@@ -499,7 +499,7 @@ function FloatingNotifications({ role }) {
     <>
       <button
         onClick={handleOpen}
-        className={`fixed bottom-6 right-6 z-[800] w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 ${
+        className={`fixed bottom-20 md:bottom-6 right-6 z-[800] w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 ${
           hasNotif ? 'bg-red-500 text-white shadow-red-300' : ''
         }`}
         style={!hasNotif ? { background: 'rgba(8,16,44,.95)', color: '#8aa0cc', border: '1px solid rgba(255,255,255,.1)', boxShadow: '0 8px 28px rgba(0,6,28,.5)' } : {}}
@@ -517,7 +517,7 @@ function FloatingNotifications({ role }) {
       {open && (
         <Portal>
           <div className="fixed inset-0 z-[799]" onClick={() => setOpen(false)} />
-          <div className="fixed bottom-24 right-6 z-[800] w-80 rounded-2xl overflow-hidden"
+          <div className="fixed bottom-36 md:bottom-24 right-6 z-[800] w-80 rounded-2xl overflow-hidden"
             style={{ background: '#0a1628', border: '1px solid rgba(255,255,255,.1)', boxShadow: '0 24px 60px rgba(0,6,28,.8)' }}>
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,.07)' }}>
               <div className="flex items-center gap-2">
