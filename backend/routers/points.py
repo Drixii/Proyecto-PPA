@@ -2,6 +2,7 @@ import os
 import uuid
 import secrets
 import string
+from utils.image import validate_and_convert
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -289,9 +290,12 @@ async def upload_reward_image(reward_id: int, file: UploadFile = File(...), db: 
         old = os.path.join(REWARDS_DIR, r.image_filename)
         if os.path.exists(old):
             os.remove(old)
+    content = await file.read()
+    if ext != ".gif":
+        content = validate_and_convert(content, min_kb=10)
+        ext = ".webp"
     filename = f"reward_{reward_id}_{uuid.uuid4().hex[:8]}{ext}"
     path = os.path.join(REWARDS_DIR, filename)
-    content = await file.read()
     with open(path, "wb") as f:
         f.write(content)
     r.image_filename = filename

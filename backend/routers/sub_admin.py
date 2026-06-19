@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from utils.image import validate_and_convert
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
@@ -234,10 +235,14 @@ async def complete_order(
     ext = os.path.splitext(completion_proof.filename or "")[1].lower()
     if ext not in (".jpg", ".jpeg", ".png", ".webp", ".pdf"):
         raise HTTPException(status_code=400, detail="Formato no permitido (jpg/png/webp/pdf)")
+    content = await completion_proof.read()
+    if ext != ".pdf":
+        content = validate_and_convert(content, min_kb=30)
+        ext = ".webp"
     filename = f"completion_{uuid.uuid4().hex}{ext}"
     os.makedirs("uploads/completions", exist_ok=True)
     with open(f"uploads/completions/{filename}", "wb") as f:
-        shutil.copyfileobj(completion_proof.file, f)
+        f.write(content)
 
     order.completion_proof = filename
 

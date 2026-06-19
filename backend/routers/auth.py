@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from utils.image import validate_and_convert
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 import shutil, uuid, os
@@ -129,10 +130,12 @@ async def upload_avatar(
     ext = os.path.splitext(avatar.filename or "")[1].lower()
     if ext not in (".jpg", ".jpeg", ".png", ".webp"):
         raise HTTPException(status_code=400, detail="Solo jpg/png/webp permitidos")
-    filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:8]}{ext}"
+    content = await avatar.read()
+    content = validate_and_convert(content, min_kb=5)
+    filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:8]}.webp"
     os.makedirs("uploads/avatars", exist_ok=True)
     with open(f"uploads/avatars/{filename}", "wb") as f:
-        shutil.copyfileobj(avatar.file, f)
+        f.write(content)
     current_user.avatar = filename
     db.commit()
     db.refresh(current_user)

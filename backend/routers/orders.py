@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from utils.image import validate_and_convert
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
@@ -118,9 +119,13 @@ async def upload_proof(
     if ext not in allowed:
         raise HTTPException(status_code=400, detail="Tipo de archivo no permitido. Usa JPG, PNG o PDF.")
 
+    content = await file.read()
+    if ext != ".pdf":
+        content = validate_and_convert(content, min_kb=30)
+        ext = ".webp"
+
     filename = f"{order_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
     dest = os.path.join("uploads", "proofs", filename)
-    content = await file.read()
     with open(dest, "wb") as f:
         f.write(content)
 

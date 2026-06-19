@@ -92,16 +92,12 @@ export default function Home() {
           .hero-hide-mobile{display:none;}
           .section-pad{padding:56px 16px;}
           .hero-buttons{gap:10px;margin-bottom:20px;}
-          /* Pin-wrap: quitar scroll storytelling en mobile */
-          #pin-wrap{height:auto!important;}
-          /* Sticky: relative + min-height para que canvas tenga dimensiones */
-          #sticky{position:relative!important;height:auto!important;min-height:100svh;overflow:visible!important;}
-          /* Canvas: llenar el min-height del padre */
-          #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100svh!important;}
-          /* Hero content: relativo, arranca arriba, scroll natural */
-          #hero-content{position:relative!important;min-height:100svh;align-items:flex-start!important;padding-top:80px;}
+          /* Mantener scroll storytelling en mobile pero más corto (200vh) */
+          #pin-wrap{height:200vh!important;}
+          #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:hidden!important;}
+          #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
+          #hero-content{position:absolute!important;inset:0!important;min-height:unset!important;align-items:flex-start!important;padding-top:80px!important;}
           #hero-content>div{flex-direction:column;align-items:center;padding:0 16px 56px;}
-          /* Ocultar elementos del scroll storytelling en mobile */
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
         }
@@ -109,8 +105,10 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 12px;}
           #hero-content>div{padding:0 12px 48px;}
-          .hero-buttons{flex-direction:column;}
-          .hero-buttons button,.hero-buttons a{width:100%;text-align:center;box-sizing:border-box;}
+          .hero-buttons{gap:8px;}
+          /* Nav auth buttons: una línea, font más chico */
+          .nav-auth{flex-wrap:nowrap!important;}
+          .nav-auth button{padding:8px 10px!important;font-size:12px!important;white-space:nowrap;}
         }
       `}</style>
 
@@ -127,7 +125,7 @@ export default function Home() {
               <p style={{ margin: 0, fontSize: '9.5px', fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', background: 'linear-gradient(90deg,#38bdf8,#818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>EVOLUTION</p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="nav-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <a href="#como" className="nav-text-link">¿Cómo funciona?</a>
             {user ? (
               <button

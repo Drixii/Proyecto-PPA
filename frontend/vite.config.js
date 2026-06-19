@@ -9,14 +9,20 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/uploads/, /^\/ws/],
+      },
       manifest: {
-        name: 'Casa de Cambios',
-        short_name: 'CasaCambios',
-        description: 'Envía dinero a cualquier país',
+        name: 'Ksa Global',
+        short_name: 'KsaGlobal',
+        description: 'Transferencias internacionales en minutos',
         start_url: '/',
         display: 'standalone',
-        background_color: '#ffffff',
-        theme_color: '#1a56db',
+        background_color: '#060d22',
+        theme_color: '#38bdf8',
         orientation: 'portrait',
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
