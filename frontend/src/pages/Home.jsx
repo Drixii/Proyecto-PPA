@@ -115,12 +115,12 @@ export default function Home() {
           .section-pad{padding:56px 16px;}
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
           .hero-buttons button,.hero-buttons a{font-size:13px!important;padding:12px 14px!important;border-radius:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
-          /* Globe structure preserved — solo hero-content scrollable */
+          /* Globe structure mobile */
           #pin-wrap{height:320vh!important;}
-          #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:hidden!important;}
+          #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:visible!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
-          #hero-content{position:absolute!important;inset:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;align-items:flex-start!important;padding-top:0!important;}
-          #hero-content>div{flex-direction:column;align-items:center;padding:80px 16px 200px;gap:20px!important;}
+          #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
+          #hero-content>div{flex-direction:column;align-items:center;padding:80px 16px 40px;gap:20px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
           .mob-fab{display:flex!important;}
@@ -129,7 +129,7 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
-          #hero-content>div{padding:72px 12px 200px!important;}
+          #hero-content>div{padding:72px 12px 40px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}
