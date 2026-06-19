@@ -116,11 +116,11 @@ export default function Home() {
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
           .hero-buttons button,.hero-buttons a{font-size:13px!important;padding:12px 14px!important;border-radius:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           /* Globe structure preserved — solo hero-content scrollable */
-          #pin-wrap{height:200vh!important;}
+          #pin-wrap{height:320vh!important;}
           #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:hidden!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
-          #hero-content{position:absolute!important;inset:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;align-items:flex-start!important;padding-top:0!important;}
-          #hero-content>div{flex-direction:column;align-items:center;padding:80px 16px 60px;gap:20px!important;}
+          #hero-content{position:absolute!important;inset:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;align-items:flex-start!important;padding-top:0!important;}
+          #hero-content>div{flex-direction:column;align-items:center;padding:80px 16px 200px;gap:20px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
           .mob-fab{display:flex!important;}
@@ -129,7 +129,7 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
-          #hero-content>div{padding:72px 12px 60px!important;}
+          #hero-content>div{padding:72px 12px 200px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}
@@ -344,18 +344,18 @@ export default function Home() {
         <button
           onClick={handleInstall}
           style={{
-            display:'flex', alignItems:'center', gap:10,
+            display:'flex', alignItems:'center', gap:6,
             background:'linear-gradient(135deg,#1d4ed8,#38bdf8)',
             color:'#fff', border:'none', borderRadius:40,
-            padding:'13px 20px', fontSize:14, fontWeight:700,
-            boxShadow:'0 8px 28px rgba(56,189,248,.5)',
+            padding:'8px 13px', fontSize:12, fontWeight:700,
+            boxShadow:'0 6px 18px rgba(56,189,248,.45)',
             cursor:'pointer', whiteSpace:'nowrap',
           }}
         >
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          Descarga nuestra app
+          Instalar app
         </button>
       </div>
     </div>
