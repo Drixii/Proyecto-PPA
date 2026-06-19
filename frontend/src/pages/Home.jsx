@@ -45,13 +45,19 @@ export default function Home() {
   const [mobileUnlocked, setMobileUnlocked] = useState(false)
   const isMobile = useRef(window.innerWidth <= 768)
 
+  // Prevenir scroll de ventana en mobile hasta que el usuario clickee el botón
   useEffect(() => {
-    if (!isMobile.current) return
-    document.body.style.overflow = mobileUnlocked ? '' : 'hidden'
-    document.documentElement.style.overflow = mobileUnlocked ? '' : 'hidden'
-    return () => { document.body.style.overflow = ''; document.documentElement.style.overflow = '' }
+    if (!isMobile.current || mobileUnlocked) return
+    const block = (e) => {
+      const heroContent = document.getElementById('hero-content')
+      if (heroContent && heroContent.contains(e.target)) return
+      e.preventDefault()
+    }
+    document.addEventListener('touchmove', block, { passive: false })
+    return () => document.removeEventListener('touchmove', block)
   }, [mobileUnlocked])
 
+  // Re-lock cuando sube de vuelta al top
   useEffect(() => {
     if (!isMobile.current || !mobileUnlocked) return
     const onScroll = () => { if (window.scrollY < 5) setMobileUnlocked(false) }
@@ -256,20 +262,7 @@ export default function Home() {
             </svg>
           </div>
 
-          {/* Mobile — botón para desbloquear animación y resto de página */}
-          {isMobile.current && !mobileUnlocked && (
-            <div
-              onClick={handleExplore}
-              style={{ position: 'absolute', bottom: 28, left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', WebkitUserSelect: 'none', userSelect: 'none' }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#b9c8ec', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                Más de nosotros, <span style={{ color: '#38bdf8' }}>da click aquí</span>
-              </span>
-              <svg style={{ animation: 'arrowBob 1.4s ease-in-out infinite' }} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          )}
+          {/* Mobile — botón para desbloquear animación y resto de página (position:fixed escapa overflow padre) */}
         </div>
       </div>
 
@@ -395,6 +388,21 @@ export default function Home() {
           Instalar app
         </button>
       </div>
+
+      {/* Mobile explore button — fixed, fuera de cualquier overflow padre */}
+      {isMobile.current && !mobileUnlocked && (
+        <div
+          onClick={handleExplore}
+          style={{ position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)', zIndex: 150, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', WebkitUserSelect: 'none', userSelect: 'none' }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#b9c8ec', whiteSpace: 'nowrap', textAlign: 'center', textShadow: '0 1px 8px rgba(0,0,0,.8)' }}>
+            Más de nosotros, <span style={{ color: '#38bdf8' }}>da click aquí</span>
+          </span>
+          <svg style={{ animation: 'arrowBob 1.4s ease-in-out infinite', filter: 'drop-shadow(0 1px 4px rgba(0,0,0,.6))' }} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      )}
     </div>
   )
 }
