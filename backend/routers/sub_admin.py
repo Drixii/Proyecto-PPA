@@ -237,7 +237,7 @@ async def complete_order(
         raise HTTPException(status_code=400, detail="Formato no permitido (jpg/png/webp/pdf)")
     content = await completion_proof.read()
     if ext != ".pdf":
-        content = validate_and_convert(content, min_kb=30)
+        content = validate_and_convert(content)
         ext = ".webp"
     filename = f"completion_{uuid.uuid4().hex}{ext}"
     os.makedirs("uploads/completions", exist_ok=True)

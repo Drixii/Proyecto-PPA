@@ -131,7 +131,7 @@ async def upload_avatar(
     if ext not in (".jpg", ".jpeg", ".png", ".webp"):
         raise HTTPException(status_code=400, detail="Solo jpg/png/webp permitidos")
     content = await avatar.read()
-    content = validate_and_convert(content, min_kb=5)
+    content = validate_and_convert(content)
     filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:8]}.webp"
     os.makedirs("uploads/avatars", exist_ok=True)
     with open(f"uploads/avatars/{filename}", "wb") as f:

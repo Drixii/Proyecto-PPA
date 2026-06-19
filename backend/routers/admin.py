@@ -536,6 +536,19 @@ def update_user_countries(
     if data.countries:
         user.timezone = country_to_tz(data.countries[0])
     db.commit()
+
+    # Auto-asignar órdenes en_proceso sin encargado para estos países
+    if data.countries:
+        unassigned = db.query(Order).filter(
+            Order.status == "en_proceso",
+            Order.sub_admin_id == None,
+            Order.receiver_country.in_(data.countries)
+        ).all()
+        for o in unassigned:
+            o.sub_admin_id = user_id
+        if unassigned:
+            db.commit()
+
     return {"success": True, "data": data.countries, "message": "Países actualizados"}
 
 

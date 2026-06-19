@@ -79,9 +79,10 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
 
   if (!order) return null
 
+  const apiBase = import.meta.env.VITE_API_URL || ''
   const currentStep = STATUS_STEPS.indexOf(order.status)
   const isApprovalPending = order.status === 'en_aprobacion'
-  const proofUrl = order.payment_proof ? `/uploads/proofs/${order.payment_proof}` : null
+  const proofUrl = order.payment_proof ? `${apiBase}/uploads/proofs/${order.payment_proof}` : null
   const proofIsImage = proofUrl && /\.(jpg|jpeg|png|webp)$/i.test(proofUrl)
   const subAdminName = order.sub_admin_name
 
@@ -237,7 +238,7 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
         )}
 
         {tab === 'prueba_envio' && order.completion_proof_url && (() => {
-          const cpUrl = order.completion_proof_url
+          const cpUrl = `${apiBase}${order.completion_proof_url}`
           const cpIsImage = /\.(jpg|jpeg|png|webp)$/i.test(cpUrl)
           return (
             <div className="p-6 space-y-4">
@@ -418,10 +419,13 @@ export function ClientOrderPanel({ order }) {
 
   if (!order) return null
 
+  const apiBase = import.meta.env.VITE_API_URL || ''
   const CLIENT_STATUS_STEPS = order.payment_method === 'tarjeta' ? CARD_STATUS_STEPS : TRANSFER_STATUS_STEPS
   const currentStep = CLIENT_STATUS_STEPS.indexOf(order.status)
-  const proofUrl = order.payment_proof ? `/uploads/proofs/${order.payment_proof}` : null
+  const proofUrl = order.payment_proof ? `${apiBase}/uploads/proofs/${order.payment_proof}` : null
   const proofIsImage = proofUrl && /\.(jpg|jpeg|png|webp)$/i.test(proofUrl)
+  const completionProofUrl = order.completion_proof ? `${apiBase}/uploads/completions/${order.completion_proof}` : null
+  const completionProofIsImage = completionProofUrl && /\.(jpg|jpeg|png|webp)$/i.test(completionProofUrl)
 
   const handleSendAgain = () => {
     navigate('/new-transfer', {
@@ -462,6 +466,7 @@ export function ClientOrderPanel({ order }) {
       <div className="flex border-b shrink-0 overflow-x-auto" style={{background:'rgba(6,13,40,.7)', borderColor:'rgba(255,255,255,.08)'}}>
         <TabButton2 active={tab === 'estado'} onClick={() => setTab('estado')}>Estado</TabButton2>
         {proofUrl && <TabButton2 active={tab === 'comprobante'} onClick={() => setTab('comprobante')}>Comprobante</TabButton2>}
+        {completionProofUrl && <TabButton2 active={tab === 'prueba_envio'} onClick={() => setTab('prueba_envio')}>Prueba envío</TabButton2>}
         <TabButton2 active={tab === 'receptor'} onClick={() => setTab('receptor')}>Receptor</TabButton2>
         <TabButton2 active={tab === 'chat'} onClick={() => setTab('chat')}>Chat</TabButton2>
       </div>
@@ -554,6 +559,26 @@ export function ClientOrderPanel({ order }) {
               </div>
             ) : (
               <p className="text-sm text-center py-10" style={{color:'#8aa0cc'}}>Sin comprobante</p>
+            )}
+          </div>
+        )}
+
+        {tab === 'prueba_envio' && (
+          <div className="p-6 space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#8aa0cc'}}>Comprobante de envío</p>
+            {completionProofUrl ? (
+              <div className="rounded-2xl overflow-hidden" style={{background:'rgba(74,222,128,.05)', border:'1px solid rgba(74,222,128,.15)'}}>
+                {completionProofIsImage ? (
+                  <img src={completionProofUrl} alt="Prueba de envío" className="w-full max-h-96 object-contain" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3">
+                    <p className="text-sm" style={{color:'#aebfe2'}}>Comprobante PDF</p>
+                    <a href={completionProofUrl} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{color:'#38bdf8'}}>Abrir archivo →</a>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-center py-10" style={{color:'#8aa0cc'}}>Sin comprobante de envío aún</p>
             )}
           </div>
         )}

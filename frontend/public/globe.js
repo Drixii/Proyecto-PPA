@@ -43,12 +43,16 @@
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
 
+  var _rawP=0;
   function updateProgress(){
     if(!pin)return;
     var vh=window.innerHeight;
     var total=pin.offsetHeight-vh;
-    var p=total>0?clamp(-pin.getBoundingClientRect().top/total,0,1):0;
-    progress=p;
+    _rawP=total>0?clamp(-pin.getBoundingClientRect().top/total,0,1):0;
+    // En mobile suavizar con lerp para que la animación se vea lenta aunque scrolleen rápido
+    if(W<768){ progress+= (_rawP - progress) * 0.035; }
+    else { progress=_rawP; }
+    var p=progress;
     var heroOut=clamp(p/0.22,0,1);
     if(hero){hero.style.opacity=(1-heroOut).toFixed(3);hero.style.transform='translateY('+(-heroOut*40).toFixed(1)+'px)';hero.style.pointerEvents=heroOut>0.4?'none':'auto';}
     if(gridTitle)gridTitle.style.opacity=clamp((p-0.46)/0.22,0,1).toFixed(3);

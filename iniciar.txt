@@ -73,3 +73,12 @@ Esto crea los usuarios y bancos de prueba.
 Solo necesitas hacerlo UNA VEZ.
 
 ====================================================
+
+----------------------------------------------------
+CREAR ADMIN EN RAILWAY (consola de Railway)
+----------------------------------------------------
+
+set +H
+python3 -c "from database import SessionLocal,engine,Base;from models.user import User;from passlib.context import CryptContext;Base.metadata.create_all(bind=engine);pwd=CryptContext(schemes=['bcrypt'],deprecated='auto');db=SessionLocal();u=User(email='admin@casacambios.com',full_name='Admin',password=pwd.hash('Admin2024!'),role='admin',is_active=True);db.add(u);db.commit();print('OK');db.close()"
+
+====================================================

@@ -121,7 +121,7 @@ async def upload_proof(
 
     content = await file.read()
     if ext != ".pdf":
-        content = validate_and_convert(content, min_kb=30)
+        content = validate_and_convert(content)
         ext = ".webp"
 
     filename = f"{order_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"

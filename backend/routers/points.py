@@ -292,7 +292,7 @@ async def upload_reward_image(reward_id: int, file: UploadFile = File(...), db: 
             os.remove(old)
     content = await file.read()
     if ext != ".gif":
-        content = validate_and_convert(content, min_kb=10)
+        content = validate_and_convert(content)
         ext = ".webp"
     filename = f"reward_{reward_id}_{uuid.uuid4().hex[:8]}{ext}"
     path = os.path.join(REWARDS_DIR, filename)

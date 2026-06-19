@@ -9,7 +9,10 @@
       "Bash(powershell -command \"Expand-Archive -Path 'Banner convertidor futurista.zip' -DestinationPath 'banner_extracted' -Force\")",
       "Bash(powershell -command \"Get-ChildItem -Recurse | Select-Object FullName, Length\")",
       "Bash(Copy-Item *)",
-      "PowerShell(ls \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\utils\\\\\")"
+      "PowerShell(ls \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\utils\\\\\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
