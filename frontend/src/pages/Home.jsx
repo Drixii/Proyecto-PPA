@@ -42,6 +42,50 @@ export default function Home() {
   const [showHint, setShowHint] = useState(false)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
 
+  const [gateOpen, setGateOpen] = useState(false)
+  const [showGateHint, setShowGateHint] = useState(false)
+  const isMobile = useRef(window.innerWidth <= 768)
+  const lastTouchY = useRef(0)
+  const swipedOnce = useRef(false)
+
+  useEffect(() => {
+    if (!isMobile.current || gateOpen) return
+    const onTouchStart = (e) => { lastTouchY.current = e.touches[0].clientY }
+    const onTouchMove = (e) => {
+      // Permitir scroll en dropdowns internos
+      let el = e.target
+      while (el && el !== document.body) {
+        const ov = window.getComputedStyle(el).overflowY
+        if (ov === 'auto' || ov === 'scroll') return
+        el = el.parentElement
+      }
+      const deltaY = lastTouchY.current - e.touches[0].clientY
+      if (deltaY > 12) {
+        if (swipedOnce.current) {
+          setGateOpen(true)
+          return // no prevenir — dejar que este swipe scrollee
+        }
+        swipedOnce.current = true
+        setShowGateHint(true)
+        setTimeout(() => setShowGateHint(false), 2000)
+      }
+      e.preventDefault()
+    }
+    document.addEventListener('touchstart', onTouchStart, { passive: true })
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [gateOpen])
+
+  useEffect(() => {
+    if (!isMobile.current || !gateOpen) return
+    const onScroll = () => { if (window.scrollY < 5) { setGateOpen(false); swipedOnce.current = false } }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [gateOpen])
+
   const handleInstall = async () => {
     if (deferredPrompt.current) {
       deferredPrompt.current.prompt()
@@ -116,11 +160,11 @@ export default function Home() {
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
           .hero-buttons button,.hero-buttons a{font-size:13px!important;padding:12px 14px!important;border-radius:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           /* Globe structure mobile */
-          #pin-wrap{height:500vh!important;}
+          #pin-wrap{height:320vh!important;}
           #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:visible!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
-          #hero-content>div{flex-direction:column;align-items:center;padding:80px 16px 40px;gap:20px!important;}
+          #hero-content>div{flex-direction:column;align-items:center;padding:80px 16px 72px;gap:20px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
           .mob-fab{display:flex!important;}
@@ -129,7 +173,7 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
-          #hero-content>div{padding:72px 12px 40px!important;}
+          #hero-content>div{padding:72px 12px 72px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}
@@ -361,6 +405,17 @@ export default function Home() {
         </button>
       </div>
 
+      {/* Gate hint mobile — aparece en primer swipe */}
+      {isMobile.current && showGateHint && (
+        <div style={{ position: 'fixed', bottom: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 160, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, pointerEvents: 'none' }}>
+          <div style={{ background: 'rgba(8,16,44,.92)', border: '1px solid rgba(56,189,248,.3)', borderRadius: 40, padding: '8px 18px', display: 'flex', alignItems: 'center', gap: 7, backdropFilter: 'blur(12px)' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#7dd3fc', whiteSpace: 'nowrap' }}>Desliza de nuevo para ver más</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
