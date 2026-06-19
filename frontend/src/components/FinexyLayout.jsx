@@ -642,16 +642,19 @@ export default function FinexyLayout({ children, fullHeight = false }) {
           { icon: <IcoHome />, path: '/sub-admin', label: 'Inicio', exact: true },
           { icon: <IcoPipeline />, path: '/sub-admin/pipeline', label: 'Pipeline' },
           { icon: <IcoOrders />, path: '/sub-admin/orders', label: 'Órdenes' },
+          { icon: <IcoProfile />, path: '/sub-admin/profile', label: 'Perfil' },
         ]
       : [
           { icon: <IcoHome />, path: '/dashboard', label: 'Inicio', exact: true },
           { icon: <IcoTransfer />, path: '/new-transfer', label: 'Transferir' },
           { icon: <IcoHistory />, path: '/historial', label: 'Historial' },
+          { icon: <IcoGift />, path: '/mis-puntos', label: 'Mis puntos' },
         ]
 
   const slideMenuItems = isAdmin
     ? [
         { icon: <IcoUsers />, path: '/admin/users', label: 'Usuarios' },
+        { icon: <IcoGift />, path: '/admin/points', label: 'Puntos' },
         { icon: <IcoSettings />, path: '/admin/settings', label: 'Ajustes' },
         { icon: <IcoProfile />, path: '/admin/profile', label: 'Perfil' },
       ]
