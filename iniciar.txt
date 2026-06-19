@@ -1,0 +1,75 @@
+====================================================
+  CASA DE CAMBIOS — COMO INICIAR EL PROYECTO
+====================================================
+
+Necesitas DOS terminales abiertas al mismo tiempo.
+Una para el backend, otra para el frontend.
+
+----------------------------------------------------
+TERMINAL 1 — BACKEND (API)
+----------------------------------------------------
+
+1. Abre PowerShell o CMD
+2. Copia y pega esto:
+
+   cd "C:\Users\PC Asus\OneDrive\Desktop\TRABAJO\PPA\backend"
+   .\venv\Scripts\uvicorn main:app --reload --port 8000
+
+3. Espera hasta ver este mensaje:
+   Application startup complete.
+
+4. El backend queda en:
+   http://localhost:8000
+
+   Para ver todos los endpoints disponibles:
+   http://localhost:8000/docs
+
+----------------------------------------------------
+TERMINAL 2 — FRONTEND (App web)
+----------------------------------------------------
+
+1. Abre OTRA ventana de PowerShell o CMD
+2. Copia y pega esto:
+
+   cd "C:\Users\PC Asus\OneDrive\Desktop\TRABAJO\PPA\frontend"
+   npm run dev
+
+3. Espera hasta ver este mensaje:
+   Local:   http://localhost:5173/
+
+4. Abre el navegador en:
+   http://localhost:5173
+
+----------------------------------------------------
+CREDENCIALES DE PRUEBA
+----------------------------------------------------
+
+  Admin:    admin@casacambios.com  /  Admin2024!
+  Admin 2:  admin2@casacambios.com /  Admin2024!
+  Cliente:  cliente1@test.com      /  Cliente123!
+  Cliente:  cliente2@test.com      /  Cliente123!
+
+----------------------------------------------------
+ORDEN DE INICIO (IMPORTANTE)
+----------------------------------------------------
+
+Siempre iniciar PRIMERO el backend (Terminal 1),
+luego el frontend (Terminal 2).
+
+Si cierras alguna terminal, el servidor se detiene.
+Deja ambas abiertas mientras usas la app.
+
+----------------------------------------------------
+PRIMERA VEZ SOLAMENTE
+----------------------------------------------------
+
+Si es la primera vez que abres el proyecto y la base
+de datos no tiene datos, ejecuta esto en Terminal 1:
+
+   cd "C:\Users\PC Asus\OneDrive\Desktop\TRABAJO\PPA\backend"
+   .\venv\Scripts\python seed_data.py
+
+Esto crea los usuarios y bancos de prueba.
+Solo necesitas hacerlo UNA VEZ.
+
+====================================================

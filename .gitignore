@@ -1,0 +1,21 @@
+# Backend
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/casa_cambios.db
+backend/uploads/
+backend/.env
+backend/venv/
+backend/env/
+backend/.venv/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# General
+.DS_Store
+*.log

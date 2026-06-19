@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\models\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\routers\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\services\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\schemas\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\auth\")",
+      "Bash(powershell -command \"Expand-Archive -Path 'Banner convertidor futurista.zip' -DestinationPath 'banner_extracted' -Force\")",
+      "Bash(powershell -command \"Get-ChildItem -Recurse | Select-Object FullName, Length\")",
+      "Bash(Copy-Item *)",
+      "PowerShell(ls \"C:\\\\Users\\\\PC Asus\\\\OneDrive\\\\Desktop\\\\TRABAJO\\\\PPA\\\\backend\\\\utils\\\\\")"
+    ]
+  }
+}
