@@ -281,16 +281,18 @@ export default function ClientPoints() {
 
         {/* ── Section nav ──────────────────────────── */}
         <div className="px-6 pt-6 max-w-[1100px] mx-auto">
-          <div className="flex items-center rounded-full p-[3px] gap-0.5 w-fit mb-6" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.07)' }}>
-            {[['catalog', 'Catálogo de canjeables'], ['history', 'Mis canjes']].map(([key, label]) => (
-              <button key={key} onClick={() => setSection(key)}
-                className="px-5 py-2 rounded-full text-sm font-medium transition-all"
-                style={section === key
-                  ? { background: 'linear-gradient(135deg,#78350f,#ca8a04)', color: '#fef9c3' }
-                  : { color: '#8aa0cc' }}>
-                {label}
-              </button>
-            ))}
+          <div className="w-full overflow-x-auto mb-6" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+            <div className="flex items-center rounded-full p-[3px] gap-0.5 w-fit" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.07)', minWidth: 'max-content' }}>
+              {[['catalog', 'Catálogo de canjeables'], ['history', 'Mis canjes']].map(([key, label]) => (
+                <button key={key} onClick={() => setSection(key)}
+                  className="px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap"
+                  style={section === key
+                    ? { background: 'linear-gradient(135deg,#78350f,#ca8a04)', color: '#fef9c3' }
+                    : { color: '#8aa0cc' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ── Catalog ───────────────────────────── */}

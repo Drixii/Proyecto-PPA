@@ -617,16 +617,18 @@ export default function AdminPoints() {
         </div>
 
         {/* Tab nav */}
-        <div className="flex items-center rounded-full p-[3px] gap-0.5 w-fit mb-6" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.07)' }}>
-          {TABS.map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className="px-5 py-2 rounded-full text-sm font-medium transition-all"
-              style={tab === t
-                ? { background: 'linear-gradient(135deg,#78350f,#ca8a04)', color: '#fef9c3' }
-                : { color: '#8aa0cc' }}>
-              {t}
-            </button>
-          ))}
+        <div className="w-full overflow-x-auto mb-6" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+          <div className="flex items-center rounded-full p-[3px] gap-0.5 w-fit" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.07)', minWidth: 'max-content' }}>
+            {TABS.map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className="px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap"
+                style={tab === t
+                  ? { background: 'linear-gradient(135deg,#78350f,#ca8a04)', color: '#fef9c3' }
+                  : { color: '#8aa0cc' }}>
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
 
         {tab === 'Configuración' && <ConfigSection />}
