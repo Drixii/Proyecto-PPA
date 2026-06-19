@@ -42,6 +42,28 @@ export default function Home() {
   const [showHint, setShowHint] = useState(false)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
 
+  const [mobileUnlocked, setMobileUnlocked] = useState(false)
+  const isMobile = useRef(window.innerWidth <= 768)
+
+  useEffect(() => {
+    if (!isMobile.current) return
+    document.body.style.overflow = mobileUnlocked ? '' : 'hidden'
+    document.documentElement.style.overflow = mobileUnlocked ? '' : 'hidden'
+    return () => { document.body.style.overflow = ''; document.documentElement.style.overflow = '' }
+  }, [mobileUnlocked])
+
+  useEffect(() => {
+    if (!isMobile.current || !mobileUnlocked) return
+    const onScroll = () => { if (window.scrollY < 5) setMobileUnlocked(false) }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [mobileUnlocked])
+
+  const handleExplore = () => {
+    setMobileUnlocked(true)
+    setTimeout(() => window.scrollTo({ top: window.innerHeight * 0.55, behavior: 'smooth' }), 80)
+  }
+
   const handleInstall = async () => {
     if (deferredPrompt.current) {
       deferredPrompt.current.prompt()
@@ -93,6 +115,7 @@ export default function Home() {
         @keyframes pulseDot { 0%{box-shadow:0 0 0 0 rgba(56,225,255,.55)} 70%{box-shadow:0 0 0 9px rgba(56,225,255,0)} 100%{box-shadow:0 0 0 0 rgba(56,225,255,0)} }
         @keyframes marquee  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
         @keyframes hintBob  { 0%,100%{transform:translateX(-50%) translateY(0);opacity:.55} 50%{transform:translateX(-50%) translateY(7px);opacity:1} }
+        @keyframes arrowBob { 0%,100%{transform:translateY(0);opacity:.7} 50%{transform:translateY(7px);opacity:1} }
         *{box-sizing:border-box;}
         #main-nav{transition:background .35s ease;}
         .nav-inner{max-width:1200px;margin:0 auto;padding:0 24px;height:70px;display:flex;align-items:center;justify-content:space-between;}
@@ -116,7 +139,6 @@ export default function Home() {
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
           .hero-buttons button,.hero-buttons a{font-size:13px!important;padding:12px 14px!important;border-radius:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           /* Globe structure preserved — solo hero-content scrollable */
-          #pin-wrap{height:320vh!important;}
           #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:hidden!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;align-items:flex-start!important;padding-top:0!important;}
@@ -169,7 +191,7 @@ export default function Home() {
       </nav>
 
       {/* ── PIN WRAP — scroll-storytelling hero (340 vh) ── */}
-      <div id="pin-wrap" style={{ height: '340vh', position: 'relative', zIndex: 1 }}>
+      <div id="pin-wrap" style={{ height: isMobile.current ? (mobileUnlocked ? '320vh' : '100svh') : '340vh', position: 'relative', zIndex: 1 }}>
         <div id="sticky" style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}>
 
           {/* Canvas gestionado por globe.js */}
@@ -233,6 +255,21 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7-7-7M19 6l-7 7-7-7" />
             </svg>
           </div>
+
+          {/* Mobile — botón para desbloquear animación y resto de página */}
+          {isMobile.current && !mobileUnlocked && (
+            <div
+              onClick={handleExplore}
+              style={{ position: 'absolute', bottom: 28, left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', WebkitUserSelect: 'none', userSelect: 'none' }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#b9c8ec', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                Más de nosotros, <span style={{ color: '#38bdf8' }}>da click aquí</span>
+              </span>
+              <svg style={{ animation: 'arrowBob 1.4s ease-in-out infinite' }} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          )}
         </div>
       </div>
 
