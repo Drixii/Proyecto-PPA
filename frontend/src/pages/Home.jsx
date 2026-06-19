@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
 import { useStore } from '../store/useStore'
@@ -30,6 +30,23 @@ const RD = (d) => ({ ...R0, transitionDelay: `${d}s,${d}s` })
 export default function Home() {
   const navigate = useNavigate()
   const { user } = useStore()
+  const deferredPrompt = useRef(null)
+  const [canInstall, setCanInstall] = useState(false)
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); deferredPrompt.current = e; setCanInstall(true) }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const handleInstall = async () => {
+    if (deferredPrompt.current) {
+      deferredPrompt.current.prompt()
+      await deferredPrompt.current.userChoice
+      deferredPrompt.current = null
+      setCanInstall(false)
+    }
+  }
 
   // Carga globe.js desde /public — IIFE que busca los IDs en el DOM
   useEffect(() => {
@@ -309,25 +326,27 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Mobile floating app download button */}
-      <div className="mob-fab" style={{ position:'fixed', bottom:24, right:20, zIndex:200 }}>
-        <button
-          onClick={() => navigate('/login', { state: { mode: 'register' } })}
-          style={{
-            display:'flex', alignItems:'center', gap:10,
-            background:'linear-gradient(135deg,#1d4ed8,#38bdf8)',
-            color:'#fff', border:'none', borderRadius:40,
-            padding:'13px 20px', fontSize:14, fontWeight:700,
-            boxShadow:'0 8px 28px rgba(56,189,248,.5)',
-            cursor:'pointer', whiteSpace:'nowrap',
-          }}
-        >
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Descarga nuestra app
-        </button>
-      </div>
+      {/* Mobile floating PWA install button — only shows when browser supports install */}
+      {canInstall && (
+        <div className="mob-fab" style={{ position:'fixed', bottom:24, right:20, zIndex:200 }}>
+          <button
+            onClick={handleInstall}
+            style={{
+              display:'flex', alignItems:'center', gap:10,
+              background:'linear-gradient(135deg,#1d4ed8,#38bdf8)',
+              color:'#fff', border:'none', borderRadius:40,
+              padding:'13px 20px', fontSize:14, fontWeight:700,
+              boxShadow:'0 8px 28px rgba(56,189,248,.5)',
+              cursor:'pointer', whiteSpace:'nowrap',
+            }}
+          >
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Descarga nuestra app
+          </button>
+        </div>
+      )}
     </div>
   )
 }
