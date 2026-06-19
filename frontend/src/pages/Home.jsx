@@ -39,7 +39,8 @@ export default function Home() {
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
-  const [showIOSHint, setShowIOSHint] = useState(false)
+  const [showHint, setShowHint] = useState(false)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
 
   const handleInstall = async () => {
     if (deferredPrompt.current) {
@@ -48,7 +49,7 @@ export default function Home() {
       deferredPrompt.current = null
       setCanInstall(false)
     } else {
-      setShowIOSHint(h => !h)
+      setShowHint(h => !h)
     }
   }
 
@@ -332,9 +333,12 @@ export default function Home() {
 
       {/* Mobile floating PWA install button */}
       <div className="mob-fab" style={{ position:'fixed', bottom:24, right:20, zIndex:200, flexDirection:'column', alignItems:'flex-end', gap:8 }}>
-        {showIOSHint && (
+        {showHint && (
           <div style={{ background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.3)', borderRadius:14, padding:'12px 14px', maxWidth:220, fontSize:13, color:'#aebfe2', lineHeight:1.5, boxShadow:'0 8px 24px rgba(0,0,0,.5)' }}>
-            En Safari: toca <strong style={{color:'#38bdf8'}}>Compartir</strong> → <strong style={{color:'#38bdf8'}}>Añadir a pantalla de inicio</strong>
+            {isIOS
+              ? <>En Safari: toca <strong style={{color:'#38bdf8'}}>Compartir</strong> → <strong style={{color:'#38bdf8'}}>Añadir a pantalla de inicio</ strong></>
+              : <>En Chrome: toca los <strong style={{color:'#38bdf8'}}>3 puntos</strong> (⋮) → <strong style={{color:'#38bdf8'}}>Instalar aplicación</strong></>
+            }
           </div>
         )}
         <button
