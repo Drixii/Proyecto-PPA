@@ -6,9 +6,11 @@ from sqlalchemy.orm import sessionmaker
 SQLALCHEMY_DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./casa_cambios.db")
 
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql+pg8000://", 1)
+elif SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
 
-if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
+if SQLALCHEMY_DATABASE_URL.startswith("postgresql+pg8000://"):
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
 else:
     engine = create_engine(
