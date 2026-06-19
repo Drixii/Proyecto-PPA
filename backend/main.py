@@ -18,65 +18,35 @@ from database import SessionLocal
 
 def _run_migrations():
     from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE orders ADD COLUMN sub_admin_id INTEGER REFERENCES users(id)",
+        "ALTER TABLE orders ADD COLUMN completion_proof VARCHAR",
+        "ALTER TABLE users ADD COLUMN avatar VARCHAR",
+        "ALTER TABLE point_rewards ADD COLUMN image_filename VARCHAR",
+        "ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN timezone VARCHAR DEFAULT 'America/Santiago'",
+        "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE",
+    ]
+    for sql in migrations:
+        with engine.connect() as conn:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+    status_map = {
+        "pagado": "en_proceso",
+        "enviando": "completado",
+        "exitoso": "completado",
+    }
     with engine.connect() as conn:
-        # Add sub_admin_id column if missing
         try:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN sub_admin_id INTEGER REFERENCES users(id)"))
+            for old, new in status_map.items():
+                conn.execute(text(f"UPDATE orders SET status = '{new}' WHERE status = '{old}'"))
             conn.commit()
         except Exception:
-            pass  # column already exists
-
-        # Migrate old status values to new 3-status model
-        # Add completion_proof column if missing
-        try:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN completion_proof VARCHAR"))
-            conn.commit()
-        except Exception:
-            pass
-
-        # Add avatar column to users if missing
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN avatar VARCHAR"))
-            conn.commit()
-        except Exception:
-            pass
-
-        # Add image_filename to point_rewards if missing
-        try:
-            conn.execute(text("ALTER TABLE point_rewards ADD COLUMN image_filename VARCHAR"))
-            conn.commit()
-        except Exception:
-            pass
-
-        # Add deleted_at to users if missing
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN deleted_at DATETIME"))
-            conn.commit()
-        except Exception:
-            pass
-
-        # Add timezone to users if missing
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN timezone VARCHAR DEFAULT 'America/Santiago'"))
-            conn.commit()
-        except Exception:
-            pass
-
-        # Add must_change_password to users if missing
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0"))
-            conn.commit()
-        except Exception:
-            pass
-
-        status_map = {
-            "pagado": "en_proceso",
-            "enviando": "completado",
-            "exitoso": "completado",
-        }
-        for old, new in status_map.items():
-            conn.execute(text(f"UPDATE orders SET status = '{new}' WHERE status = '{old}'"))
-        conn.commit()
+            conn.rollback()
 
 
 @asynccontextmanager
