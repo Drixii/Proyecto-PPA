@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import FinexyLayout from '../../components/FinexyLayout'
 import SlidePanel from '../../components/SlidePanel'
@@ -44,6 +44,8 @@ export default function AdminOrders() {
   const [filterMode, setFilterMode] = useState({ type: 'none' })
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [search, setSearch] = useState(searchParams.get('q') || '')
+  const [showTrash, setShowTrash] = useState(false)
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (location.state?.statusFilter) {
@@ -67,6 +69,22 @@ export default function AdminOrders() {
   })
 
   const subAdminMap = Object.fromEntries(subAdmins.map(s => [s.id, s]))
+
+  const { data: trashOrders = [], refetch: refetchTrash } = useQuery({
+    queryKey: ['admin-orders-trash'],
+    queryFn: () => api.get('/admin/orders/trash').then(r => r.data.data),
+    enabled: showTrash,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/admin/orders/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries(['admin-orders-filtered']); refetch() },
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (id) => api.post(`/admin/orders/${id}/restore`),
+    onSuccess: () => { queryClient.invalidateQueries(['admin-orders-trash']); refetchTrash() },
+  })
 
   const isFiltered = filterMode.type !== 'none'
   const STATUSES = isFiltered ? STATUSES_ALL : STATUSES_DEFAULT
@@ -116,13 +134,22 @@ export default function AdminOrders() {
               {orders.length} resultado{orders.length !== 1 ? 's' : ''} en el período seleccionado
             </p>
           </div>
-          <button
-            onClick={() => refetch()}
-            className="text-xs hover:underline flex items-center gap-1" style={{ color:'#38bdf8' }}
-          >
-            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-            Actualizar
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setShowTrash(t => !t); refetchTrash() }}
+              className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors"
+              style={{ color: showTrash ? '#f87171' : '#8aa0cc', background: showTrash ? 'rgba(248,113,113,.1)' : 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.06)' }}
+            >
+              🗑 Papelera
+            </button>
+            <button
+              onClick={() => refetch()}
+              className="text-xs hover:underline flex items-center gap-1" style={{ color:'#38bdf8' }}
+            >
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+              Actualizar
+            </button>
+          </div>
         </div>
 
         {/* Filters bar */}
@@ -307,8 +334,13 @@ export default function AdminOrders() {
                         {fmtDateShort(order.created_at)}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right">
-                      <button className="text-lg transition-colors" style={{ color:'rgba(255,255,255,.2)' }}>···</button>
+                    <td className="px-4 py-4 text-right" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => { if (window.confirm(`¿Eliminar orden ${order.order_number}?`)) deleteMutation.mutate(order.id) }}
+                        className="text-lg transition-colors hover:text-red-400"
+                        style={{ color:'rgba(255,255,255,.2)' }}
+                        title="Mover a papelera"
+                      >🗑</button>
                     </td>
                   </tr>
                 ))}
@@ -316,6 +348,58 @@ export default function AdminOrders() {
             </table>
           </div>
         </div>
+
+        {/* Trash view */}
+        {showTrash && (
+          <div className="rounded-2xl overflow-hidden mt-6" style={GLASS}>
+            <div className="px-5 py-4" style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
+              <h2 className="text-sm font-semibold" style={{ color:'#f87171' }}>🗑 Papelera de órdenes</h2>
+              <p className="text-xs mt-0.5" style={{ color:'#64748b' }}>Las órdenes se eliminan permanentemente después de 30 días</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background:'rgba(4,10,30,.6)', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
+                    <th className="text-left text-xs font-semibold uppercase tracking-wider px-5 py-3" style={{ color:'#64748b' }}>Order ID</th>
+                    <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{ color:'#64748b' }}>Remitente</th>
+                    <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{ color:'#64748b' }}>Receptor</th>
+                    <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{ color:'#64748b' }}>Monto</th>
+                    <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{ color:'#64748b' }}>Días restantes</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {trashOrders.length === 0 && (
+                    <tr><td colSpan={6} className="px-5 py-12 text-center text-sm" style={{ color:'#475569' }}>Papelera vacía</td></tr>
+                  )}
+                  {trashOrders.map(o => (
+                    <tr key={o.id} style={{ borderBottom:'1px solid rgba(255,255,255,.04)' }}>
+                      <td className="px-5 py-4"><span className="font-mono text-xs" style={{ color:'#8aa0cc' }}>{o.order_number}</span></td>
+                      <td className="px-4 py-4"><span className="text-sm" style={{ color:'#aebfe2' }}>{o.sender_name}</span></td>
+                      <td className="px-4 py-4">
+                        <p className="text-sm" style={{ color:'#aebfe2' }}>{o.receiver_name}</p>
+                        <p className="text-xs" style={{ color:'#64748b' }}>{o.receiver_country}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <p className="text-sm font-semibold" style={{ color:'#eaf2ff' }}>{o.amount_sent?.toLocaleString()} <span className="text-xs" style={{ color:'#8aa0cc' }}>{o.currency_from}</span></p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-xs" style={{ color: o.days_left <= 5 ? '#f87171' : '#fcd34d' }}>{o.days_left} días</span>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <button
+                          onClick={() => restoreMutation.mutate(o.id)}
+                          className="text-xs px-3 py-1 rounded-lg transition-colors"
+                          style={{ color:'#38bdf8', background:'rgba(56,189,248,.08)', border:'1px solid rgba(56,189,248,.2)' }}
+                        >Restaurar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       <SlidePanel

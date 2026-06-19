@@ -26,6 +26,7 @@ def _run_migrations():
         "ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN timezone VARCHAR DEFAULT 'America/Santiago'",
         "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE orders ADD COLUMN deleted_at TIMESTAMP",
     ]
     for sql in migrations:
         with engine.connect() as conn:

@@ -77,7 +77,7 @@ def list_all_orders(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    query = db.query(Order).order_by(Order.created_at.asc())
+    query = db.query(Order).filter(Order.deleted_at == None).order_by(Order.created_at.asc())
 
     # Status filter — evaluated first so it always takes precedence
     if status:
@@ -158,6 +158,38 @@ def list_all_orders(
         },
         "message": ""
     }
+
+
+@router.get("/orders/trash", response_model=dict)
+def get_orders_trash_early(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    orders = (
+        db.query(Order)
+        .filter(Order.deleted_at != None)
+        .order_by(Order.deleted_at.desc())
+        .all()
+    )
+    now = datetime.utcnow()
+    result = []
+    for o in orders:
+        days_left = max(0, 30 - (now - o.deleted_at).days)
+        result.append({
+            "id": o.id,
+            "order_number": o.order_number,
+            "sender_name": o.sender_name,
+            "receiver_name": o.receiver_name,
+            "receiver_country": o.receiver_country,
+            "amount_sent": o.amount_sent,
+            "currency_from": o.currency_from,
+            "currency_to": o.currency_to,
+            "amount_received": o.amount_received,
+            "status": o.status,
+            "deleted_at": o.deleted_at.isoformat(),
+            "days_left": days_left,
+        })
+    return {"success": True, "data": result, "message": ""}
 
 
 @router.get("/orders/{order_id}", response_model=dict)
@@ -644,3 +676,31 @@ def get_banks(
         "data": [{"id": b.id, "name": b.name, "country": b.country} for b in banks],
         "message": ""
     }
+
+
+@router.delete("/orders/{order_id}", response_model=dict)
+def delete_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    order = db.query(Order).filter(Order.id == order_id, Order.deleted_at == None).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    order.deleted_at = datetime.utcnow()
+    db.commit()
+    return {"success": True, "data": None, "message": f"Orden {order.order_number} movida a papelera"}
+
+
+@router.post("/orders/{order_id}/restore", response_model=dict)
+def restore_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    order = db.query(Order).filter(Order.id == order_id, Order.deleted_at != None).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada en papelera")
+    order.deleted_at = None
+    db.commit()
+    return {"success": True, "data": None, "message": f"Orden {order.order_number} restaurada"}
