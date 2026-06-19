@@ -116,7 +116,7 @@ export default function Home() {
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
           .hero-buttons button,.hero-buttons a{font-size:13px!important;padding:12px 14px!important;border-radius:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           /* Globe structure mobile */
-          #pin-wrap{height:320vh!important;}
+          #pin-wrap{height:500vh!important;}
           #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:visible!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
