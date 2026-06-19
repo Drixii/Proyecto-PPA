@@ -39,12 +39,16 @@ export default function Home() {
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
+  const [showIOSHint, setShowIOSHint] = useState(false)
+
   const handleInstall = async () => {
     if (deferredPrompt.current) {
       deferredPrompt.current.prompt()
       await deferredPrompt.current.userChoice
       deferredPrompt.current = null
       setCanInstall(false)
+    } else {
+      setShowIOSHint(h => !h)
     }
   }
 
@@ -326,27 +330,30 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Mobile floating PWA install button — only shows when browser supports install */}
-      {canInstall && (
-        <div className="mob-fab" style={{ position:'fixed', bottom:24, right:20, zIndex:200 }}>
-          <button
-            onClick={handleInstall}
-            style={{
-              display:'flex', alignItems:'center', gap:10,
-              background:'linear-gradient(135deg,#1d4ed8,#38bdf8)',
-              color:'#fff', border:'none', borderRadius:40,
-              padding:'13px 20px', fontSize:14, fontWeight:700,
-              boxShadow:'0 8px 28px rgba(56,189,248,.5)',
-              cursor:'pointer', whiteSpace:'nowrap',
-            }}
-          >
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Descarga nuestra app
-          </button>
-        </div>
-      )}
+      {/* Mobile floating PWA install button */}
+      <div className="mob-fab" style={{ position:'fixed', bottom:24, right:20, zIndex:200, flexDirection:'column', alignItems:'flex-end', gap:8 }}>
+        {showIOSHint && (
+          <div style={{ background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.3)', borderRadius:14, padding:'12px 14px', maxWidth:220, fontSize:13, color:'#aebfe2', lineHeight:1.5, boxShadow:'0 8px 24px rgba(0,0,0,.5)' }}>
+            En Safari: toca <strong style={{color:'#38bdf8'}}>Compartir</strong> → <strong style={{color:'#38bdf8'}}>Añadir a pantalla de inicio</strong>
+          </div>
+        )}
+        <button
+          onClick={handleInstall}
+          style={{
+            display:'flex', alignItems:'center', gap:10,
+            background:'linear-gradient(135deg,#1d4ed8,#38bdf8)',
+            color:'#fff', border:'none', borderRadius:40,
+            padding:'13px 20px', fontSize:14, fontWeight:700,
+            boxShadow:'0 8px 28px rgba(56,189,248,.5)',
+            cursor:'pointer', whiteSpace:'nowrap',
+          }}
+        >
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Descarga nuestra app
+        </button>
+      </div>
     </div>
   )
 }
