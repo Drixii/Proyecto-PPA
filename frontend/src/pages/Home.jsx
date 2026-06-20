@@ -121,6 +121,9 @@ export default function Home() {
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
           #hero-content>div{flex-direction:column;align-items:center;padding:12px 16px 180px;gap:14px!important;}
+          .hero-text>div:first-child{display:none!important;}
+          .hero-text h1{margin-bottom:10px!important;}
+          .hero-buttons{margin-bottom:0!important;}
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
           .mob-fab{display:flex!important;}
