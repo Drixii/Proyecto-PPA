@@ -1,15 +1,3 @@
-/**
- * CalculatorDark.jsx — Versión dark glass del Calculator
- * Uso: reemplaza <Calculator> en Home.jsx por <CalculatorDark onSend={handleSend} />
- * Copiar a: src/components/CalculatorDark.jsx
- *
- * Mantiene TODA la lógica real de la API:
- *   - GET /rates/countries  → lista de países disponibles
- *   - GET /rates/convert    → conversión con tasa real
- *   - Auto-refresh cada 60s
- *   - Animación count-up en el resultado
- */
-
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
@@ -37,65 +25,130 @@ function fmt(num, currency) {
 }
 function parseRaw(str) { return parseInt((str || '').replace(/\D/g, ''), 10) || 0 }
 
-// ── Dropdown Origen ───────────────────────────────────────────────────────────
-function FromDropdown({ value, onChange, onClose }) {
-  const ref = useRef()
+// ── Bottom Sheet para mobile ──────────────────────────────────────────────────
+function MobileSheet({ title, onClose, children }) {
   useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) onClose() }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [onClose])
-
+    const prev = document.documentElement.style.overflow
+    document.documentElement.style.overflow = 'hidden'
+    return () => { document.documentElement.style.overflow = prev }
+  }, [])
   return (
-    <div ref={ref} style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', zIndex: 200, width: 230, borderRadius: 16, overflow: 'hidden', background: 'rgba(12,20,46,.97)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,.16)', boxShadow: '0 24px 60px rgba(0,0,0,.5)' }}>
-      {SEND_CURRENCIES.map(c => (
-        <button key={c.code} type="button" onClick={() => { onChange(c.code); onClose() }}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', background: value === c.code ? 'rgba(56,189,248,.14)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-          <img src={cflag(c.iso2)} alt="" style={{ width: 22, height: 15, borderRadius: 3, objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#eaf2ff' }}>{c.code}</span>
-          <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: '#8aa0cc' }}>{c.name}</span>
-        </button>
-      ))}
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,.72)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: 'linear-gradient(180deg,rgba(10,20,52,.99),rgba(6,14,40,1))', borderRadius: '24px 24px 0 0', border: '1px solid rgba(255,255,255,.13)', borderBottom: 'none', boxShadow: '0 -20px 60px rgba(0,0,0,.7)', maxHeight: '82vh', display: 'flex', flexDirection: 'column', animation: 'sheetUp .26s cubic-bezier(.32,1,.68,1)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, paddingBottom: 2 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.22)' }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#eaf2ff', letterSpacing: '-.01em' }}>{title}</span>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.12)', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#bfe4ff', fontSize: 16, lineHeight: 1 }}>✕</button>
+        </div>
+        {children}
+        <div style={{ height: 28 }} />
+      </div>
     </div>
   )
 }
 
-// ── Dropdown Destino ──────────────────────────────────────────────────────────
-function ToDropdown({ countries, value, onChange, onClose }) {
+// ── Dropdown / Sheet Origen ───────────────────────────────────────────────────
+function FromDropdown({ value, onChange, onClose, mobile }) {
+  const ref = useRef()
+  useEffect(() => {
+    if (mobile) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) onClose() }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [onClose, mobile])
+
+  const items = SEND_CURRENCIES.map(c => (
+    <button key={c.code} type="button" onClick={() => { onChange(c.code); onClose() }}
+      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: mobile ? '14px 20px' : '11px 14px', background: value === c.code ? 'rgba(56,189,248,.15)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+      <img src={cflag(c.iso2)} alt="" style={{ width: mobile ? 30 : 22, height: mobile ? 20 : 15, borderRadius: 3, objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
+      <span style={{ fontSize: mobile ? 15 : 14, fontWeight: 700, color: '#eaf2ff' }}>{c.code}</span>
+      <span style={{ flex: 1, textAlign: 'right', fontSize: mobile ? 12.5 : 11.5, color: '#8aa0cc' }}>{c.name}</span>
+      {value === c.code && <span style={{ color: '#38bdf8', fontSize: 16 }}>✓</span>}
+    </button>
+  ))
+
+  if (mobile) {
+    return (
+      <MobileSheet title="Selecciona moneda de envío" onClose={onClose}>
+        <div style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', flex: 1, overscrollBehavior: 'contain' }}>
+          {items}
+        </div>
+      </MobileSheet>
+    )
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', zIndex: 200, width: 230, borderRadius: 16, overflow: 'hidden', background: 'rgba(12,20,46,.97)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,.16)', boxShadow: '0 24px 60px rgba(0,0,0,.5)' }}>
+      {items}
+    </div>
+  )
+}
+
+// ── Dropdown / Sheet Destino ──────────────────────────────────────────────────
+function ToDropdown({ countries, value, onChange, onClose, mobile }) {
   const [search, setSearch] = useState('')
   const ref = useRef()
   const inputRef = useRef()
   useEffect(() => {
+    if (mobile) return
     const h = e => { if (ref.current && !ref.current.contains(e.target)) onClose() }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
-  }, [onClose])
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 50) }, [])
+  }, [onClose, mobile])
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80) }, [])
   const filtered = search ? countries.filter(c => c.country.toLowerCase().includes(search.toLowerCase())) : countries
+
+  const searchBar = (
+    <div style={{ padding: mobile ? '0 20px 12px' : '0 10px 10px', borderBottom: mobile ? 'none' : '1px solid rgba(255,255,255,.08)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.07)', borderRadius: 12, padding: '9px 14px', border: '1px solid rgba(255,255,255,.1)' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        <input ref={inputRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar país..."
+          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 14, color: '#eaf2ff', fontFamily: 'inherit' }} />
+      </div>
+    </div>
+  )
+
+  const items = (
+    <>
+      {filtered.length === 0 && <p style={{ textAlign: 'center', color: '#8aa0cc', fontSize: 13, padding: '16px 0' }}>Sin resultados</p>}
+      {filtered.map(c => (
+        <button key={c.country} type="button" onClick={() => { onChange(c); onClose() }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: mobile ? '14px 20px' : '11px 14px', background: value === c.country ? 'rgba(56,189,248,.15)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+          {flagUrl(c.country)
+            ? <img src={flagUrl(c.country)} alt="" style={{ width: mobile ? 30 : 22, height: mobile ? 20 : 15, borderRadius: 3, objectFit: 'cover' }} />
+            : <span style={{ width: mobile ? 30 : 22, height: mobile ? 20 : 15, background: 'rgba(255,255,255,.1)', borderRadius: 3, display: 'inline-block' }} />
+          }
+          <span style={{ flex: 1, fontSize: mobile ? 15 : 14, fontWeight: 500, color: '#eaf2ff' }}>{c.country}</span>
+          <span style={{ fontSize: mobile ? 12.5 : 11.5, color: '#8aa0cc', fontFamily: "'JetBrains Mono',monospace" }}>{c.currency}</span>
+          {value === c.country && <span style={{ color: '#38bdf8', fontSize: 16 }}>✓</span>}
+        </button>
+      ))}
+    </>
+  )
+
+  if (mobile) {
+    return (
+      <MobileSheet title="Selecciona país destino" onClose={onClose}>
+        {searchBar}
+        <div style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', flex: 1, overscrollBehavior: 'contain' }}>
+          {items}
+        </div>
+      </MobileSheet>
+    )
+  }
 
   return (
     <div ref={ref} style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', zIndex: 200, width: 248, borderRadius: 16, overflow: 'hidden', background: 'rgba(12,20,46,.97)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,.16)', boxShadow: '0 24px 60px rgba(0,0,0,.5)' }}>
-      <div style={{ padding: 10, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.07)', borderRadius: 11, padding: '8px 12px' }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          <input ref={inputRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar país..."
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#eaf2ff', fontFamily: 'inherit' }} />
-        </div>
-      </div>
-      <div style={{ maxHeight: 230, overflowY: 'auto' }}>
-        {filtered.length === 0 && <p style={{ textAlign: 'center', color: '#8aa0cc', fontSize: 12, padding: '12px 0' }}>Sin resultados</p>}
-        {filtered.map(c => (
-          <button key={c.country} type="button" onClick={() => { onChange(c); onClose() }}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', background: value === c.country ? 'rgba(56,189,248,.14)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-            {flagUrl(c.country)
-              ? <img src={flagUrl(c.country)} alt="" style={{ width: 22, height: 15, borderRadius: 3, objectFit: 'cover' }} />
-              : <span style={{ width: 22, height: 15, background: 'rgba(255,255,255,.1)', borderRadius: 3, display: 'inline-block' }} />
-            }
-            <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: '#eaf2ff' }}>{c.country}</span>
-            <span style={{ fontSize: 11.5, color: '#8aa0cc', fontFamily: "'JetBrains Mono',monospace" }}>{c.currency}</span>
-          </button>
-        ))}
-      </div>
+      <div style={{ padding: 10 }}>{searchBar}</div>
+      <div style={{ maxHeight: 230, overflowY: 'auto' }}>{items}</div>
     </div>
   )
 }
@@ -111,10 +164,10 @@ export default function CalculatorDark({ onSend }) {
   const [rateError, setRateError] = useState(null)
   const [fromOpen, setFromOpen] = useState(false)
   const [toOpen, setToOpen]     = useState(false)
+  const [isMobile]              = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768)
   const receivedRef = useRef(null)
   const countRaf    = useRef(null)
 
-  // ── Real API: países disponibles ─────────────────────────────────────────
   const { data: countriesData } = useQuery({
     queryKey: ['countries'],
     queryFn: () => api.get('/rates/countries').then(r => r.data.data),
@@ -128,7 +181,6 @@ export default function CalculatorDark({ onSend }) {
     if (found) setToCurrency(found.currency)
   }, [toCountry, countries])
 
-  // ── Auto-fetch tasa ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!rawAmount || rawAmount <= 0) { setResult(null); setRateError(null); return }
     if (fromCurrency === toCurrency) { setResult(null); setRateError('Misma moneda en ambos lados'); return }
@@ -142,7 +194,6 @@ export default function CalculatorDark({ onSend }) {
     return () => clearInterval(interval)
   }, [result, fromCurrency, toCurrency, displayAmount])
 
-  // ── Real API: conversión ──────────────────────────────────────────────────
   const fetchRate = async () => {
     if (!rawAmount || rawAmount <= 0) return
     setLoading(true); setRateError(null)
@@ -162,7 +213,6 @@ export default function CalculatorDark({ onSend }) {
     } finally { setLoading(false) }
   }
 
-  // ── Animación count-up ────────────────────────────────────────────────────
   const animateCount = (from, to, latestResult) => {
     if (!receivedRef.current) return
     cancelAnimationFrame(countRaf.current)
@@ -192,7 +242,6 @@ export default function CalculatorDark({ onSend }) {
     ? `1 ${fromCurrency} = ${result.rate.toLocaleString('es-CL', { maximumFractionDigits: 4, minimumFractionDigits: 2 })} ${toCurrency}`
     : loading ? 'Calculando...' : rateError || 'Ingresa un monto para ver la tasa'
 
-  // ── Estilos ───────────────────────────────────────────────────────────────
   const card = { position: 'relative', borderRadius: 28, padding: 24, background: 'rgba(6,14,40,.18)', backdropFilter: 'blur(10px) saturate(140%)', WebkitBackdropFilter: 'blur(10px) saturate(140%)', border: '1px solid rgba(255,255,255,.10)', boxShadow: '0 8px 40px rgba(0,0,0,.18), inset 0 1.5px 0 rgba(255,255,255,.12)' }
   const panel = bg => ({ borderRadius: 18, padding: '15px 16px', background: bg, border: '1px solid rgba(255,255,255,.06)' })
   const btnCurrency = extra => ({ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 999, background: 'rgba(255,255,255,.09)', border: '1px solid rgba(255,255,255,.16)', cursor: 'pointer', ...extra })
@@ -204,6 +253,7 @@ export default function CalculatorDark({ onSend }) {
         @keyframes flagWave{0%{transform:perspective(80px) rotateY(0deg) skewY(0deg) scaleX(1);}12%{transform:perspective(80px) rotateY(-14deg) skewY(-2.5deg) scaleX(.94);}46%{transform:perspective(80px) rotateY(2deg) scaleX(1);}62%{transform:perspective(80px) rotateY(10deg) skewY(-1.5deg) scaleX(.95);}100%{transform:perspective(80px) rotateY(0deg) scaleX(1);}}
         @keyframes glowPulse{0%,100%{opacity:.45}50%{opacity:1}}
         @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
         @media(max-width:768px){
           .calc-dark-wrap .calc-card{padding:16px!important;background:rgba(6,14,40,0.07)!important;border:1px solid rgba(255,255,255,.07)!important;backdrop-filter:blur(8px) saturate(120%)!important;}
           .calc-dark-wrap .calc-header{margin-bottom:12px!important;}
@@ -219,10 +269,8 @@ export default function CalculatorDark({ onSend }) {
       `}</style>
 
       <div className="calc-card" style={card}>
-        {/* sheen line */}
         <div style={{ position: 'absolute', top: 0, left: 24, right: 24, height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)' }} />
 
-        {/* Header */}
         <div className="calc-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <h2 className="calc-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-.01em' }}>Calcula tu envío</h2>
           <span className="calc-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: '#9fe7c0', background: 'rgba(34,197,94,.14)', border: '1px solid rgba(74,222,128,.3)', padding: '5px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>
@@ -241,7 +289,7 @@ export default function CalculatorDark({ onSend }) {
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{fromCurrency}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9fb3dd" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>
-              {fromOpen && <FromDropdown value={fromCurrency} onChange={handleFromChange} onClose={() => setFromOpen(false)} />}
+              {fromOpen && <FromDropdown value={fromCurrency} onChange={handleFromChange} onClose={() => setFromOpen(false)} mobile={isMobile} />}
             </div>
             <input type="text" inputMode="numeric" value={displayAmount} onChange={handleAmountChange} placeholder="0"
               className="calc-amount"
@@ -275,7 +323,7 @@ export default function CalculatorDark({ onSend }) {
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{toCurrency}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9fb3dd" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>
-              {toOpen && <ToDropdown countries={countries} value={toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} />}
+              {toOpen && <ToDropdown countries={countries} value={toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} mobile={isMobile} />}
             </div>
             <p ref={receivedRef} className="calc-received" style={{ flex: 1, margin: 0, textAlign: 'right', fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: result ? '#7dd3fc' : 'rgba(125,211,252,.3)', textShadow: result ? '0 0 22px rgba(56,189,248,.45)' : 'none' }}>
               {result ? fmt(result.amount_received, toCurrency) : '—'}
