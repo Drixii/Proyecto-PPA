@@ -75,35 +75,54 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Mobile: bloqueo desde primer touchmove en zona → iOS no puede commitear momentum
+  // Mobile: body position:fixed = lock físico absoluto + progreso manual en globe.js
   useEffect(() => {
     if (window.innerWidth > 768) return
     let autoScrolling = false
     let rafId = null
     let touchStartY = null
     let inZone = false
-    let lastScrollY = window.scrollY
 
     const getZone = () => {
       const pin = document.getElementById('pin-wrap')
       if (!pin) return null
       const pinStart = pin.offsetTop
       const pinEnd = pinStart + pin.offsetHeight - window.innerHeight
-      return { pinStart, pinEnd }
+      return { pinStart, pinEnd, pin }
     }
 
-    const animateTo = (target) => {
+    const lockBody = () => {
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      return scrollY
+    }
+
+    const unlockBody = (targetScrollY) => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      window.__heroProgress = null
+      window.scrollTo(0, targetScrollY)
+    }
+
+    const animateTo = (targetProgress, targetScrollY) => {
       if (autoScrolling) return
       autoScrolling = true
-      const startY = window.scrollY
+      const frozenScrollY = lockBody()
+      const zone = getZone()
+      const total = zone ? zone.pin.offsetHeight - window.innerHeight : 1
+      const startProgress = total > 0 ? frozenScrollY / total : 0
+      window.__heroProgress = startProgress
       const duration = 2800
       const t0 = performance.now()
       const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
       const step = (now) => {
         const p = Math.min(1, (now - t0) / duration)
-        window.scrollTo(0, Math.round(startY + (target - startY) * ease(p)))
+        window.__heroProgress = startProgress + (targetProgress - startProgress) * ease(p)
         if (p < 1) { rafId = requestAnimationFrame(step) }
-        else { autoScrolling = false; rafId = null }
+        else { unlockBody(targetScrollY); autoScrolling = false; rafId = null }
       }
       rafId = requestAnimationFrame(step)
     }
@@ -119,8 +138,9 @@ export default function Home() {
     }
 
     const onTouchMove = (e) => {
+      // Siempre bloquear si animando
       if (autoScrolling) { e.preventDefault(); return }
-      // En zona: preventDefault INMEDIATO frame 0 — iOS no puede commitear momentum
+      // En zona: bloquear frame 0 sin esperar dirección
       if (!inZone) return
       e.preventDefault()
       if (touchStartY === null) return
@@ -130,8 +150,8 @@ export default function Home() {
       const scrollY = window.scrollY
       const dy = touchStartY - e.touches[0].clientY
       if (Math.abs(dy) < 8) return
-      if (dy > 0 && scrollY >= pinStart && scrollY < pinEnd - 50) animateTo(pinEnd)
-      else if (dy < 0 && scrollY > pinStart + 50 && scrollY <= pinEnd) animateTo(pinStart)
+      if (dy > 0 && scrollY >= pinStart && scrollY < pinEnd - 50) animateTo(1, pinEnd)
+      else if (dy < 0 && scrollY > pinStart + 50 && scrollY <= pinEnd) animateTo(0, pinStart)
     }
 
     const onTouchEnd = (e) => {
@@ -142,39 +162,22 @@ export default function Home() {
         const scrollY = window.scrollY
         const dy = touchStartY - e.changedTouches[0].clientY
         if (Math.abs(dy) >= 8) {
-          if (dy > 0 && scrollY >= pinStart && scrollY < pinEnd - 50) animateTo(pinEnd)
-          else if (dy < 0 && scrollY > pinStart + 50 && scrollY <= pinEnd) animateTo(pinStart)
+          if (dy > 0 && scrollY >= pinStart && scrollY < pinEnd - 50) animateTo(1, pinEnd)
+          else if (dy < 0 && scrollY > pinStart + 50 && scrollY <= pinEnd) animateTo(0, pinStart)
         }
       }
       inZone = false; touchStartY = null
     }
 
-    // Respaldo: scroll que escapó → lo mata y retoma control
-    const onScroll = () => {
-      if (autoScrolling) { window.scrollTo(0, window.scrollY); return }
-      const zone = getZone()
-      if (!zone) return
-      const { pinStart, pinEnd } = zone
-      const scrollY = window.scrollY
-      const goingDown = scrollY > lastScrollY
-      lastScrollY = scrollY
-      if (goingDown && scrollY >= pinStart + 20 && scrollY < pinEnd - 50) {
-        window.scrollTo(0, scrollY); animateTo(pinEnd)
-      } else if (!goingDown && scrollY <= pinEnd - 20 && scrollY > pinStart + 50) {
-        window.scrollTo(0, scrollY); animateTo(pinStart)
-      }
-    }
-
     document.addEventListener('touchstart', onTouchStart, { passive: true })
     document.addEventListener('touchmove', onTouchMove, { passive: false })
     document.addEventListener('touchend', onTouchEnd, { passive: true })
-    window.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       document.removeEventListener('touchstart', onTouchStart)
       document.removeEventListener('touchmove', onTouchMove)
       document.removeEventListener('touchend', onTouchEnd)
-      window.removeEventListener('scroll', onScroll)
       if (rafId) cancelAnimationFrame(rafId)
+      unlockBody(window.scrollY)
     }
   }, [])
 
