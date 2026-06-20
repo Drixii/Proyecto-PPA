@@ -142,7 +142,8 @@
     if((frame._t=(frame._t||0)+1)%10===0)revealCheck();
     if(!ctx||!W||!H){anim=requestAnimationFrame(frame);return;}
     var p=progress;
-    var morph=ease(clamp((p-0.10)/0.62,0,1));
+    var morphStart=W<768?0.10+0.35:0.10;
+    var morph=ease(clamp((p-morphStart)/0.62,0,1));
     var inv=1-morph;
     var cx=W*0.5,cy=H*0.5;
     var R=W<768?Math.min(W*0.49,H*0.49):Math.min(W*0.40,H*0.62);
