@@ -75,28 +75,37 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Mobile: auto-scroll animation at 40px entry, full touch lock both directions
+  // Mobile: animación controlada con rAF (2s), lock total de touch en ambas direcciones
   useEffect(() => {
     if (window.innerWidth > 768) return
     let autoScrolling = false
     let lastScrollY = window.scrollY
+    let rafId = null
 
     const blockTouch = (e) => { e.preventDefault() }
 
     const unlockScroll = () => {
       document.removeEventListener('touchmove', blockTouch)
       autoScrolling = false
+      rafId = null
     }
 
-    const triggerAuto = (target) => {
+    const animateTo = (target) => {
       if (autoScrolling) return
       autoScrolling = true
       document.addEventListener('touchmove', blockTouch, { passive: false })
-      window.scrollTo({ top: target, behavior: 'smooth' })
-      const check = setInterval(() => {
-        if (Math.abs(window.scrollY - target) < 30) { clearInterval(check); unlockScroll() }
-      }, 80)
-      setTimeout(() => { clearInterval(check); unlockScroll() }, 4000)
+      const startY = window.scrollY
+      window.scrollTo(0, startY) // mata momentum iOS instantáneamente
+      const duration = 2000
+      const t0 = performance.now()
+      const ease = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2
+      const step = (now) => {
+        const p = Math.min(1, (now - t0) / duration)
+        window.scrollTo(0, startY + (target - startY) * ease(p))
+        if (p < 1) { rafId = requestAnimationFrame(step) }
+        else { unlockScroll() }
+      }
+      rafId = requestAnimationFrame(step)
     }
 
     const onScroll = () => {
@@ -108,13 +117,10 @@ export default function Home() {
       const scrollY = window.scrollY
       const goingDown = scrollY > lastScrollY
       lastScrollY = scrollY
-      // Bajando: 40px dentro del pin-wrap → auto-scroll hasta banderas
-      if (goingDown && scrollY >= pinStart + 40 && scrollY < pinEnd - 50) {
-        triggerAuto(pinEnd)
-      }
-      // Subiendo: 40px desde el fondo del pin-wrap → auto-scroll al inicio
-      else if (!goingDown && scrollY <= pinEnd - 40 && scrollY > pinStart + 50) {
-        triggerAuto(pinStart)
+      if (goingDown && scrollY >= pinStart + 20 && scrollY < pinEnd - 50) {
+        animateTo(pinEnd)
+      } else if (!goingDown && scrollY <= pinEnd - 20 && scrollY > pinStart + 50) {
+        animateTo(pinStart)
       }
     }
 
@@ -122,6 +128,7 @@ export default function Home() {
     return () => {
       window.removeEventListener('scroll', onScroll)
       document.removeEventListener('touchmove', blockTouch)
+      if (rafId) cancelAnimationFrame(rafId)
     }
   }, [])
 
