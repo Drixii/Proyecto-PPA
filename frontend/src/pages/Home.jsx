@@ -115,14 +115,22 @@ export default function Home() {
       const total = zone ? zone.pin.offsetHeight - window.innerHeight : 1
       const startProgress = total > 0 ? frozenScrollY / total : 0
       window.__heroProgress = startProgress
-      const duration = 2800
+      const duration = 2600
       const t0 = performance.now()
       const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
       const step = (now) => {
         const p = Math.min(1, (now - t0) / duration)
         window.__heroProgress = startProgress + (targetProgress - startProgress) * ease(p)
-        if (p < 1) { rafId = requestAnimationFrame(step) }
-        else { unlockBody(targetScrollY); autoScrolling = false; rafId = null }
+        if (p < 1) { rafId = requestAnimationFrame(step); return }
+        // rAF terminó: esperar a que globe.js visual llegue al destino
+        const threshold = targetProgress > 0.5 ? 0.92 : 0.08
+        const check = () => {
+          const vp = window.__heroVisualProgress ?? targetProgress
+          const reached = targetProgress > 0.5 ? vp >= threshold : vp <= threshold
+          if (reached) { unlockBody(targetScrollY); autoScrolling = false; rafId = null }
+          else { rafId = requestAnimationFrame(check) }
+        }
+        rafId = requestAnimationFrame(check)
       }
       rafId = requestAnimationFrame(step)
     }

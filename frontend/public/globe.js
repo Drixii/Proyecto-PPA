@@ -56,6 +56,7 @@
     // En mobile suavizar con lerp para que la animación se vea lenta aunque scrolleen rápido
     if(W<768){ progress+=(_rawP-progress)*0.035; }
     else { progress=_rawP; }
+    window.__heroVisualProgress=progress;
     var p=progress;
     var heroDeadZone=W<768?0.35:0;
     var heroOut=clamp((p-heroDeadZone)/0.22,0,1);
