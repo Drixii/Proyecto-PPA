@@ -145,8 +145,8 @@
     var morphStart=W<768?0.10+0.35:0.10;
     var morph=ease(clamp((p-morphStart)/0.62,0,1));
     var inv=1-morph;
-    var cx=W*0.5,cy=H*0.5;
-    var R=W<768?Math.min(W*0.49,H*0.49):Math.min(W*0.40,H*0.62);
+    var cx=W*0.5,cy=W<768?H*0.38:H*0.5;
+    var R=W<768?Math.min(W*0.64,H*0.58):Math.min(W*0.40,H*0.62);
     rot+=0.0018*inv;
     var cosR=Math.cos(rot),sinR=Math.sin(rot);
     function rotY(x,y,z){return [x*cosR-z*sinR,y,x*sinR+z*cosR];}

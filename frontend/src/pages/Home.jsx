@@ -110,7 +110,7 @@ export default function Home() {
         @media(max-width:768px){
           .nav-inner{padding:0 14px;}
           .hero-text{flex:none;width:100%;}
-          .hero-calc{flex:none;width:100%;max-width:420px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:220px!important;animation:none;}
+          .hero-calc{flex:none;width:100%;max-width:460px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:220px!important;animation:none;}
           .hero-hide-mobile{display:none;}
           .section-pad{padding:56px 16px;}
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
@@ -121,9 +121,12 @@ export default function Home() {
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
           #hero-content>div{flex-direction:column;align-items:center;padding:12px 16px 180px;gap:14px!important;}
-          .hero-text>div:first-child{display:none!important;}
+          .hero-text>div:first-child{padding:3px 10px!important;margin-bottom:6px!important;gap:6px!important;}
+          .hero-text>div:first-child>span:last-child{font-size:10px!important;}
+          .hero-text>div:first-child>span:first-child{width:6px!important;height:6px!important;}
           .hero-text h1{margin-bottom:10px!important;}
           .hero-buttons{margin-bottom:0!important;}
+          .hero-calc{margin-top:20px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
           .mob-fab{display:flex!important;}
