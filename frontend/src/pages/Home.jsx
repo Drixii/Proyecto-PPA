@@ -6,10 +6,10 @@ import logoSrc from '../assets/logo.png'
 
 // ── Secciones estáticas ───────────────────────────────────────────────────────
 const FEATURES = [
-  { icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#7dd3fc" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>, title: 'Transferencias en minutos', desc: 'Procesamos tu envío al instante. Sin esperas, sin burocracia.' },
-  { icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#86efac" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, title: 'Seguridad de nivel bancario', desc: 'Datos y dinero protegidos con cifrado y certificación.' },
-  { icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#a5b4fc" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>, title: 'Cero comisiones ocultas', desc: 'Ves exactamente cuánto recibe tu beneficiario antes de confirmar.' },
-  { icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#fcd34d" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>, title: 'Tasas en tiempo real', desc: 'Tipos de cambio actualizados en vivo para la mejor tasa.' },
+  { accent: '#7dd3fc', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#7dd3fc" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>, title: 'Transferencias en minutos', desc: 'Procesamos tu envío al instante. Sin esperas, sin burocracia.' },
+  { accent: '#86efac', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#86efac" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, title: 'Seguridad de nivel bancario', desc: 'Datos y dinero protegidos con cifrado y certificación.' },
+  { accent: '#a5b4fc', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#a5b4fc" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>, title: 'Cero comisiones ocultas', desc: 'Ves exactamente cuánto recibe tu beneficiario antes de confirmar.' },
+  { accent: '#fcd34d', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#fcd34d" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>, title: 'Tasas en tiempo real', desc: 'Tipos de cambio actualizados en vivo para la mejor tasa.' },
 ]
 const STEPS = [
   { n: '1', title: 'Calcula tu envío', desc: 'Ingresa el monto y elige el país. Tasa en tiempo real.' },
@@ -191,6 +191,14 @@ export default function Home() {
           .hero-calc{margin-top:20px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{padding-top:5vh!important;}
+          .stats-row{display:grid!important;grid-template-columns:repeat(2,1fr)!important;gap:10px!important;width:100%!important;margin-top:14px!important;}
+          .stats-row>div{flex-direction:column!important;gap:0!important;align-items:flex-start!important;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 14px!important;}
+          .stat-divider{display:none!important;}
+          .features-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important;}
+          .feature-card{padding:16px!important;border-radius:18px!important;}
+          .feature-card h3{font-size:14px!important;}
+          .feature-card p{font-size:13px!important;}
+          .feature-icon{width:38px!important;height:38px!important;border-radius:11px!important;margin-bottom:10px!important;}
           .mob-fab{display:flex!important;}
         }
         @media(max-width:480px){
@@ -270,16 +278,19 @@ export default function Home() {
                     </>
                   )}
                 </div>
-                <div className="stats-row hero-hide-mobile">
-                  {[['2 min', 'tiempo promedio'], ['+50', 'países conectados'], ['0%', 'comisiones ocultas']].map(([val, label], i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                      {i > 0 && <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,.14)' }} />}
-                      <div>
-                        <p style={{ margin: 0, fontFamily: "'JetBrains Mono',monospace", fontSize: 26, fontWeight: 700, color: '#fff' }}>{val}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>{label}</p>
+                <div style={{ marginTop: 28 }}>
+                  <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 600, letterSpacing: '.13em', textTransform: 'uppercase', color: '#38bdf8' }}>En números</p>
+                  <div className="stats-row">
+                    {[['2 min', 'Tiempo promedio'], ['+50', 'Países conectados'], ['0%', 'Comisiones ocultas']].map(([val, label], i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                        {i > 0 && <div className="stat-divider" style={{ width: 1, height: 32, background: 'rgba(255,255,255,.14)' }} />}
+                        <div>
+                          <p style={{ margin: 0, fontFamily: "'JetBrains Mono',monospace", fontSize: 26, fontWeight: 700, color: '#fff' }}>{val}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>{label}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="hero-calc">
@@ -331,10 +342,10 @@ export default function Home() {
             <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Por qué Ksa Global</p>
             <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>Diseñado para mover dinero<br />sin fronteras</h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 18 }}>
+          <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 18 }}>
             {FEATURES.map((f, i) => (
-              <div key={f.title} data-reveal="" style={{ ...glassCard, borderRadius: 22, padding: 26, ...RD(i * 0.1) }}>
-                <div style={{ width: 50, height: 50, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, background: 'rgba(4,12,38,.9)', border: '1px solid rgba(56,189,248,.2)' }}>{f.icon}</div>
+              <div key={f.title} className="feature-card" data-reveal="" style={{ ...glassCard, borderRadius: 22, padding: 26, borderTop: `2px solid ${f.accent}`, ...RD(i * 0.1) }}>
+                <div className="feature-icon" style={{ width: 50, height: 50, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, background: 'rgba(4,12,38,.9)', border: `1px solid ${f.accent}33` }}>{f.icon}</div>
                 <h3 style={{ margin: '0 0 7px', fontSize: 17, fontWeight: 600, color: '#fff' }}>{f.title}</h3>
                 <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: '#9fb0d4' }}>{f.desc}</p>
               </div>

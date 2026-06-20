@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { flagUrl } from '../utils/flags'
@@ -32,7 +33,7 @@ function MobileSheet({ title, onClose, children }) {
     document.documentElement.style.overflow = 'hidden'
     return () => { document.documentElement.style.overflow = prev }
   }, [])
-  return (
+  return createPortal(
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,.72)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
       onClick={onClose}
@@ -51,7 +52,8 @@ function MobileSheet({ title, onClose, children }) {
         {children}
         <div style={{ height: 28 }} />
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
