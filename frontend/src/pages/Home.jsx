@@ -75,6 +75,56 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // Mobile: bloquear scroll en primer bloque (hero/pinWrap) siempre
+  useEffect(() => {
+    if (window.innerWidth > 768) return
+    const blockZone = (e) => {
+      if (e.target.closest('.calc-dark-wrap')) return
+      const pin = document.getElementById('pin-wrap')
+      if (!pin) return
+      const pinEnd = pin.offsetTop + pin.offsetHeight - window.innerHeight
+      if (window.scrollY < pinEnd - 30) e.preventDefault()
+    }
+    document.addEventListener('touchmove', blockZone, { passive: false })
+    return () => document.removeEventListener('touchmove', blockZone)
+  }, [])
+
+  // Mobile: animación lenta al presionar TOCA AQUÍ
+  const handleTocaAqui = () => {
+    if (window.innerWidth > 768) return
+    const pin = document.getElementById('pin-wrap')
+    if (!pin) return
+    const pinEnd = pin.offsetTop + pin.offsetHeight - window.innerHeight
+    const total = pin.offsetHeight - window.innerHeight
+    const frozenY = window.scrollY
+    // Congelar página completamente
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${frozenY}px`
+    document.body.style.width = '100%'
+    const startP = total > 0 ? frozenY / total : 0
+    window.__heroProgress = startP
+    const duration = 3500
+    const t0 = performance.now()
+    const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / duration)
+      window.__heroProgress = startP + (1 - startP) * ease(p)
+      if (p < 1) { requestAnimationFrame(step); return }
+      // Esperar que el visual llegue a las banderas
+      const waitFlags = () => {
+        if ((window.__heroVisualProgress ?? 1) >= 0.92) {
+          document.body.style.position = ''
+          document.body.style.top = ''
+          document.body.style.width = ''
+          window.__heroProgress = null
+          window.scrollTo(0, pinEnd)
+        } else { requestAnimationFrame(waitFlags) }
+      }
+      requestAnimationFrame(waitFlags)
+    }
+    requestAnimationFrame(step)
+  }
+
   const handleSend = ({ amount, fromCurrency, toCountry, toCurrency, result }) => {
     if (!user) { navigate('/login'); return }
     navigate('/new-transfer', { state: { amount, fromCurrency, toCountry, toCurrency, result } })
@@ -225,12 +275,8 @@ export default function Home() {
               <div className="hero-calc">
                 <CalculatorDark onSend={handleSend} />
               </div>
-              <div className="mob-scroll-hint" onClick={() => {
-                const pin = document.getElementById('pin-wrap');
-                if (!pin) return;
-                window.scrollTo({ top: pin.offsetTop + pin.offsetHeight - window.innerHeight, behavior: 'smooth' });
-              }}>
-                <span style={{ fontSize: 11, color: 'rgba(191,228,255,0.8)', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Desliza para más información</span>
+              <div className="mob-scroll-hint" onClick={handleTocaAqui}>
+                <span style={{ fontSize: 11, color: 'rgba(191,228,255,0.8)', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>TOCA AQUÍ para más información</span>
                 <svg style={{ animation: 'bounceDown 1.6s ease-in-out infinite' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(191,228,255,0.6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
