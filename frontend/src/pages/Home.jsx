@@ -75,12 +75,13 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Mobile: touchmove { passive:false } intercepta ANTES del scroll → lock absoluto
+  // Mobile: bloqueo desde primer touchmove en zona → iOS no puede commitear momentum
   useEffect(() => {
     if (window.innerWidth > 768) return
     let autoScrolling = false
     let rafId = null
     let touchStartY = null
+    let inZone = false
     let lastScrollY = window.scrollY
 
     const getZone = () => {
@@ -95,10 +96,9 @@ export default function Home() {
       if (autoScrolling) return
       autoScrolling = true
       const startY = window.scrollY
-      window.scrollTo(0, startY) // mata momentum iOS en el momento exacto
       const duration = 2800
       const t0 = performance.now()
-      const ease = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2
+      const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
       const step = (now) => {
         const p = Math.min(1, (now - t0) / duration)
         window.scrollTo(0, Math.round(startY + (target - startY) * ease(p)))
@@ -109,30 +109,49 @@ export default function Home() {
     }
 
     const onTouchStart = (e) => {
-      if (e.target.closest('.calc-dark-wrap')) { touchStartY = null; return }
-      touchStartY = e.touches[0].clientY
+      if (e.target.closest('.calc-dark-wrap')) { inZone = false; touchStartY = null; return }
+      const zone = getZone()
+      if (!zone) { inZone = false; return }
+      const { pinStart, pinEnd } = zone
+      const scrollY = window.scrollY
+      inZone = scrollY >= pinStart && scrollY <= pinEnd + 100
+      touchStartY = inZone ? e.touches[0].clientY : null
     }
 
-    // passive:false → llega ANTES de que el browser mueva la pantalla
     const onTouchMove = (e) => {
       if (autoScrolling) { e.preventDefault(); return }
-      if (touchStartY === null || e.target.closest('.calc-dark-wrap')) return
+      // En zona: preventDefault INMEDIATO frame 0 — iOS no puede commitear momentum
+      if (!inZone) return
+      e.preventDefault()
+      if (touchStartY === null) return
       const zone = getZone()
       if (!zone) return
       const { pinStart, pinEnd } = zone
       const scrollY = window.scrollY
       const dy = touchStartY - e.touches[0].clientY
       if (Math.abs(dy) < 8) return
-      if (dy > 0 && scrollY >= pinStart && scrollY < pinEnd - 50) {
-        e.preventDefault(); animateTo(pinEnd)
-      } else if (dy < 0 && scrollY > pinStart + 50 && scrollY <= pinEnd) {
-        e.preventDefault(); animateTo(pinStart)
-      }
+      if (dy > 0 && scrollY >= pinStart && scrollY < pinEnd - 50) animateTo(pinEnd)
+      else if (dy < 0 && scrollY > pinStart + 50 && scrollY <= pinEnd) animateTo(pinStart)
     }
 
-    // respaldo para swipes ultra-rápidos que escapan del touchmove
+    const onTouchEnd = (e) => {
+      if (!inZone || autoScrolling || touchStartY === null) { inZone = false; return }
+      const zone = getZone()
+      if (zone) {
+        const { pinStart, pinEnd } = zone
+        const scrollY = window.scrollY
+        const dy = touchStartY - e.changedTouches[0].clientY
+        if (Math.abs(dy) >= 8) {
+          if (dy > 0 && scrollY >= pinStart && scrollY < pinEnd - 50) animateTo(pinEnd)
+          else if (dy < 0 && scrollY > pinStart + 50 && scrollY <= pinEnd) animateTo(pinStart)
+        }
+      }
+      inZone = false; touchStartY = null
+    }
+
+    // Respaldo: scroll que escapó → lo mata y retoma control
     const onScroll = () => {
-      if (autoScrolling) return
+      if (autoScrolling) { window.scrollTo(0, window.scrollY); return }
       const zone = getZone()
       if (!zone) return
       const { pinStart, pinEnd } = zone
@@ -140,18 +159,20 @@ export default function Home() {
       const goingDown = scrollY > lastScrollY
       lastScrollY = scrollY
       if (goingDown && scrollY >= pinStart + 20 && scrollY < pinEnd - 50) {
-        animateTo(pinEnd)
+        window.scrollTo(0, scrollY); animateTo(pinEnd)
       } else if (!goingDown && scrollY <= pinEnd - 20 && scrollY > pinStart + 50) {
-        animateTo(pinStart)
+        window.scrollTo(0, scrollY); animateTo(pinStart)
       }
     }
 
     document.addEventListener('touchstart', onTouchStart, { passive: true })
     document.addEventListener('touchmove', onTouchMove, { passive: false })
+    document.addEventListener('touchend', onTouchEnd, { passive: true })
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       document.removeEventListener('touchstart', onTouchStart)
       document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', onTouchEnd)
       window.removeEventListener('scroll', onScroll)
       if (rafId) cancelAnimationFrame(rafId)
     }
