@@ -152,7 +152,7 @@ export default function Home() {
           #sticky{position:sticky!important;top:0!important;height:100svh!important;overflow:visible!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
-          #hero-content>div{flex-direction:column;align-items:center;padding:78px 16px 180px;gap:14px!important;}
+          #hero-content>div{flex-direction:column;align-items:center;padding:78px 16px 48px;gap:14px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
           .mob-fab{display:flex!important;}
@@ -162,7 +162,7 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
-          #hero-content>div{padding:72px 12px 180px!important;gap:10px!important;}
+          #hero-content>div{padding:72px 12px 40px!important;gap:10px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}
@@ -248,15 +248,15 @@ export default function Home() {
               </div>
               <div className="hero-calc">
                 <CalculatorDark onSend={handleSend} />
-                {/* CTA mobile — solo visible en mobile, dentro del espacio bajo el calculador */}
-                <div className="calc-explore-cta" onClick={handleExplore} style={{ display: 'none', marginTop: 28, textAlign: 'center', cursor: 'pointer', padding: '10px 0' }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.65)', lineHeight: 1.4 }}>
-                    Click aquí para saber más de nosotros
-                  </p>
-                  <svg style={{ marginTop: 6, opacity: 0.5 }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+              </div>
+              {/* CTA mobile — hijo directo del flex column, visible en pantalla sin scrollear */}
+              <div className="calc-explore-cta" onClick={handleExplore} style={{ display: 'none', textAlign: 'center', cursor: 'pointer', padding: '10px 0' }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>
+                  Click aquí para saber más de nosotros
+                </p>
+                <svg style={{ marginTop: 6, opacity: 0.45 }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
             </div>
           </div>
