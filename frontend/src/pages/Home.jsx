@@ -191,9 +191,6 @@ export default function Home() {
           .hero-calc{margin-top:20px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{padding-top:5vh!important;}
-          .stats-row{display:grid!important;grid-template-columns:repeat(2,1fr)!important;gap:10px!important;width:100%!important;margin-top:14px!important;}
-          .stats-row>div{flex-direction:column!important;gap:0!important;align-items:flex-start!important;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 14px!important;}
-          .stat-divider{display:none!important;}
           .features-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important;}
           .feature-card{padding:16px!important;border-radius:18px!important;}
           .feature-card h3{font-size:14px!important;}
@@ -278,19 +275,16 @@ export default function Home() {
                     </>
                   )}
                 </div>
-                <div style={{ marginTop: 28 }}>
-                  <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 600, letterSpacing: '.13em', textTransform: 'uppercase', color: '#38bdf8' }}>En números</p>
-                  <div className="stats-row">
-                    {[['2 min', 'Tiempo promedio'], ['+50', 'Países conectados'], ['0%', 'Comisiones ocultas']].map(([val, label], i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                        {i > 0 && <div className="stat-divider" style={{ width: 1, height: 32, background: 'rgba(255,255,255,.14)' }} />}
-                        <div>
-                          <p style={{ margin: 0, fontFamily: "'JetBrains Mono',monospace", fontSize: 26, fontWeight: 700, color: '#fff' }}>{val}</p>
-                          <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>{label}</p>
-                        </div>
+                <div className="stats-row hero-hide-mobile">
+                  {[['2 min', 'tiempo promedio'], ['+50', 'países conectados'], ['0%', 'comisiones ocultas']].map(([val, label], i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                      {i > 0 && <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,.14)' }} />}
+                      <div>
+                        <p style={{ margin: 0, fontFamily: "'JetBrains Mono',monospace", fontSize: 26, fontWeight: 700, color: '#fff' }}>{val}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>{label}</p>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="hero-calc">
