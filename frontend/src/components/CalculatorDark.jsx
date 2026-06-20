@@ -199,27 +199,39 @@ export default function CalculatorDark({ onSend }) {
   const flagAnim = { animation: 'flagWave 2.4s ease-in-out infinite', transformOrigin: 'left center' }
 
   return (
-    <div style={{ width: '100%', maxWidth: 420, fontFamily: "'Space Grotesk',system-ui,sans-serif" }}>
+    <div className="calc-dark-wrap" style={{ width: '100%', maxWidth: 420, fontFamily: "'Space Grotesk',system-ui,sans-serif" }}>
       <style>{`
         @keyframes flagWave{0%{transform:perspective(80px) rotateY(0deg) skewY(0deg) scaleX(1);}12%{transform:perspective(80px) rotateY(-14deg) skewY(-2.5deg) scaleX(.94);}46%{transform:perspective(80px) rotateY(2deg) scaleX(1);}62%{transform:perspective(80px) rotateY(10deg) skewY(-1.5deg) scaleX(.95);}100%{transform:perspective(80px) rotateY(0deg) scaleX(1);}}
         @keyframes glowPulse{0%,100%{opacity:.45}50%{opacity:1}}
         @keyframes spin{to{transform:rotate(360deg)}}
+        @media(max-width:768px){
+          .calc-dark-wrap .calc-card{padding:16px!important;}
+          .calc-dark-wrap .calc-header{margin-bottom:12px!important;}
+          .calc-dark-wrap .calc-title{font-size:15px!important;}
+          .calc-dark-wrap .calc-badge{padding:4px 8px!important;font-size:10px!important;}
+          .calc-dark-wrap .calc-panel{padding:11px 12px!important;}
+          .calc-dark-wrap .calc-amount{font-size:24px!important;}
+          .calc-dark-wrap .calc-received{font-size:24px!important;}
+          .calc-dark-wrap .calc-divider{padding:10px 4px!important;}
+          .calc-dark-wrap .calc-cta{padding:12px!important;font-size:14px!important;margin-top:12px!important;}
+          .calc-dark-wrap .calc-footer{margin-top:8px!important;font-size:11px!important;}
+        }
       `}</style>
 
-      <div style={card}>
+      <div className="calc-card" style={card}>
         {/* sheen line */}
         <div style={{ position: 'absolute', top: 0, left: 24, right: 24, height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)' }} />
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-.01em' }}>Calcula tu envío</h2>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: '#9fe7c0', background: 'rgba(34,197,94,.14)', border: '1px solid rgba(74,222,128,.3)', padding: '5px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>
+        <div className="calc-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <h2 className="calc-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-.01em' }}>Calcula tu envío</h2>
+          <span className="calc-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: '#9fe7c0', background: 'rgba(34,197,94,.14)', border: '1px solid rgba(74,222,128,.3)', padding: '5px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', animation: 'glowPulse 1.6s infinite' }} />EN VIVO
           </span>
         </div>
 
         {/* TU ENVÍAS */}
-        <div style={panel('rgba(255,255,255,.04)')}>
+        <div className="calc-panel" style={panel('rgba(255,255,255,.04)')}>
           <p style={{ margin: '0 0 9px', fontSize: 11, fontWeight: 600, letterSpacing: '.08em', color: '#8aa0cc', textTransform: 'uppercase' }}>Tú envías</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -232,12 +244,13 @@ export default function CalculatorDark({ onSend }) {
               {fromOpen && <FromDropdown value={fromCurrency} onChange={handleFromChange} onClose={() => setFromOpen(false)} />}
             </div>
             <input type="text" inputMode="numeric" value={displayAmount} onChange={handleAmountChange} placeholder="0"
+              className="calc-amount"
               style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', textAlign: 'right', fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: '#fff' }} />
           </div>
         </div>
 
         {/* RATE DIVIDER */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 4px' }}>
+        <div className="calc-divider" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 4px' }}>
           <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.18))' }} />
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, background: 'rgba(56,189,248,.12)', border: '1px solid rgba(56,189,248,.3)' }}>
             {loading
@@ -250,7 +263,7 @@ export default function CalculatorDark({ onSend }) {
         </div>
 
         {/* DESTINATARIO RECIBE */}
-        <div style={panel('rgba(56,189,248,.04)')}>
+        <div className="calc-panel" style={panel('rgba(56,189,248,.04)')}>
           <p style={{ margin: '0 0 9px', fontSize: 11, fontWeight: 600, letterSpacing: '.08em', color: '#9fc7ff', textTransform: 'uppercase' }}>Destinatario recibe</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -264,18 +277,18 @@ export default function CalculatorDark({ onSend }) {
               </button>
               {toOpen && <ToDropdown countries={countries} value={toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} />}
             </div>
-            <p ref={receivedRef} style={{ flex: 1, margin: 0, textAlign: 'right', fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: result ? '#7dd3fc' : 'rgba(125,211,252,.3)', textShadow: result ? '0 0 22px rgba(56,189,248,.45)' : 'none' }}>
+            <p ref={receivedRef} className="calc-received" style={{ flex: 1, margin: 0, textAlign: 'right', fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: result ? '#7dd3fc' : 'rgba(125,211,252,.3)', textShadow: result ? '0 0 22px rgba(56,189,248,.45)' : 'none' }}>
               {result ? fmt(result.amount_received, toCurrency) : '—'}
             </p>
           </div>
         </div>
 
         {/* CTA */}
-        <button onClick={() => onSend?.({ amount: rawAmount, fromCurrency, toCountry, toCurrency, result })}
+        <button className="calc-cta" onClick={() => onSend?.({ amount: rawAmount, fromCurrency, toCountry, toCurrency, result })}
           style={{ marginTop: 16, width: '100%', padding: 15, fontSize: 16, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 14px 38px rgba(56,189,248,.4)' }}>
           ¡Comienza tu envío ahora! →
         </button>
-        <p style={{ margin: '11px 0 0', textAlign: 'center', fontSize: 11.5, color: '#8aa0cc' }}>🔒 Cifrado de extremo a extremo · Sin sorpresas</p>
+        <p className="calc-footer" style={{ margin: '11px 0 0', textAlign: 'center', fontSize: 11.5, color: '#8aa0cc' }}>🔒 Cifrado de extremo a extremo · Sin sorpresas</p>
       </div>
     </div>
   )
