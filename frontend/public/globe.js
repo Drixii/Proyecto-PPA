@@ -53,7 +53,8 @@
     if(W<768){ progress+= (_rawP - progress) * 0.035; }
     else { progress=_rawP; }
     var p=progress;
-    var heroOut=clamp(p/0.22,0,1);
+    var heroDeadZone=W<768?0.18:0;
+    var heroOut=clamp((p-heroDeadZone)/0.22,0,1);
     if(hero){hero.style.opacity=(1-heroOut).toFixed(3);hero.style.transform='translateY('+(-heroOut*40).toFixed(1)+'px)';hero.style.pointerEvents=heroOut>0.4?'none':'auto';}
     if(gridTitle)gridTitle.style.opacity=clamp((p-0.46)/0.22,0,1).toFixed(3);
     if(hint)hint.style.opacity=(1-clamp(p/0.1,0,1)).toFixed(3);
