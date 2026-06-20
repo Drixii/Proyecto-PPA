@@ -80,7 +80,7 @@
     var cellH=fr*2+50;
     var rows=Math.ceil(n/cols);
     var startX=W*0.5-(cols*cellW)/2+cellW/2;
-    var startY=H*0.57-(rows*cellH)/2+cellH/2;
+    var startY=(W<720?H*0.65:H*0.57)-(rows*cellH)/2+cellH/2;
     return {fr:fr,cols:cols,cellW:cellW,cellH:cellH,startX:startX,startY:startY};
   }
 

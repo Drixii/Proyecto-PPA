@@ -189,6 +189,7 @@ export default function Home() {
           .hero-buttons{margin-bottom:0!important;}
           .hero-calc{margin-top:20px!important;}
           #scroll-hint{display:none!important;}
+          #grid-title{padding-top:5vh!important;}
           .mob-fab{display:flex!important;}
         }
         @media(max-width:480px){
