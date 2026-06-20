@@ -47,35 +47,48 @@ export default function Home() {
   const isMobile = useRef(window.innerWidth <= 768)
   const lastTouchY = useRef(0)
   const swipedOnce = useRef(false)
+  const gestureHandled = useRef(false)
 
+  // Bloqueo de scroll + gate de 2 swipes
   useEffect(() => {
     if (!isMobile.current || gateOpen) return
-    const onTouchStart = (e) => { lastTouchY.current = e.touches[0].clientY }
+    const onTouchStart = (e) => {
+      lastTouchY.current = e.touches[0].clientY
+      gestureHandled.current = false // nuevo gesto
+    }
     const onTouchMove = (e) => {
-      // Permitir scroll en dropdowns internos
+      // Permitir scroll en elementos internos scrollables (dropdowns)
       let el = e.target
       while (el && el !== document.body) {
         const ov = window.getComputedStyle(el).overflowY
         if (ov === 'auto' || ov === 'scroll') return
         el = el.parentElement
       }
+      // Un solo disparo por gesto
+      if (gestureHandled.current) { e.preventDefault(); return }
       const deltaY = lastTouchY.current - e.touches[0].clientY
       if (deltaY > 12) {
+        gestureHandled.current = true
         if (swipedOnce.current) {
           setGateOpen(true)
-          return // no prevenir — dejar que este swipe scrollee
+          setTimeout(() => window.scrollTo({ top: window.innerHeight * 0.55, behavior: 'smooth' }), 60)
+        } else {
+          swipedOnce.current = true
+          setShowGateHint(true)
+          setTimeout(() => setShowGateHint(false), 2000)
         }
-        swipedOnce.current = true
-        setShowGateHint(true)
-        setTimeout(() => setShowGateHint(false), 2000)
       }
-      e.preventDefault()
+      e.preventDefault() // siempre bloquear scroll crudo
     }
+    // Snap-back si algo (teclado iOS, rebote) mueve el scroll mientras gate cerrado
+    const snapBack = () => { if (window.scrollY > 0) window.scrollTo(0, 0) }
     document.addEventListener('touchstart', onTouchStart, { passive: true })
     document.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('scroll', snapBack, { passive: true })
     return () => {
       document.removeEventListener('touchstart', onTouchStart)
       document.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('scroll', snapBack)
     }
   }, [gateOpen])
 
