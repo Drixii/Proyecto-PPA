@@ -75,47 +75,43 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Mobile: bloquear scroll en primer bloque (hero/pinWrap) siempre
+  // Mobile: congelar body desde el inicio — ningún scroll posible en el primer bloque
   useEffect(() => {
     if (window.innerWidth > 768) return
-    const blockZone = (e) => {
-      if (e.target.closest('.calc-dark-wrap')) return
-      const pin = document.getElementById('pin-wrap')
-      if (!pin) return
-      const pinEnd = pin.offsetTop + pin.offsetHeight - window.innerHeight
-      if (window.scrollY < pinEnd - 30) e.preventDefault()
+    document.body.style.position = 'fixed'
+    document.body.style.top = '0px'
+    document.body.style.width = '100%'
+    document.body.style.overflow = 'hidden'
+    window.__heroProgress = 0
+    return () => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      document.body.style.overflow = ''
+      window.__heroProgress = null
     }
-    document.addEventListener('touchmove', blockZone, { passive: false })
-    return () => document.removeEventListener('touchmove', blockZone)
   }, [])
 
-  // Mobile: animación lenta al presionar TOCA AQUÍ
+  // Mobile: TOCA AQUÍ → animación lenta al presionar
   const handleTocaAqui = () => {
     if (window.innerWidth > 768) return
     const pin = document.getElementById('pin-wrap')
     if (!pin) return
     const pinEnd = pin.offsetTop + pin.offsetHeight - window.innerHeight
-    const total = pin.offsetHeight - window.innerHeight
-    const frozenY = window.scrollY
-    // Congelar página completamente
-    document.body.style.position = 'fixed'
-    document.body.style.top = `-${frozenY}px`
-    document.body.style.width = '100%'
-    const startP = total > 0 ? frozenY / total : 0
-    window.__heroProgress = startP
+    window.__heroProgress = 0
     const duration = 3500
     const t0 = performance.now()
     const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
     const step = (now) => {
       const p = Math.min(1, (now - t0) / duration)
-      window.__heroProgress = startP + (1 - startP) * ease(p)
+      window.__heroProgress = ease(p)
       if (p < 1) { requestAnimationFrame(step); return }
-      // Esperar que el visual llegue a las banderas
       const waitFlags = () => {
         if ((window.__heroVisualProgress ?? 1) >= 0.92) {
           document.body.style.position = ''
           document.body.style.top = ''
           document.body.style.width = ''
+          document.body.style.overflow = ''
           window.__heroProgress = null
           window.scrollTo(0, pinEnd)
         } else { requestAnimationFrame(waitFlags) }
