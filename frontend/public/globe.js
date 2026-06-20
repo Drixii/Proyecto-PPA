@@ -227,12 +227,12 @@
       var ppy=gy+(ty-gy)*morph;
       var fr=frG*inv+gr.fr*morph;
       var alpha=clamp(a2*inv+morph,0,1);
-      var shapeT=clamp((morph-0.5)/0.28,0,1);   // 0=círculo (globo), 1=bandera rect ondeante
+      var shapeT=clamp((morph-0.45)/0.48,0,1);
       if(shapeT<1) cityFlag(c,ppx,ppy,fr,alpha*(1-shapeT),a2*inv);
       if(shapeT>0) wavingFlag(c,ppx,ppy,fr*2.3,alpha*shapeT,ts/1000,c.phase);
-      if(morph>0.4){
+      if(morph>0.45){
         ctx.save();
-        ctx.globalAlpha=clamp((morph-0.4)/0.4,0,1);
+        ctx.globalAlpha=clamp((morph-0.45)/0.52,0,1);
         ctx.fillStyle='#dbe6ff';
         ctx.font="600 14px 'Space Grotesk',system-ui,sans-serif";
         ctx.textAlign='center';

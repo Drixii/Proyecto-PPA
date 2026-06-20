@@ -99,7 +99,7 @@ export default function Home() {
     if (!pin) return
     const pinEnd = pin.offsetTop + pin.offsetHeight - window.innerHeight
     window.__heroProgress = 0
-    const duration = 3500
+    const duration = 5500
     const t0 = performance.now()
     const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
     const step = (now) => {
