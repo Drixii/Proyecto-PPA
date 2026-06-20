@@ -46,17 +46,12 @@
   var _rawP=0;
   function updateProgress(){
     if(!pin)return;
-    if(window.__heroProgress!=null){
-      _rawP=window.__heroProgress;
-    } else {
-      var vh=window.innerHeight;
-      var total=pin.offsetHeight-vh;
-      _rawP=total>0?clamp(-pin.getBoundingClientRect().top/total,0,1):0;
-    }
+    var vh=window.innerHeight;
+    var total=pin.offsetHeight-vh;
+    _rawP=total>0?clamp(-pin.getBoundingClientRect().top/total,0,1):0;
     // En mobile suavizar con lerp para que la animación se vea lenta aunque scrolleen rápido
-    if(W<768){ progress+=(_rawP-progress)*0.035; }
+    if(W<768){ progress+= (_rawP - progress) * 0.035; }
     else { progress=_rawP; }
-    window.__heroVisualProgress=progress;
     var p=progress;
     var heroDeadZone=W<768?0.35:0;
     var heroOut=clamp((p-heroDeadZone)/0.22,0,1);
