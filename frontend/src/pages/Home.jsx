@@ -42,6 +42,38 @@ export default function Home() {
   const [showHint, setShowHint] = useState(false)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
 
+  const isMobile = useRef(window.innerWidth <= 768)
+  const [locked, setLocked] = useState(true)
+
+  // Bloqueo de scroll en mobile hasta que el usuario haga click en el CTA
+  useEffect(() => {
+    if (!isMobile.current || !locked) return
+    const block = (e) => {
+      let el = e.target
+      while (el && el !== document.body) {
+        const ov = window.getComputedStyle(el).overflowY
+        if (ov === 'auto' || ov === 'scroll') return
+        el = el.parentElement
+      }
+      e.preventDefault()
+    }
+    document.addEventListener('touchmove', block, { passive: false })
+    return () => document.removeEventListener('touchmove', block)
+  }, [locked])
+
+  // Re-tranca cuando vuelven arriba (scroll < 30px)
+  useEffect(() => {
+    if (!isMobile.current || locked) return
+    const check = () => { if (window.scrollY < 30) setLocked(true) }
+    window.addEventListener('scroll', check, { passive: true })
+    return () => window.removeEventListener('scroll', check)
+  }, [locked])
+
+  const handleExplore = () => {
+    setLocked(false)
+    setTimeout(() => window.scrollTo({ top: window.innerHeight * 0.65, behavior: 'smooth' }), 30)
+  }
+
   const handleInstall = async () => {
     if (deferredPrompt.current) {
       deferredPrompt.current.prompt()
@@ -124,6 +156,7 @@ export default function Home() {
           #scroll-hint{display:none!important;}
           #grid-title{display:none!important;}
           .mob-fab{display:flex!important;}
+          .calc-explore-cta{display:block!important;}
         }
         @media(max-width:480px){
           .section-pad{padding:44px 12px;}
@@ -215,6 +248,15 @@ export default function Home() {
               </div>
               <div className="hero-calc">
                 <CalculatorDark onSend={handleSend} />
+                {/* CTA mobile — solo visible en mobile, dentro del espacio bajo el calculador */}
+                <div className="calc-explore-cta" onClick={handleExplore} style={{ display: 'none', marginTop: 28, textAlign: 'center', cursor: 'pointer', padding: '10px 0' }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.65)', lineHeight: 1.4 }}>
+                    Click aquí para saber más de nosotros
+                  </p>
+                  <svg style={{ marginTop: 6, opacity: 0.5 }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
