@@ -110,7 +110,7 @@ export default function Home() {
         @media(max-width:768px){
           .nav-inner{padding:0 14px;}
           .hero-text{flex:none;width:100%;}
-          .hero-calc{flex:none;width:100%;max-width:420px;margin:0 auto;animation:none;margin-bottom:220px!important;}
+          .hero-calc{flex:none;width:100%;max-width:420px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:220px!important;animation:none;}
           .hero-hide-mobile{display:none;}
           .section-pad{padding:56px 16px;}
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
