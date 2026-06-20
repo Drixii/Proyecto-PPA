@@ -108,15 +108,16 @@ export default function Home() {
     if (!pin) return
     const pinEnd = pin.offsetTop + pin.offsetHeight - window.innerHeight
     const cv = document.getElementById('globe-cv')
-    // Canvas sube encima del calculador desde el primer frame
-    if (cv) cv.style.zIndex = '15'
     window.__heroProgress = 0
     const duration = 5500
     const t0 = performance.now()
     const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
     const step = (now) => {
       const p = Math.min(1, (now - t0) / duration)
-      window.__heroProgress = ease(p)
+      const ep = ease(p)
+      window.__heroProgress = ep
+      // canvas sube sobre el hero solo cuando este ya está casi invisible (heroOut completo ~0.57)
+      if (cv && ep > 0.60 && cv.style.zIndex !== '15') cv.style.zIndex = '15'
       if (p < 1) { requestAnimationFrame(step); return }
       const waitFlags = () => {
         if ((window.__heroVisualProgress ?? 1) >= 0.92) {
