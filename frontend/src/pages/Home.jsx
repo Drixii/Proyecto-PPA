@@ -65,11 +65,20 @@ export default function Home() {
     }
   }, [])
 
-  // Scroll → opacidad del nav
+  // Scroll → opacidad del nav + re-lock hero al volver al top en mobile
   useEffect(() => {
     const onScroll = () => {
       const nav = document.getElementById('main-nav')
       if (nav) nav.style.background = window.scrollY > 20 ? 'rgba(7,14,35,.88)' : 'rgba(7,14,35,.45)'
+      // Mobile: si vuelve al inicio del todo, re-bloquear hero
+      if (window.innerWidth <= 768 && document.body.style.position !== 'fixed' && window.scrollY < 10) {
+        window.scrollTo(0, 0)
+        document.body.style.position = 'fixed'
+        document.body.style.top = '0px'
+        document.body.style.width = '100%'
+        document.body.style.overflow = 'hidden'
+        window.__heroProgress = 0
+      }
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)

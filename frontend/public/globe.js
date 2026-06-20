@@ -48,13 +48,14 @@
     if(!pin)return;
     if(window.__heroProgress!=null){
       _rawP=window.__heroProgress;
+      progress=_rawP; // sin lerp durante animacion automatica
     } else {
       var vh=window.innerHeight;
       var total=pin.offsetHeight-vh;
       _rawP=total>0?clamp(-pin.getBoundingClientRect().top/total,0,1):0;
+      if(W<768){ progress+=(_rawP-progress)*0.035; }
+      else { progress=_rawP; }
     }
-    if(W<768){ progress+=(_rawP-progress)*0.035; }
-    else { progress=_rawP; }
     window.__heroVisualProgress=progress;
     var p=progress;
     var heroDeadZone=W<768?0.35:0;
