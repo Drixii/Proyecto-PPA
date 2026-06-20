@@ -75,6 +75,49 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // Mobile: auto-scroll animation on swipe, lock touch during animation
+  useEffect(() => {
+    if (window.innerWidth > 768) return
+    let autoScrolling = false
+    let touchStartY = 0
+    let trackingTouch = false
+
+    const preventScroll = (e) => { if (autoScrolling) e.preventDefault() }
+
+    const onTouchStart = (e) => {
+      if (e.target.closest('.calc-dark-wrap')) { trackingTouch = false; return }
+      touchStartY = e.touches[0].clientY
+      trackingTouch = true
+    }
+
+    const onTouchEnd = (e) => {
+      if (!trackingTouch || autoScrolling) return
+      const pin = document.getElementById('pin-wrap')
+      if (!pin) return
+      const pinStart = pin.offsetTop
+      const pinEnd = pinStart + pin.offsetHeight - window.innerHeight
+      const scrollY = window.scrollY
+      if (scrollY < pinStart || scrollY >= pinEnd - 10) return
+      const dy = touchStartY - e.changedTouches[0].clientY
+      if (dy < 20) return
+      autoScrolling = true
+      window.scrollTo({ top: pinEnd, behavior: 'smooth' })
+      const check = setInterval(() => {
+        if (window.scrollY >= pinEnd - 30) { clearInterval(check); autoScrolling = false }
+      }, 80)
+      setTimeout(() => { autoScrolling = false }, 3000)
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true })
+    document.addEventListener('touchend', onTouchEnd, { passive: true })
+    document.addEventListener('touchmove', preventScroll, { passive: false })
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchend', onTouchEnd)
+      document.removeEventListener('touchmove', preventScroll)
+    }
+  }, [])
+
   const handleSend = ({ amount, fromCurrency, toCountry, toCurrency, result }) => {
     if (!user) { navigate('/login'); return }
     navigate('/new-transfer', { state: { amount, fromCurrency, toCountry, toCurrency, result } })

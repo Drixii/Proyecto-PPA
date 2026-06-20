@@ -205,6 +205,7 @@ export default function CalculatorDark({ onSend }) {
         @keyframes glowPulse{0%,100%{opacity:.45}50%{opacity:1}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @media(max-width:768px){
+          .calc-dark-wrap{position:relative!important;z-index:10!important;}
           .calc-dark-wrap .calc-card{padding:16px!important;background:rgba(6,14,40,0.07)!important;border:1px solid rgba(255,255,255,.07)!important;backdrop-filter:blur(8px) saturate(120%)!important;}
           .calc-dark-wrap .calc-header{margin-bottom:12px!important;}
           .calc-dark-wrap .calc-title{font-size:15px!important;}
