@@ -235,9 +235,11 @@
         ctx.save();
         ctx.globalAlpha=clamp((morph-0.45)/0.52,0,1);
         ctx.fillStyle='#dbe6ff';
-        ctx.font="600 14px 'Space Grotesk',system-ui,sans-serif";
+        var fs=W<768?15:14;
+        ctx.font='600 '+fs+'px \'Space Grotesk\',system-ui,sans-serif';
         ctx.textAlign='center';
-        ctx.fillText(c.name,ppx,ppy+fr+20);
+        var flagHalf=fr*2.3*0.32;
+        ctx.fillText(c.name,ppx,ppy-flagHalf-14);
         ctx.restore();
       }
     }

@@ -108,19 +108,15 @@ export default function Home() {
     if (!pin) return
     const pinEnd = pin.offsetTop + pin.offsetHeight - window.innerHeight
     const cv = document.getElementById('globe-cv')
+    // Canvas sube encima del calculador desde el primer frame
+    if (cv) cv.style.zIndex = '15'
     window.__heroProgress = 0
-    let cvRaised = false
     const duration = 5500
     const t0 = performance.now()
     const ease = t => t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2
     const step = (now) => {
       const p = Math.min(1, (now - t0) / duration)
       window.__heroProgress = ease(p)
-      // Cuando el calc empieza a desvanecerse, subir canvas encima
-      if (!cvRaised && p >= 0.32 && cv) {
-        cv.style.zIndex = '15'
-        cvRaised = true
-      }
       if (p < 1) { requestAnimationFrame(step); return }
       const waitFlags = () => {
         if ((window.__heroVisualProgress ?? 1) >= 0.92) {
