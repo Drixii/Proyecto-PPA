@@ -195,6 +195,9 @@ export default function Home() {
           .stats-band{grid-template-columns:repeat(2,1fr)!important;gap:12px!important;}
           .stats-band>div{padding:20px 16px!important;border-radius:16px!important;}
           .stats-band>div>div{width:34px!important;height:34px!important;margin-bottom:12px!important;}
+          .steps-wrap{grid-template-columns:1fr!important;}
+          .steps-line-h{display:none!important;}
+          .steps-line-v{display:block!important;}
           .feature-card{padding:16px!important;border-radius:18px!important;}
           .feature-card h3{font-size:14px!important;}
           .feature-card p{font-size:13px!important;}
@@ -358,10 +361,14 @@ export default function Home() {
             <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Simple y transparente</p>
             <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>En 4 pasos, tu dinero llega</h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 18 }}>
+          <div className="steps-wrap" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 18, position: 'relative' }}>
+            {/* línea conectora — desktop horizontal */}
+            <div className="steps-line-h" style={{ position: 'absolute', top: 47, left: '12.5%', right: '12.5%', height: 2, background: 'linear-gradient(90deg,rgba(252,211,77,.3),#fcd34d 30%,#f59e0b 70%,rgba(245,158,11,.3))', borderRadius: 2, zIndex: 0, pointerEvents: 'none' }} />
+            {/* línea conectora — mobile vertical */}
+            <div className="steps-line-v" style={{ display: 'none', position: 'absolute', left: 47, top: 47, bottom: 47, width: 2, background: 'linear-gradient(180deg,rgba(252,211,77,.3),#fcd34d 20%,#f59e0b 80%,rgba(245,158,11,.3))', borderRadius: 2, zIndex: 0, pointerEvents: 'none' }} />
             {STEPS.map((s, i) => (
-              <div key={s.n} data-reveal="" style={{ ...glassCard, borderRadius: 20, padding: 24, ...RD(i * 0.12), ...(s.green ? { background: 'linear-gradient(135deg,rgba(8,30,70,.95),rgba(8,22,60,.95))', border: '1px solid rgba(56,189,248,.32)', boxShadow: '0 8px 32px rgba(0,6,28,.6),inset 0 1px 0 rgba(56,189,248,.15)' } : {}) }}>
-                <div style={{ width: 46, height: 46, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono',monospace", fontSize: 19, fontWeight: 700, color: s.green ? '#fff' : '#061027', background: s.green ? 'linear-gradient(135deg,#4ade80,#22c55e)' : 'linear-gradient(135deg,#7dd3fc,#38bdf8)', boxShadow: `0 8px 22px ${s.green ? 'rgba(74,222,128,.38)' : 'rgba(56,189,248,.38)'}`, marginBottom: 14 }}>{s.n}</div>
+              <div key={s.n} data-reveal="" style={{ ...glassCard, borderRadius: 20, padding: 24, position: 'relative', zIndex: 1, ...RD(i * 0.12), ...(s.green ? { background: 'linear-gradient(135deg,rgba(8,30,70,.95),rgba(8,22,60,.95))', border: '1px solid rgba(56,189,248,.32)', boxShadow: '0 8px 32px rgba(0,6,28,.6),inset 0 1px 0 rgba(56,189,248,.15)' } : {}) }}>
+                <div style={{ width: 46, height: 46, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono',monospace", fontSize: 19, fontWeight: 700, color: s.green ? '#fff' : '#061027', background: s.green ? 'linear-gradient(135deg,#4ade80,#22c55e)' : 'linear-gradient(135deg,#7dd3fc,#38bdf8)', boxShadow: `0 8px 22px ${s.green ? 'rgba(74,222,128,.38)' : 'rgba(56,189,248,.38)'}, 0 0 0 3px rgba(252,211,77,.22)`, marginBottom: 14 }}>{s.n}</div>
                 <h3 style={{ margin: '0 0 6px', fontSize: 15.5, fontWeight: 600, color: '#fff' }}>{s.title}</h3>
                 <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: s.green ? '#cfe0ff' : '#9fb0d4' }}>{s.desc}</p>
               </div>
