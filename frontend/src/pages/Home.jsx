@@ -110,7 +110,9 @@ export default function Home() {
         @media(max-width:768px){
           .nav-inner{padding:0 14px;}
           .hero-text{flex:none;width:100%;}
-          .hero-calc{flex:none;width:100%;max-width:460px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:350px!important;animation:none;}
+          .hero-calc{flex:none;width:100%;max-width:460px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:0!important;animation:none;}
+          .mob-scroll-hint{display:flex!important;flex-direction:column;align-items:center;gap:6px;cursor:pointer;margin-top:18px!important;margin-bottom:300px!important;opacity:.7;transition:opacity .2s;}
+          .mob-scroll-hint:active{opacity:1;}
           .hero-hide-mobile{display:none;}
           .section-pad{padding:56px 16px;}
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
@@ -140,7 +142,8 @@ export default function Home() {
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}
         }
-        @media(min-width:769px){ .mob-fab{display:none!important;} }
+        @media(min-width:769px){ .mob-fab{display:none!important;}.mob-scroll-hint{display:none!important;} }
+        @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
       `}</style>
 
       {/* Ambient glows */}
@@ -221,6 +224,16 @@ export default function Home() {
               </div>
               <div className="hero-calc">
                 <CalculatorDark onSend={handleSend} />
+              </div>
+              <div className="mob-scroll-hint" onClick={() => {
+                const pin = document.getElementById('pin-wrap');
+                if (!pin) return;
+                window.scrollTo({ top: pin.offsetTop + pin.offsetHeight - window.innerHeight, behavior: 'smooth' });
+              }}>
+                <span style={{ fontSize: 11, color: 'rgba(191,228,255,0.8)', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Desliza para más información</span>
+                <svg style={{ animation: 'bounceDown 1.6s ease-in-out infinite' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(191,228,255,0.6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
               </div>
             </div>
           </div>
