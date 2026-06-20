@@ -75,22 +75,33 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Mobile: auto-scroll animation on swipe, lock touch during animation
+  // Mobile: auto-scroll animation on swipe down, allow free scroll up
   useEffect(() => {
     if (window.innerWidth > 768) return
     let autoScrolling = false
     let touchStartY = 0
+    let lastTouchY = 0
     let trackingTouch = false
 
-    const preventScroll = (e) => { if (autoScrolling) e.preventDefault() }
+    const preventScroll = (e) => {
+      if (!autoScrolling) return
+      const currentY = e.touches[0].clientY
+      const scrollingDown = currentY < lastTouchY // finger up = page down
+      lastTouchY = currentY
+      if (scrollingDown) e.preventDefault() // solo bloquea bajar, no subir
+    }
 
     const onTouchStart = (e) => {
       if (e.target.closest('.calc-dark-wrap')) { trackingTouch = false; return }
       touchStartY = e.touches[0].clientY
+      lastTouchY = touchStartY
       trackingTouch = true
     }
 
     const onTouchEnd = (e) => {
+      const endY = e.changedTouches[0].clientY
+      // Si estaba animando y el usuario sube el dedo → cancela auto-scroll
+      if (autoScrolling && endY > touchStartY + 30) { autoScrolling = false; return }
       if (!trackingTouch || autoScrolling) return
       const pin = document.getElementById('pin-wrap')
       if (!pin) return
@@ -98,7 +109,7 @@ export default function Home() {
       const pinEnd = pinStart + pin.offsetHeight - window.innerHeight
       const scrollY = window.scrollY
       if (scrollY < pinStart || scrollY >= pinEnd - 10) return
-      const dy = touchStartY - e.changedTouches[0].clientY
+      const dy = touchStartY - endY
       if (dy < 20) return
       autoScrolling = true
       window.scrollTo({ top: pinEnd, behavior: 'smooth' })
