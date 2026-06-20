@@ -75,57 +75,53 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Mobile: auto-scroll animation on swipe down, allow free scroll up
+  // Mobile: auto-scroll animation at 40px entry, full touch lock both directions
   useEffect(() => {
     if (window.innerWidth > 768) return
     let autoScrolling = false
-    let touchStartY = 0
-    let lastTouchY = 0
-    let trackingTouch = false
+    let lastScrollY = window.scrollY
 
-    const preventScroll = (e) => {
-      if (!autoScrolling) return
-      const currentY = e.touches[0].clientY
-      const scrollingDown = currentY < lastTouchY // finger up = page down
-      lastTouchY = currentY
-      if (scrollingDown) e.preventDefault() // solo bloquea bajar, no subir
+    const blockTouch = (e) => { e.preventDefault() }
+
+    const unlockScroll = () => {
+      document.removeEventListener('touchmove', blockTouch)
+      autoScrolling = false
     }
 
-    const onTouchStart = (e) => {
-      if (e.target.closest('.calc-dark-wrap')) { trackingTouch = false; return }
-      touchStartY = e.touches[0].clientY
-      lastTouchY = touchStartY
-      trackingTouch = true
+    const triggerAuto = (target) => {
+      if (autoScrolling) return
+      autoScrolling = true
+      document.addEventListener('touchmove', blockTouch, { passive: false })
+      window.scrollTo({ top: target, behavior: 'smooth' })
+      const check = setInterval(() => {
+        if (Math.abs(window.scrollY - target) < 30) { clearInterval(check); unlockScroll() }
+      }, 80)
+      setTimeout(() => { clearInterval(check); unlockScroll() }, 4000)
     }
 
-    const onTouchEnd = (e) => {
-      const endY = e.changedTouches[0].clientY
-      // Si estaba animando y el usuario sube el dedo → cancela auto-scroll
-      if (autoScrolling && endY > touchStartY + 30) { autoScrolling = false; return }
-      if (!trackingTouch || autoScrolling) return
+    const onScroll = () => {
+      if (autoScrolling) return
       const pin = document.getElementById('pin-wrap')
       if (!pin) return
       const pinStart = pin.offsetTop
       const pinEnd = pinStart + pin.offsetHeight - window.innerHeight
       const scrollY = window.scrollY
-      if (scrollY < pinStart || scrollY >= pinEnd - 10) return
-      const dy = touchStartY - endY
-      if (dy < 20) return
-      autoScrolling = true
-      window.scrollTo({ top: pinEnd, behavior: 'smooth' })
-      const check = setInterval(() => {
-        if (window.scrollY >= pinEnd - 30) { clearInterval(check); autoScrolling = false }
-      }, 80)
-      setTimeout(() => { autoScrolling = false }, 3000)
+      const goingDown = scrollY > lastScrollY
+      lastScrollY = scrollY
+      // Bajando: 40px dentro del pin-wrap → auto-scroll hasta banderas
+      if (goingDown && scrollY >= pinStart + 40 && scrollY < pinEnd - 50) {
+        triggerAuto(pinEnd)
+      }
+      // Subiendo: 40px desde el fondo del pin-wrap → auto-scroll al inicio
+      else if (!goingDown && scrollY <= pinEnd - 40 && scrollY > pinStart + 50) {
+        triggerAuto(pinStart)
+      }
     }
 
-    document.addEventListener('touchstart', onTouchStart, { passive: true })
-    document.addEventListener('touchend', onTouchEnd, { passive: true })
-    document.addEventListener('touchmove', preventScroll, { passive: false })
+    window.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      document.removeEventListener('touchstart', onTouchStart)
-      document.removeEventListener('touchend', onTouchEnd)
-      document.removeEventListener('touchmove', preventScroll)
+      window.removeEventListener('scroll', onScroll)
+      document.removeEventListener('touchmove', blockTouch)
     }
   }, [])
 
