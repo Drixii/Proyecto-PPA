@@ -14,7 +14,7 @@ else:
     admin = User(
         email="admin@casacambios.com",
         full_name="Admin",
-        hashed_password=pwd.hash("Admin2024!"),
+        password=pwd.hash("Admin2024!"),
         role="admin",
         is_active=True,
     )
