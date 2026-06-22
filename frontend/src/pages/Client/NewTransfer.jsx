@@ -504,45 +504,6 @@ export default function NewTransfer() {
                 </div>
               )}
 
-              {/* Selector moneda/país — visible solo para nuevo */}
-              {destinatarioType === 'nuevo' && (
-                <div className="rounded-xl p-4 space-y-3" style={{background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.07)'}}>
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{color:'#8aa0cc'}}>Configurar envío</p>
-                  <div className="flex gap-3 items-center flex-wrap">
-                    <div>
-                      <p className="text-[10px] mb-1.5" style={{color:'#8aa0cc'}}>Envías</p>
-                      <div className="relative">
-                        <button type="button" onClick={() => { setFromOpen(v => !v); setToOpen(false) }}
-                          className="flex items-center gap-2 rounded-full px-3 py-2"
-                          style={{border:'1px solid rgba(255,255,255,.1)', background:'rgba(6,13,40,.8)'}}>
-                          <img src={currencyFlagUrl(selectedFrom?.iso2)} alt="" className="w-5 h-[14px] rounded-sm object-cover shrink-0"
-                            onError={e => { e.target.style.display = 'none' }} />
-                          <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.fromCurrency}</span>
-                          <ChevronDown />
-                        </button>
-                        {fromOpen && <FromDropdown value={calc.fromCurrency} onChange={handleFromCurrencyChange} onClose={() => setFromOpen(false)} />}
-                      </div>
-                    </div>
-                    <span style={{color:'#475569', marginTop:16}}>→</span>
-                    <div>
-                      <p className="text-[10px] mb-1.5" style={{color:'#8aa0cc'}}>País destino</p>
-                      <div className="relative">
-                        <button type="button" onClick={() => { setToOpen(v => !v); setFromOpen(false) }}
-                          className="flex items-center gap-2 rounded-full px-3 py-2"
-                          style={{border:'1px solid rgba(255,255,255,.1)', background:'rgba(6,13,40,.8)'}}>
-                          {flagUrl(calc.toCountry)
-                            ? <img src={flagUrl(calc.toCountry)} alt="" className="w-5 h-[14px] rounded-sm object-cover shrink-0" />
-                            : <span className="text-sm">🌍</span>}
-                          <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCountry}</span>
-                          <ChevronDown />
-                        </button>
-                        {toOpen && <ToDropdown countries={countriesData} value={calc.toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} />}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <button
                 onClick={() => setStep(1)}
                 disabled={
@@ -614,13 +575,32 @@ export default function NewTransfer() {
                 <div className="p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{color:'#8aa0cc'}}>Destinatario recibe</p>
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-full px-3 py-2 shrink-0"
-                      style={{border:'1px solid rgba(255,255,255,.08)', background:'rgba(6,13,40,.6)'}}>
-                      {flagUrl(calc.toCountry)
-                        ? <img src={flagUrl(calc.toCountry)} alt="" className="w-[22px] h-[15px] rounded-sm object-cover shrink-0" />
-                        : <span className="text-sm shrink-0">🌍</span>
-                      }
-                      <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCurrency}</span>
+                    <div className="relative shrink-0">
+                      {destinatarioType === 'anterior' ? (
+                        <div className="flex items-center gap-2 rounded-full px-3 py-2"
+                          style={{border:'1px solid rgba(255,255,255,.08)', background:'rgba(6,13,40,.6)'}}>
+                          {flagUrl(calc.toCountry)
+                            ? <img src={flagUrl(calc.toCountry)} alt="" className="w-[22px] h-[15px] rounded-sm object-cover shrink-0" />
+                            : <span className="text-sm shrink-0">🌍</span>
+                          }
+                          <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCurrency}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full ml-1" style={{background:'rgba(100,116,139,.2)', color:'#64748b'}}>bloqueado</span>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => { setToOpen(v => !v); setFromOpen(false) }}
+                          className="flex items-center gap-2 rounded-full px-3 py-2 transition-colors"
+                          style={{border:'1px solid rgba(255,255,255,.1)', background:'rgba(6,13,40,.8)'}}>
+                          {flagUrl(calc.toCountry)
+                            ? <img src={flagUrl(calc.toCountry)} alt="" className="w-[22px] h-[15px] rounded-sm object-cover shrink-0" />
+                            : <span className="text-sm shrink-0">🌍</span>
+                          }
+                          <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCurrency}</span>
+                          <ChevronDown />
+                        </button>
+                      )}
+                      {toOpen && destinatarioType !== 'anterior' && (
+                        <ToDropdown countries={countriesData} value={calc.toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} />
+                      )}
                     </div>
                     <p className="flex-1 text-3xl font-bold text-right" style={{color: receivedDisplay ? '#38bdf8' : '#64748b'}}>
                       {receivedDisplay || '—'}
@@ -631,14 +611,39 @@ export default function NewTransfer() {
 
               {/* Comisión $0 */}
               {liveResult && (
-                <div style={{display:'flex', justifyContent:'space-between', padding:'4px 4px 0'}}>
-                  <span style={{fontSize:13, color:'#8aa0cc'}}>Comisión</span>
-                  <span style={{fontSize:13, fontWeight:700, color:'#4ade80'}}>$0 ✓</span>
+                <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{background:'rgba(74,222,128,.08)', border:'1px solid rgba(74,222,128,.25)'}}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{background:'rgba(74,222,128,.18)'}}>
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#4ade80" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold" style={{color:'#4ade80'}}>Sin comisión</p>
+                      <p className="text-[10px]" style={{color:'rgba(74,222,128,.6)'}}>0% en esta transferencia</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-black" style={{color:'#4ade80'}}>$0</p>
+                    <p className="text-[10px] font-semibold" style={{color:'rgba(74,222,128,.7)'}}>GRATIS</p>
+                  </div>
                 </div>
               )}
 
               {error && <p className="text-sm" style={{color:'#f87171'}}>{error}</p>}
 
+              {destinatarioType === 'anterior' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult }))
+                    setStep(2)
+                  }}
+                  disabled={!liveResult || !rawAmount}
+                  className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all"
+                  style={{background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.12)', color:'#8aa0cc', opacity: (!liveResult || !rawAmount) ? 0.4 : 1}}
+                >
+                  ✏️ Modificar datos del receptor
+                </button>
+              )}
               <button
                 onClick={() => {
                   setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult }))
@@ -647,7 +652,7 @@ export default function NewTransfer() {
                 disabled={!liveResult || !rawAmount}
                 className="w-full bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 disabled:opacity-40 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm shadow-blue-200"
               >
-                Continuar →
+                {destinatarioType === 'anterior' ? 'Ir a pago →' : 'Continuar →'}
               </button>
             </div>
           )}
@@ -660,9 +665,15 @@ export default function NewTransfer() {
                   style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
                   ←
                 </button>
-                <div>
+                <div className="flex-1">
                   <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Datos del receptor</h2>
-                  <p className="text-xs" style={{color:'#8aa0cc'}}>Envío a {calc.toCountry}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {flagUrl(calc.toCountry) && (
+                      <img src={flagUrl(calc.toCountry)} alt="" className="w-4 h-[11px] rounded-sm object-cover" />
+                    )}
+                    <p className="text-xs" style={{color:'#8aa0cc'}}>{calc.toCountry}</p>
+                    <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded" style={{background:'rgba(56,189,248,.12)', color:'#38bdf8'}}>{calc.toCurrency}</span>
+                  </div>
                 </div>
               </div>
 
@@ -687,17 +698,27 @@ export default function NewTransfer() {
                   </div>
                 </div>
 
-                {banksData?.length > 0 && (
-                  <div>
-                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Banco destino</label>
+                <div>
+                  <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>
+                    Banco destino
+                    {flagUrl(receiver.receiver_country) && (
+                      <img src={flagUrl(receiver.receiver_country)} alt="" className="inline-block w-4 h-[11px] rounded-sm object-cover ml-2 align-middle" />
+                    )}
+                  </label>
+                  {banksData?.length > 0 ? (
                     <select value={receiver.receiver_bank_id} onChange={e => setReceiver({ ...receiver, receiver_bank_id: e.target.value })}
                       className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
                       <option value="" style={{background:'#0f172a', color:'#fff'}}>Seleccionar banco...</option>
                       {banksData.map(b => <option key={b.id} value={b.id} style={{background:'#0f172a', color:'#fff'}}>{b.name}</option>)}
                     </select>
-                  </div>
-                )}
+                  ) : (
+                    <input type="text" value={receiver.receiver_bank_id} onChange={e => setReceiver({ ...receiver, receiver_bank_id: e.target.value })}
+                      placeholder="Nombre del banco"
+                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                  )}
+                </div>
 
                 <div>
                   <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Número de cuenta</label>

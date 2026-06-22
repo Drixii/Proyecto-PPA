@@ -711,12 +711,12 @@ export default function AdminUsers() {
                 ← Volver
               </button>
               <p className="text-xs" style={{color:'#8aa0cc'}}>Sub-admins disponibles de otros super-admins:</p>
-              {availableSubAdmins.filter(sa => !sa.linked).length === 0 ? (
+              {availableSubAdmins.length === 0 ? (
                 <p className="text-sm text-center py-6" style={{color:'#475569'}}>No hay sub-admins disponibles</p>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {availableSubAdmins.filter(sa => !sa.linked).map(sa => (
-                    <div key={sa.id} className="flex items-center gap-3 rounded-xl px-3 py-3" style={{background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.07)'}}>
+                  {availableSubAdmins.map(sa => (
+                    <div key={sa.id} className="flex items-center gap-3 rounded-xl px-3 py-3" style={{background: sa.linked ? 'rgba(56,189,248,.04)' : 'rgba(255,255,255,.03)', border: sa.linked ? '1px solid rgba(56,189,248,.15)' : '1px solid rgba(255,255,255,.07)'}}>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate" style={{color:'#eaf2ff'}}>{sa.full_name}</p>
                         <p className="text-xs truncate" style={{color:'#64748b'}}>{sa.email}</p>
@@ -724,13 +724,19 @@ export default function AdminUsers() {
                           <p className="text-[10px] mt-0.5" style={{color:'#475569'}}>{sa.managed_countries.join(', ')}</p>
                         )}
                       </div>
-                      <button
-                        onClick={() => linkSubAdminMutation.mutate(sa.id)}
-                        disabled={linkSubAdminMutation.isPending}
-                        className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg"
-                        style={{background:'rgba(167,139,250,.15)', color:'#a78bfa', border:'1px solid rgba(167,139,250,.3)'}}>
-                        Vincular
-                      </button>
+                      {sa.linked ? (
+                        <span className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{background:'rgba(56,189,248,.1)', color:'#38bdf8', border:'1px solid rgba(56,189,248,.2)'}}>
+                          ✓ Ya vinculado
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => linkSubAdminMutation.mutate(sa.id)}
+                          disabled={linkSubAdminMutation.isPending}
+                          className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                          style={{background:'rgba(167,139,250,.15)', color:'#a78bfa', border:'1px solid rgba(167,139,250,.3)'}}>
+                          Vincular
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
