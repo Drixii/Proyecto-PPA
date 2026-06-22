@@ -5,36 +5,43 @@ Luego crea 2 super-admins. Ejecutar en el servidor:
 """
 from sqlalchemy import text
 from database import SessionLocal, engine, Base
+import models  # noqa: registra todos los modelos
 from models.user import User
-from models.order import Order
-from models.notification import Notification
-from models.message import Message
-from models.sub_admin_country import SubAdminCountry
 from passlib.context import CryptContext
 
 Base.metadata.create_all(bind=engine)
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 db = SessionLocal()
 
+# Orden respeta FK: hijos primero, luego padres
+TABLES = [
+    "point_redemptions",
+    "point_transactions",
+    "point_accounts",
+    "point_rewards",
+    "notifications",
+    "messages",
+    "sub_admin_countries",
+    "orders",
+    "invite_codes",
+    "admin_sub_admin",
+    "users",
+]
+
 try:
-    # Borrar en orden correcto (respetar FK), ignorar tablas inexistentes
-    tables = [
-        "notifications", "messages", "sub_admin_country",
-        "orders", "invite_codes", "admin_sub_admin", "users"
-    ]
     n_usr = 0
-    for t in tables:
+    for t in TABLES:
         try:
             result = db.execute(text(f"DELETE FROM {t}"))
             if t == "users":
                 n_usr = result.rowcount
-        except Exception:
+            print(f"  ✓ {t}: {result.rowcount} filas borradas")
+        except Exception as e:
             db.rollback()
-            print(f"  (tabla '{t}' no existe, se omite)")
+            print(f"  (omitida '{t}': {e})")
     db.commit()
-    print(f"Base limpia: {n_usr} usuarios borrados")
+    print(f"\nBase limpia — {n_usr} usuarios borrados")
 
-    # Super-admin 1
     admin1 = User(
         email="Freizer@gmail.com",
         full_name="Freizer",
@@ -45,7 +52,6 @@ try:
     db.add(admin1)
     db.flush()
 
-    # Super-admin 2
     admin2 = User(
         email="Ender@gmail.com",
         full_name="Ender",
