@@ -376,6 +376,7 @@ export default function AdminUsers() {
                     setPwdVisible(false)
                     setCopied(false)
                     setFormError('')
+                    setSubAdminView('choice')
                     setCreateModal(true)
                   }
                 }}
