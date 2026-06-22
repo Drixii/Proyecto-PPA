@@ -144,6 +144,10 @@ export default function Login() {
   const [regError, setRegError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [regLoading, setRegLoading] = useState(false)
+  const [showCodeModal, setShowCodeModal] = useState(false)
+  const [inviteCode, setInviteCode] = useState('')
+  const [codeError, setCodeError] = useState('')
+  const [codeLoading, setCodeLoading] = useState(false)
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -169,17 +173,31 @@ export default function Login() {
   }
 
   const submitRegister = async (e) => {
-    e.preventDefault(); setRegLoading(true); setRegError('')
+    e.preventDefault()
+    setRegLoading(true); setRegError('')
     try {
-      const res = await api.post('/auth/register', regForm)
+      await api.post('/auth/check-email', { email: regForm.email })
+      setInviteCode(''); setCodeError('')
+      setShowCodeModal(true)
+    } catch (err) {
+      setRegError(err.response?.data?.detail || 'El correo no es el correcto')
+    } finally { setRegLoading(false) }
+  }
+
+  const submitWithCode = async () => {
+    if (!inviteCode.trim()) { setCodeError('Debes ingresar el código'); return }
+    setCodeLoading(true); setCodeError('')
+    try {
+      const res = await api.post('/auth/register', { ...regForm, invite_code: inviteCode.trim().toUpperCase() })
       queryClient.clear()
       login(res.data.data.access_token, res.data.data.user)
       const firstName = res.data.data.user.full_name?.split(' ')[0] || 'Usuario'
       localStorage.setItem(`ksa_seen_${regForm.email}`, '1')
       localStorage.setItem('ksa_welcome_pending', JSON.stringify({ name: firstName, returning: false }))
       navigate('/dashboard')
-    } catch (err) { setRegError(err.response?.data?.detail || 'Error al registrarse') }
-    finally { setRegLoading(false) }
+    } catch (err) {
+      setCodeError(err.response?.data?.detail || 'Código inválido')
+    } finally { setCodeLoading(false) }
   }
 
   const inputStyle = {
@@ -192,6 +210,46 @@ export default function Login() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100svh', background: '#060d22', fontFamily: "'Space Grotesk',system-ui,sans-serif" }}>
+
+      {/* Invite code modal */}
+      {showCodeModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.72)', backdropFilter: 'blur(6px)' }}>
+          <div style={{ width: '100%', maxWidth: 380, margin: '0 16px', background: '#0d1a35', border: '1px solid rgba(255,255,255,.12)', borderRadius: 20, padding: '32px 28px', boxShadow: '0 24px 80px rgba(0,0,0,.6)' }}>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(252,211,77,.12)', border: '1px solid rgba(252,211,77,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#fcd34d" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+              </div>
+              <h2 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700, color: '#eaf2ff' }}>Código de invitación</h2>
+              <p style={{ margin: 0, fontSize: 13, color: '#8aa0cc', lineHeight: 1.5 }}>Ingresa el código que te envió el administrador para activar tu cuenta.</p>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#fcd34d', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Código</label>
+              <input
+                autoFocus
+                type="text"
+                value={inviteCode}
+                onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === 'Enter' && submitWithCode()}
+                placeholder="Ej: ABC12345"
+                style={{ width: '100%', padding: '13px 16px', background: 'rgba(252,211,77,.06)', border: '1.5px solid rgba(252,211,77,.35)', borderRadius: 12, fontSize: 16, color: '#fcd34d', outline: 'none', fontFamily: 'monospace', letterSpacing: '.1em', boxSizing: 'border-box' }}
+              />
+            </div>
+            {codeError && (
+              <div style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.3)', marginBottom: 16 }}>
+                <p style={{ margin: 0, fontSize: 13, color: '#fca5a5' }}>{codeError}</p>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowCodeModal(false)} style={{ flex: 1, padding: '12px 0', fontSize: 14, fontWeight: 600, color: '#8aa0cc', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={submitWithCode} disabled={codeLoading} style={{ flex: 2, padding: '12px 0', fontSize: 14, fontWeight: 700, color: '#061027', background: codeLoading ? 'rgba(252,211,77,.4)' : 'linear-gradient(135deg,#fcd34d,#f59e0b)', border: 'none', borderRadius: 12, cursor: codeLoading ? 'not-allowed' : 'pointer' }}>
+                {codeLoading ? 'Verificando...' : 'Confirmar →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
         *{box-sizing:border-box;}

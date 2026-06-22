@@ -200,6 +200,22 @@ def force_change_password(
     }
 
 
+class CheckEmailPayload(PydanticBase):
+    email: str
+
+@router.post("/check-email", response_model=dict)
+def check_email_invite(data: CheckEmailPayload, db: Session = Depends(get_db)):
+    from models.invite_code import InviteCode
+    from sqlalchemy import func
+    code_row = db.query(InviteCode).filter(
+        func.lower(InviteCode.email) == data.email.strip().lower(),
+        InviteCode.is_used == False,
+    ).first()
+    if not code_row:
+        raise HTTPException(status_code=400, detail="El correo no es el correcto")
+    return {"success": True, "message": ""}
+
+
 @router.get("/check-invite-code/{code}", response_model=dict)
 def check_invite_code(code: str, db: Session = Depends(get_db)):
     from models.invite_code import InviteCode
