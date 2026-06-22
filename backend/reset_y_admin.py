@@ -22,6 +22,7 @@ try:
         "notifications", "messages", "sub_admin_country",
         "orders", "invite_codes", "admin_sub_admin", "users"
     ]
+    n_usr = 0
     for t in tables:
         try:
             result = db.execute(text(f"DELETE FROM {t}"))
