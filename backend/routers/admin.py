@@ -680,7 +680,13 @@ def list_sub_admins(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    sub_admins = db.query(User).filter(User.role == "sub_admin", User.is_active == True, User.deleted_at == None).all()
+    linked_ids = {r.sub_admin_id for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == _admin.id).all()}
+    sub_admins = db.query(User).filter(
+        User.id.in_(linked_ids),
+        User.role == "sub_admin",
+        User.is_active == True,
+        User.deleted_at == None,
+    ).all()
     result = []
     for sa in sub_admins:
         result.append({

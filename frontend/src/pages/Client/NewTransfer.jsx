@@ -815,7 +815,28 @@ export default function NewTransfer() {
 
               {/* Tarjeta: payment portal */}
               {payment.payment_method === 'tarjeta' && (
-                <div className="rounded-2xl overflow-hidden" style={GLASS}>
+                <div className="space-y-3">
+                  {/* Receptor summary */}
+                  <div className="rounded-2xl p-4 space-y-2" style={{...GLASS, border:'1px solid rgba(56,189,248,.15)'}}>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{color:'#64748b'}}>Datos del destinatario</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: 'Nombre', value: receiver.receiver_name },
+                        { label: 'País', value: receiver.receiver_country },
+                        { label: 'Teléfono', value: receiver.receiver_phone || '—' },
+                        { label: 'Banco', value: (() => { const b = (banksData || []).find(b => String(b.id) === String(receiver.receiver_bank_id)); return b?.name || '—' })() },
+                        { label: 'Cuenta', value: receiver.receiver_account || '—' },
+                        { label: 'Documento', value: receiver.receiver_id_num ? `${receiver.receiver_id_type}: ${receiver.receiver_id_num}` : '—' },
+                      ].map(({ label, value }) => (
+                        <div key={label}>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{color:'#475569'}}>{label}</p>
+                          <p className="text-xs font-semibold mt-0.5 truncate" style={{color:'#aebfe2'}}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl overflow-hidden" style={GLASS}>
                   {/* Portal header */}
                   <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-5 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -875,6 +896,7 @@ export default function NewTransfer() {
                       🔒 Tu pago está protegido con cifrado SSL
                     </p>
                   </div>
+                </div>
                 </div>
               )}
 

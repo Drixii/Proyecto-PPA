@@ -39,6 +39,8 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
         ).first()
         if not code_row:
             raise HTTPException(status_code=400, detail="Código de invitación inválido o ya utilizado")
+        if code_row.email.lower().strip() != data.email.lower().strip():
+            raise HTTPException(status_code=400, detail="El correo no coincide con el de la invitación")
         super_admin_id = code_row.super_admin_id
     else:
         raise HTTPException(status_code=400, detail="Se requiere un código de invitación para registrarse")
@@ -196,6 +198,18 @@ def force_change_password(
         "data": _user_out(current_user, db),
         "message": "Contraseña actualizada exitosamente",
     }
+
+
+@router.get("/check-invite-code/{code}", response_model=dict)
+def check_invite_code(code: str, db: Session = Depends(get_db)):
+    from models.invite_code import InviteCode
+    code_row = db.query(InviteCode).filter(
+        InviteCode.code == code.strip().upper(),
+        InviteCode.is_used == False,
+    ).first()
+    if not code_row:
+        return {"success": True, "data": {"valid": False, "email": None}, "message": ""}
+    return {"success": True, "data": {"valid": True, "email": code_row.email}, "message": ""}
 
 
 @router.get("/my-coverage", response_model=dict)

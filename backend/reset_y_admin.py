@@ -17,22 +17,27 @@ pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 db = SessionLocal()
 
 try:
-    # Borrar en orden correcto (respetar FK)
-    db.execute(text("DELETE FROM notifications"))
-    db.execute(text("DELETE FROM messages"))
-    db.execute(text("DELETE FROM sub_admin_country"))
-    db.execute(text("DELETE FROM orders"))
-    db.execute(text("DELETE FROM invite_codes"))
-    db.execute(text("DELETE FROM admin_sub_admin"))
-    n_usr = db.execute(text("DELETE FROM users")).rowcount
+    # Borrar en orden correcto (respetar FK), ignorar tablas inexistentes
+    tables = [
+        "notifications", "messages", "sub_admin_country",
+        "orders", "invite_codes", "admin_sub_admin", "users"
+    ]
+    for t in tables:
+        try:
+            result = db.execute(text(f"DELETE FROM {t}"))
+            if t == "users":
+                n_usr = result.rowcount
+        except Exception:
+            db.rollback()
+            print(f"  (tabla '{t}' no existe, se omite)")
     db.commit()
     print(f"Base limpia: {n_usr} usuarios borrados")
 
     # Super-admin 1
     admin1 = User(
-        email="admin@casacambios.com",
-        full_name="Admin Principal",
-        password=pwd.hash("Admin2024!"),
+        email="Freizer@gmail.com",
+        full_name="Freizer",
+        password=pwd.hash("123456"),
         role="admin",
         is_active=True,
     )
@@ -41,9 +46,9 @@ try:
 
     # Super-admin 2
     admin2 = User(
-        email="admin2@casacambios.com",
-        full_name="Admin Secundario",
-        password=pwd.hash("Admin2024!"),
+        email="Ender@gmail.com",
+        full_name="Ender",
+        password=pwd.hash("123456"),
         role="admin",
         is_active=True,
     )
@@ -51,8 +56,8 @@ try:
     db.commit()
 
     print("Admins creados OK:")
-    print("  1. admin@casacambios.com  / Admin2024!")
-    print("  2. admin2@casacambios.com / Admin2024!")
+    print("  1. Freizer@gmail.com / 123456")
+    print("  2. Ender@gmail.com   / 123456")
 
 except Exception as e:
     db.rollback()
