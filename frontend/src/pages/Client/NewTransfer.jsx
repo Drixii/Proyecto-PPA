@@ -7,8 +7,8 @@ import { useStore } from '../../store/useStore'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
-const ID_TYPES = ['RUT', 'Cédula', 'DNI', 'Pasaporte', 'Otro']
 const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
+const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD']
 
 const SEND_CURRENCIES = [
   { code: 'CLP', iso2: 'cl', name: 'Peso Chileno' },
@@ -18,7 +18,40 @@ const SEND_CURRENCIES = [
   { code: 'PEN', iso2: 'pe', name: 'Sol Peruano' },
   { code: 'BRL', iso2: 'br', name: 'Real Brasileño' },
   { code: 'MXN', iso2: 'mx', name: 'Peso Mexicano' },
+  { code: 'ARS', iso2: 'ar', name: 'Peso Argentino' },
+  { code: 'CAD', iso2: 'ca', name: 'Dólar Canadiense' },
 ]
+
+const COUNTRY_PHONE_PREFIX = {
+  'Colombia': '+57 ', 'Chile': '+56 ', 'Estados Unidos': '+1 ', 'México': '+52 ',
+  'Brasil': '+55 ', 'España': '+34 ', 'Perú': '+51 ', 'Argentina': '+54 ',
+  'Canadá': '+1 ', 'Venezuela': '+58 ',
+}
+
+const COUNTRY_ID_TYPES = {
+  'Colombia': ['Cédula de Ciudadanía', 'Pasaporte', 'NIT'],
+  'Chile': ['RUT', 'Pasaporte'],
+  'Perú': ['DNI', 'Pasaporte', 'RUC'],
+  'Brasil': ['CPF', 'CNPJ', 'Pasaporte'],
+  'México': ['CURP', 'INE', 'RFC', 'Pasaporte'],
+  'España': ['DNI', 'NIE', 'Pasaporte'],
+  'Argentina': ['DNI', 'CUIL/CUIT', 'Pasaporte'],
+  'Estados Unidos': ['SSN', 'Pasaporte', 'Otro'],
+  'Canadá': ['SIN', 'Pasaporte', 'Otro'],
+}
+const DEFAULT_ID_TYPES = ['Cédula', 'DNI', 'RUT', 'Pasaporte', 'Otro']
+
+const COUNTRY_ACCOUNT_HINT = {
+  'Colombia': 'Cuenta de Ahorros o Corriente',
+  'Chile': 'Cuenta Vista o Corriente (RUT)',
+  'Perú': 'CCI (20 dígitos)',
+  'Brasil': 'Conta Corrente / Poupança + Agência',
+  'México': 'CLABE (18 dígitos)',
+  'España': 'IBAN (ES + 22 dígitos)',
+  'Argentina': 'CBU o CVU (22 dígitos) / Alias',
+  'Estados Unidos': 'Account + Routing Number',
+  'Canadá': 'Account + Transit Number',
+}
 
 const COUNTRY_CODE = {
   'Venezuela': 've', 'Colombia': 'co', 'Argentina': 'ar', 'Perú': 'pe',
@@ -134,8 +167,8 @@ function ToDropdown({ countries, value, onChange, onClose }) {
   )
 }
 
-// Steps per path
-const NUEVO_STEPS = ['Destino', 'Receptor', 'Calcular', 'Pago', 'Confirmar']
+// Steps per path — 1.Destino 2.Calcular 3.Receptor 4.Pago 5.Confirmar
+const NUEVO_STEPS = ['Destino', 'Calcular', 'Receptor', 'Pago', 'Confirmar']
 const ANTERIOR_STEPS = ['Destino', 'Calcular', 'Pago', 'Confirmar']
 
 export default function NewTransfer() {
@@ -145,9 +178,9 @@ export default function NewTransfer() {
   const prefill = location.state || {}
   const prefillReceiver = prefill.prefillReceiver || null
 
-  // Internal steps: 0=Destino, 1=Receptor, 2=Calcular, 3=Pago, 4=Confirmar
-  // "Enviar nuevamente" (prefillReceiver) jumps directly to Calcular (step 2)
-  const [step, setStep] = useState(prefillReceiver ? 2 : 0)
+  // Internal steps: 0=Destino, 1=Calcular, 2=Receptor, 3=Pago, 4=Confirmar
+  // "Enviar nuevamente" (prefillReceiver) jumps directly to Calcular (step 1)
+  const [step, setStep] = useState(prefillReceiver ? 1 : 0)
   const [destinatarioType, setDestinatarioType] = useState(prefillReceiver ? 'anterior' : null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -161,18 +194,18 @@ export default function NewTransfer() {
   const [calc, setCalc] = useState({
     amount: prefill.amount || '',
     fromCurrency: prefill.fromCurrency || 'CLP',
-    toCountry: prefill.toCountry || prefillReceiver?.receiver_country || 'Venezuela',
-    toCurrency: prefill.toCurrency || 'VES',
+    toCountry: prefill.toCountry || prefillReceiver?.receiver_country || 'Colombia',
+    toCurrency: prefill.toCurrency || 'COP',
     result: prefill.result || null,
   })
 
   const [receiver, setReceiver] = useState({
     receiver_name: prefillReceiver?.receiver_name || '',
     receiver_phone: prefillReceiver?.receiver_phone || '',
-    receiver_country: prefillReceiver?.receiver_country || prefill.toCountry || 'Venezuela',
+    receiver_country: prefillReceiver?.receiver_country || prefill.toCountry || 'Colombia',
     receiver_bank_id: prefillReceiver?.receiver_bank_id || '',
     receiver_account: prefillReceiver?.receiver_account || '',
-    receiver_id_type: prefillReceiver?.receiver_id_type || 'Cédula',
+    receiver_id_type: prefillReceiver?.receiver_id_type || 'Cédula de Ciudadanía',
     receiver_id_num: prefillReceiver?.receiver_id_num || '',
   })
 
@@ -244,10 +277,11 @@ export default function NewTransfer() {
     setLiveResult(null)
   }
 
-  const { data: countriesData } = useQuery({
+  const { data: countriesRaw } = useQuery({
     queryKey: ['countries'],
     queryFn: () => api.get('/rates/countries').then(r => r.data.data),
   })
+  const countriesData = (countriesRaw || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency))
 
   const { data: banksData } = useQuery({
     queryKey: ['banks', receiver.receiver_country],
@@ -325,9 +359,9 @@ export default function NewTransfer() {
 
   const receivedDisplay = liveResult ? formatDisplay(liveResult.amount_received, calc.toCurrency) : null
 
-  // Stepper: anterior path skips step 1 (Receptor), maps step 2→1, 3→2, 4→3
+  // Stepper: anterior path skips step 2 (Receptor), maps step 3→2, 4→3
   const displaySteps = destinatarioType === 'anterior' ? ANTERIOR_STEPS : NUEVO_STEPS
-  const displayStep = destinatarioType === 'anterior' && step >= 2 ? step - 1 : step
+  const displayStep = destinatarioType === 'anterior' && step >= 3 ? step - 1 : step
 
   return (
     <FinexyLayout>
@@ -470,11 +504,47 @@ export default function NewTransfer() {
                 </div>
               )}
 
+              {/* Selector moneda/país — visible solo para nuevo */}
+              {destinatarioType === 'nuevo' && (
+                <div className="rounded-xl p-4 space-y-3" style={{background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.07)'}}>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{color:'#8aa0cc'}}>Configurar envío</p>
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <div>
+                      <p className="text-[10px] mb-1.5" style={{color:'#8aa0cc'}}>Envías</p>
+                      <div className="relative">
+                        <button type="button" onClick={() => { setFromOpen(v => !v); setToOpen(false) }}
+                          className="flex items-center gap-2 rounded-full px-3 py-2"
+                          style={{border:'1px solid rgba(255,255,255,.1)', background:'rgba(6,13,40,.8)'}}>
+                          <img src={currencyFlagUrl(selectedFrom?.iso2)} alt="" className="w-5 h-[14px] rounded-sm object-cover shrink-0"
+                            onError={e => { e.target.style.display = 'none' }} />
+                          <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.fromCurrency}</span>
+                          <ChevronDown />
+                        </button>
+                        {fromOpen && <FromDropdown value={calc.fromCurrency} onChange={handleFromCurrencyChange} onClose={() => setFromOpen(false)} />}
+                      </div>
+                    </div>
+                    <span style={{color:'#475569', marginTop:16}}>→</span>
+                    <div>
+                      <p className="text-[10px] mb-1.5" style={{color:'#8aa0cc'}}>País destino</p>
+                      <div className="relative">
+                        <button type="button" onClick={() => { setToOpen(v => !v); setFromOpen(false) }}
+                          className="flex items-center gap-2 rounded-full px-3 py-2"
+                          style={{border:'1px solid rgba(255,255,255,.1)', background:'rgba(6,13,40,.8)'}}>
+                          {flagUrl(calc.toCountry)
+                            ? <img src={flagUrl(calc.toCountry)} alt="" className="w-5 h-[14px] rounded-sm object-cover shrink-0" />
+                            : <span className="text-sm">🌍</span>}
+                          <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCountry}</span>
+                          <ChevronDown />
+                        </button>
+                        {toOpen && <ToDropdown countries={countriesData} value={calc.toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} />}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button
-                onClick={() => {
-                  if (destinatarioType === 'nuevo') setStep(1)
-                  else if (destinatarioType === 'anterior' && receiver.receiver_name) setStep(2)
-                }}
+                onClick={() => setStep(1)}
                 disabled={
                   !destinatarioType ||
                   (destinatarioType === 'anterior' && !receiver.receiver_name)
@@ -486,76 +556,12 @@ export default function NewTransfer() {
             </div>
           )}
 
-          {/* ── Paso 1: Receptor (solo nuevo) ── */}
+          {/* ── Paso 1: Calcular ── */}
           {step === 1 && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setStep(0)} className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                    style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
-                    ←
-                  </button>
-                  <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Datos del receptor</h2>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {[
-                  { key: 'receiver_name', label: 'Nombre completo', type: 'text' },
-                  { key: 'receiver_phone', label: 'Teléfono', type: 'tel' },
-                  { key: 'receiver_account', label: 'N° de cuenta / CBU / Clabe', type: 'text' },
-                ].map(({ key, label, type }) => (
-                  <div key={key}>
-                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>{label}</label>
-                    <input type={type} value={receiver[key]} onChange={e => setReceiver({ ...receiver, [key]: e.target.value })}
-                      className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
-                  </div>
-                ))}
-
-                {banksData?.length > 0 && (
-                  <div>
-                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Banco destino</label>
-                    <select value={receiver.receiver_bank_id} onChange={e => setReceiver({ ...receiver, receiver_bank_id: e.target.value })}
-                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
-                      <option value="" style={{background:'#0f172a', color:'#fff'}}>Seleccionar banco...</option>
-                      {banksData.map(b => <option key={b.id} value={b.id} style={{background:'#0f172a', color:'#fff'}}>{b.name}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Tipo de ID</label>
-                    <select value={receiver.receiver_id_type} onChange={e => setReceiver({ ...receiver, receiver_id_type: e.target.value })}
-                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
-                      {ID_TYPES.map(t => <option key={t} style={{background:'#0f172a', color:'#fff'}}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Número de ID</label>
-                    <input value={receiver.receiver_id_num} onChange={e => setReceiver({ ...receiver, receiver_id_num: e.target.value })}
-                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
-                  </div>
-                </div>
-              </div>
-
-              <button onClick={() => { if (receiver.receiver_name) setStep(2) }} disabled={!receiver.receiver_name}
-                className="w-full bg-gradient-to-r from-blue-400 to-blue-700 disabled:opacity-40 text-white font-semibold py-3 rounded-xl">
-                Continuar →
-              </button>
-            </div>
-          )}
-
-          {/* ── Paso 2: Calcular ── */}
-          {step === 2 && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setStep(destinatarioType === 'anterior' ? 0 : 1)}
+                  onClick={() => setStep(0)}
                   className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
                   style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
                   ←
@@ -564,7 +570,6 @@ export default function NewTransfer() {
               </div>
 
               <div className="rounded-2xl overflow-visible" style={{border:'1px solid rgba(255,255,255,.1)'}}>
-
                 {/* TOP ROW: Tu envías */}
                 <div className="p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{color:'#8aa0cc'}}>Tu envías</p>
@@ -595,51 +600,28 @@ export default function NewTransfer() {
                     />
                   </div>
                 </div>
-
-                {/* DIVIDER with rate */}
+                {/* DIVIDER */}
                 <div className="flex items-center gap-2 px-4 py-2.5" style={{background:'rgba(6,13,40,.5)', borderTop:'1px solid rgba(255,255,255,.06)', borderBottom:'1px solid rgba(255,255,255,.06)'}}>
                   {liveLoading
                     ? <div className="w-2 h-2 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
                     : <div className="w-2 h-2 rounded-full shrink-0" style={{background: liveResult ? '#4ade80' : '#64748b'}} />
                   }
                   <span className="text-xs font-medium truncate" style={{color:'#8aa0cc'}}>
-                    {liveLoading
-                      ? 'Calculando...'
-                      : rateDisplay || 'Ingresa un monto para ver la tasa'}
+                    {liveLoading ? 'Calculando...' : rateDisplay || 'Ingresa un monto para ver la tasa'}
                   </span>
                 </div>
-
                 {/* BOTTOM ROW: Destinatario recibe */}
                 <div className="p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{color:'#8aa0cc'}}>Destinatario recibe</p>
                   <div className="flex items-center gap-3">
-                    {destinatarioType === 'anterior' ? (
-                      <div className="flex items-center gap-2 rounded-full px-3 py-2 shrink-0"
-                        style={{border:'1px solid rgba(255,255,255,.08)', background:'rgba(6,13,40,.6)'}}>
-                        {flagUrl(calc.toCountry)
-                          ? <img src={flagUrl(calc.toCountry)} alt="" className="w-[22px] h-[15px] rounded-sm object-cover shrink-0" />
-                          : <span className="text-sm shrink-0">🌍</span>
-                        }
-                        <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCurrency}</span>
-                      </div>
-                    ) : (
-                      <div className="relative shrink-0">
-                        <button type="button"
-                          onClick={() => { setToOpen(v => !v); setFromOpen(false) }}
-                          className="flex items-center gap-2 rounded-full px-3 py-2 transition-colors"
-                          style={{border:'1px solid rgba(255,255,255,.1)', background:'rgba(6,13,40,.8)'}}>
-                          {flagUrl(calc.toCountry)
-                            ? <img src={flagUrl(calc.toCountry)} alt="" className="w-[22px] h-[15px] rounded-sm object-cover shrink-0" />
-                            : <span className="text-sm shrink-0">🌍</span>
-                          }
-                          <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCurrency}</span>
-                          <ChevronDown />
-                        </button>
-                        {toOpen && (
-                          <ToDropdown countries={countriesData || []} value={calc.toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} />
-                        )}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 rounded-full px-3 py-2 shrink-0"
+                      style={{border:'1px solid rgba(255,255,255,.08)', background:'rgba(6,13,40,.6)'}}>
+                      {flagUrl(calc.toCountry)
+                        ? <img src={flagUrl(calc.toCountry)} alt="" className="w-[22px] h-[15px] rounded-sm object-cover shrink-0" />
+                        : <span className="text-sm shrink-0">🌍</span>
+                      }
+                      <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCurrency}</span>
+                    </div>
                     <p className="flex-1 text-3xl font-bold text-right" style={{color: receivedDisplay ? '#38bdf8' : '#64748b'}}>
                       {receivedDisplay || '—'}
                     </p>
@@ -647,12 +629,20 @@ export default function NewTransfer() {
                 </div>
               </div>
 
+              {/* Comisión $0 */}
+              {liveResult && (
+                <div style={{display:'flex', justifyContent:'space-between', padding:'4px 4px 0'}}>
+                  <span style={{fontSize:13, color:'#8aa0cc'}}>Comisión</span>
+                  <span style={{fontSize:13, fontWeight:700, color:'#4ade80'}}>$0 ✓</span>
+                </div>
+              )}
+
               {error && <p className="text-sm" style={{color:'#f87171'}}>{error}</p>}
 
               <button
                 onClick={() => {
                   setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult }))
-                  setStep(3)
+                  setStep(destinatarioType === 'anterior' ? 3 : 2)
                 }}
                 disabled={!liveResult || !rawAmount}
                 className="w-full bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 disabled:opacity-40 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm shadow-blue-200"
@@ -662,11 +652,94 @@ export default function NewTransfer() {
             </div>
           )}
 
+          {/* ── Paso 2: Receptor (solo nuevo) ── */}
+          {step === 2 && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3">
+                <button onClick={() => setStep(1)} className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
+                  ←
+                </button>
+                <div>
+                  <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Datos del receptor</h2>
+                  <p className="text-xs" style={{color:'#8aa0cc'}}>Envío a {calc.toCountry}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Nombre completo *</label>
+                  <input type="text" value={receiver.receiver_name} onChange={e => setReceiver({ ...receiver, receiver_name: e.target.value })}
+                    className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                </div>
+
+                <div>
+                  <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Teléfono</label>
+                  <div className="flex gap-2">
+                    <div className="rounded-xl px-3 py-2.5 text-sm shrink-0" style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc'}}>
+                      {COUNTRY_PHONE_PREFIX[calc.toCountry] || '+'}
+                    </div>
+                    <input type="tel" value={receiver.receiver_phone} onChange={e => setReceiver({ ...receiver, receiver_phone: e.target.value })}
+                      className="flex-1 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
+                      placeholder="Número sin código de país" />
+                  </div>
+                </div>
+
+                {banksData?.length > 0 && (
+                  <div>
+                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Banco destino</label>
+                    <select value={receiver.receiver_bank_id} onChange={e => setReceiver({ ...receiver, receiver_bank_id: e.target.value })}
+                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
+                      <option value="" style={{background:'#0f172a', color:'#fff'}}>Seleccionar banco...</option>
+                      {banksData.map(b => <option key={b.id} value={b.id} style={{background:'#0f172a', color:'#fff'}}>{b.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Número de cuenta</label>
+                  {COUNTRY_ACCOUNT_HINT[calc.toCountry] && (
+                    <p className="text-xs mb-1.5" style={{color:'#475569'}}>📌 {COUNTRY_ACCOUNT_HINT[calc.toCountry]}</p>
+                  )}
+                  <input type="text" value={receiver.receiver_account} onChange={e => setReceiver({ ...receiver, receiver_account: e.target.value })}
+                    className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Tipo de ID</label>
+                    <select value={receiver.receiver_id_type} onChange={e => setReceiver({ ...receiver, receiver_id_type: e.target.value })}
+                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
+                      {(COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES).map(t => <option key={t} style={{background:'#0f172a', color:'#fff'}}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Número de ID</label>
+                    <input value={receiver.receiver_id_num} onChange={e => setReceiver({ ...receiver, receiver_id_num: e.target.value })}
+                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                  </div>
+                </div>
+              </div>
+
+              <button onClick={() => { if (receiver.receiver_name) setStep(3) }} disabled={!receiver.receiver_name}
+                className="w-full bg-gradient-to-r from-blue-400 to-blue-700 disabled:opacity-40 text-white font-semibold py-3 rounded-xl">
+                Continuar →
+              </button>
+            </div>
+          )}
+
+
           {/* ── Paso 3: Pago ── */}
           {step === 3 && (
             <div className="space-y-5">
               <div className="flex items-center gap-3">
-                <button onClick={() => setStep(2)} className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                <button onClick={() => setStep(destinatarioType === 'anterior' ? 1 : 2)} className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
                   style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
                   ←
                 </button>
