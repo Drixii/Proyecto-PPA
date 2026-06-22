@@ -164,6 +164,8 @@ export default function AdminUsers() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteResult, setInviteResult] = useState(null)
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
+  const [inviteCodeCopied, setInviteCodeCopied] = useState(false)
+  const [subAdminView, setSubAdminView] = useState('choice') // 'choice' | 'new' | 'existing'
   const [pwdModal, setPwdModal] = useState(null)
   const [countriesModal, setCountriesModal] = useState(null)
   const [pointsModal, setPointsModal] = useState(null)
@@ -274,6 +276,25 @@ export default function AdminUsers() {
       showToast(res.data.message || 'Usuario restaurado')
     },
     onError: (err) => showToast(err.response?.data?.detail || 'Error al restaurar', false),
+  })
+
+  const { data: availableSubAdmins = [] } = useQuery({
+    queryKey: ['admin-available-sub-admins'],
+    queryFn: () => api.get('/admin/sub-admins/available').then(r => r.data.data),
+    enabled: createModal && roleTab === 'sub_admin' && subAdminView === 'existing',
+    staleTime: 0,
+  })
+
+  const linkSubAdminMutation = useMutation({
+    mutationFn: (id) => api.post(`/admin/sub-admins/${id}/link`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      qc.invalidateQueries({ queryKey: ['admin-available-sub-admins'] })
+      setCreateModal(false)
+      setSubAdminView('choice')
+      showToast('Sub-admin vinculado exitosamente')
+    },
+    onError: (err) => showToast(err.response?.data?.detail || 'Error al vincular', false),
   })
 
   const generatePassword = () => {
@@ -622,10 +643,10 @@ export default function AdminUsers() {
                     {inviteLinkCopied ? '✓ Copiado' : 'Copiar enlace'}
                   </button>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(inviteResult.code) }}
+                    onClick={() => { navigator.clipboard.writeText(inviteResult.code); setInviteCodeCopied(true); setTimeout(() => setInviteCodeCopied(false), 2000) }}
                     className="text-xs font-semibold px-3 py-2 rounded-lg font-mono"
-                    style={{background:'rgba(252,211,77,.08)', color:'#fcd34d', border:'1px solid rgba(252,211,77,.2)'}}>
-                    Código: {inviteResult.code}
+                    style={inviteCodeCopied ? {background:'rgba(74,222,128,.15)', color:'#4ade80', border:'1px solid rgba(74,222,128,.3)'} : {background:'rgba(252,211,77,.08)', color:'#fcd34d', border:'1px solid rgba(252,211,77,.2)'}}>
+                    {inviteCodeCopied ? '✓ Copiado' : `Código: ${inviteResult.code}`}
                   </button>
                 </div>
               </div>
@@ -657,8 +678,73 @@ export default function AdminUsers() {
 
       {/* Create user modal */}
       {createModal && (
-        <Modal title={roleTab === 'sub_admin' ? 'Nuevo Sub-admin' : 'Nuevo Cliente'} onClose={() => setCreateModal(false)}>
+        <Modal title={roleTab === 'sub_admin' ? 'Sub-admin' : 'Nuevo Cliente'} onClose={() => { setCreateModal(false); setSubAdminView('choice') }}>
+          {/* Sub-admin choice screen */}
+          {roleTab === 'sub_admin' && subAdminView === 'choice' && (
+            <div className="space-y-3">
+              <button onClick={() => setSubAdminView('new')} className="w-full flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-colors" style={{background:'rgba(56,189,248,.08)', border:'1px solid rgba(56,189,248,.2)', color:'#eaf2ff'}}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{background:'rgba(56,189,248,.15)'}}>
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#38bdf8" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Crear nuevo sub-admin</p>
+                  <p className="text-xs mt-0.5" style={{color:'#8aa0cc'}}>Registra un sub-admin nuevo en el sistema</p>
+                </div>
+              </button>
+              <button onClick={() => setSubAdminView('existing')} className="w-full flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-colors" style={{background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.2)', color:'#eaf2ff'}}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{background:'rgba(167,139,250,.15)'}}>
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#a78bfa" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Vincular sub-admin existente</p>
+                  <p className="text-xs mt-0.5" style={{color:'#8aa0cc'}}>Usa un sub-admin creado por otro super-admin</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Existing sub-admins list */}
+          {roleTab === 'sub_admin' && subAdminView === 'existing' && (
+            <div className="space-y-3">
+              <button onClick={() => setSubAdminView('choice')} className="flex items-center gap-2 text-xs font-semibold mb-1" style={{color:'#8aa0cc', background:'none', border:'none', cursor:'pointer', padding:0}}>
+                ← Volver
+              </button>
+              <p className="text-xs" style={{color:'#8aa0cc'}}>Sub-admins disponibles de otros super-admins:</p>
+              {availableSubAdmins.filter(sa => !sa.linked).length === 0 ? (
+                <p className="text-sm text-center py-6" style={{color:'#475569'}}>No hay sub-admins disponibles</p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {availableSubAdmins.filter(sa => !sa.linked).map(sa => (
+                    <div key={sa.id} className="flex items-center gap-3 rounded-xl px-3 py-3" style={{background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.07)'}}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{color:'#eaf2ff'}}>{sa.full_name}</p>
+                        <p className="text-xs truncate" style={{color:'#64748b'}}>{sa.email}</p>
+                        {sa.managed_countries?.length > 0 && (
+                          <p className="text-[10px] mt-0.5" style={{color:'#475569'}}>{sa.managed_countries.join(', ')}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => linkSubAdminMutation.mutate(sa.id)}
+                        disabled={linkSubAdminMutation.isPending}
+                        className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                        style={{background:'rgba(167,139,250,.15)', color:'#a78bfa', border:'1px solid rgba(167,139,250,.3)'}}>
+                        Vincular
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* New user form — always for clients, or when 'new' for sub_admins */}
+          {(roleTab !== 'sub_admin' || subAdminView === 'new') && (
           <form onSubmit={handleCreate} className="space-y-4">
+            {roleTab === 'sub_admin' && (
+              <button type="button" onClick={() => setSubAdminView('choice')} className="flex items-center gap-2 text-xs font-semibold mb-1" style={{color:'#8aa0cc', background:'none', border:'none', cursor:'pointer', padding:0}}>
+                ← Volver
+              </button>
+            )}
             <div>
               <label className="block text-xs font-semibold mb-1" style={{color:'#aebfe2'}}>Nombre completo *</label>
               <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
@@ -754,7 +840,7 @@ export default function AdminUsers() {
             )}
             {formError && <p className="text-xs px-3 py-2 rounded-lg" style={{color:'#f87171', background:'rgba(239,68,68,.1)'}}>{formError}</p>}
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setCreateModal(false)}
+              <button type="button" onClick={() => { setCreateModal(false); setSubAdminView('choice') }}
                 className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition-colors"
                 style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
                 Cancelar
@@ -765,6 +851,7 @@ export default function AdminUsers() {
               </button>
             </div>
           </form>
+          )}
         </Modal>
       )}
 

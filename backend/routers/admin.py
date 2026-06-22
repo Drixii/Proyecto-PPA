@@ -765,8 +765,9 @@ def create_invite_code(
     db.add(invite)
     db.commit()
     db.refresh(invite)
+    from urllib.parse import quote
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-    reg_url = f"{frontend_url}/register?code={code}"
+    reg_url = f"{frontend_url}/login?mode=register&code={code}&email={quote(invite.email)}"
     return {
         "success": True,
         "data": {
@@ -789,6 +790,7 @@ def list_invite_codes(
     codes = db.query(InviteCode).filter(
         InviteCode.super_admin_id == _admin.id
     ).order_by(InviteCode.created_at.desc()).all()
+    from urllib.parse import quote
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
     result = []
     for c in codes:
@@ -802,7 +804,7 @@ def list_invite_codes(
             "email": c.email,
             "is_used": c.is_used,
             "used_by_name": used_by_name,
-            "registration_url": f"{frontend_url}/register?code={c.code}",
+            "registration_url": f"{frontend_url}/login?mode=register&code={c.code}&email={quote(c.email)}",
             "created_at": c.created_at.isoformat() if c.created_at else None,
         })
     return {"success": True, "data": result, "message": ""}

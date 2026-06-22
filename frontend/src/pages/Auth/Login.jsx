@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import api from '../../services/api'
 import logoSrc from '../../assets/logo.png'
@@ -135,11 +135,17 @@ const REGISTER_COUNTRIES = ['Chile', 'Colombia', 'Venezuela', 'Perú', 'Argentin
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { login } = useStore()
   const canvasRef = useRef(null)
-  const [mode, setMode] = useState(location.state?.mode || 'login')
+
+  const urlMode = searchParams.get('mode')
+  const urlEmail = searchParams.get('email') || ''
+  const urlCode = searchParams.get('code') || ''
+
+  const [mode, setMode] = useState(urlMode === 'register' ? 'register' : (location.state?.mode || 'login'))
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
-  const [regForm, setRegForm] = useState({ email: '', full_name: '', password: '', phone: '', country: 'Chile' })
+  const [regForm, setRegForm] = useState({ email: urlEmail, full_name: '', password: '', confirmPassword: '', phone: '', country: 'Chile' })
   const [loginError, setLoginError] = useState('')
   const [regError, setRegError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
@@ -174,10 +180,13 @@ export default function Login() {
 
   const submitRegister = async (e) => {
     e.preventDefault()
+    if (regForm.password !== regForm.confirmPassword) {
+      setRegError('Las contraseñas no coinciden'); return
+    }
     setRegLoading(true); setRegError('')
     try {
       await api.post('/auth/check-email', { email: regForm.email })
-      setInviteCode(''); setCodeError('')
+      setInviteCode(urlCode); setCodeError('')
       setShowCodeModal(true)
     } catch (err) {
       setRegError(err.response?.data?.detail || 'El correo no es el correcto')
@@ -365,6 +374,12 @@ export default function Login() {
               </div>
               <div><label style={labelStyle}>Contraseña</label>
                 <input className="login-input" type="password" value={regForm.password} onChange={e => setRegForm({ ...regForm, password: e.target.value })} required placeholder="••••••••" style={inputStyle} />
+              </div>
+              <div><label style={labelStyle}>Confirmar contraseña</label>
+                <input className="login-input" type="password" value={regForm.confirmPassword} onChange={e => setRegForm({ ...regForm, confirmPassword: e.target.value })} required placeholder="••••••••" style={{ ...inputStyle, borderColor: regForm.confirmPassword && regForm.password !== regForm.confirmPassword ? 'rgba(239,68,68,.5)' : undefined }} />
+                {regForm.confirmPassword && regForm.password !== regForm.confirmPassword && (
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>Las contraseñas no coinciden</p>
+                )}
               </div>
               <div><label style={labelStyle}>Teléfono (opcional)</label>
                 <input className="login-input" type="tel" value={regForm.phone} onChange={e => setRegForm({ ...regForm, phone: e.target.value })} placeholder="+56 9 1234 5678" style={inputStyle} />
