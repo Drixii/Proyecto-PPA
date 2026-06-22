@@ -317,6 +317,7 @@ export default function SubAdminPipeline() {
                           key={order.id}
                           order={order}
                           isAdmin
+                          assignedName={order.super_admin_name || undefined}
                           onView={o => setSelectedOrder(o)}
                         />
                       ))}

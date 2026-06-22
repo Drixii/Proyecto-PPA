@@ -14,16 +14,16 @@ export default function OrderCard({ order, isAdmin = false, onView, assignedName
       onMouseLeave={e => e.currentTarget.style.borderColor='rgba(255,255,255,.06)'}>
       <div className="flex justify-between items-start mb-2">
         <span className="font-mono text-xs" style={{ color:'#8aa0cc' }}>{order.order_number}</span>
-        <div className="flex items-center gap-1.5">
-          {assignedName && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ color:'#7dd3fc', background:'rgba(56,189,248,.12)', border:'1px solid rgba(56,189,248,.2)' }}>
-              {assignedName}
-            </span>
-          )}
-          <StatusBadge status={order.status} />
-        </div>
+        <StatusBadge status={order.status} />
       </div>
-      <p className="font-semibold text-sm" style={{ color:'#eaf2ff' }}>{order.sender_name}</p>
+      {assignedName && (
+        <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color:'#64748b' }}>
+          Cliente de {assignedName}
+        </p>
+      )}
+      <p className="font-semibold text-sm" style={{ color:'#eaf2ff' }}>
+        {assignedName ? 'Cliente: ' : ''}{order.sender_name}
+      </p>
       <span className="inline-flex items-center gap-1 text-xs mb-2" style={{ color:'#8aa0cc' }}>
         → {order.receiver_name} ·
         {flagUrl(order.receiver_country) && <img src={flagUrl(order.receiver_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0 mx-0.5" />}

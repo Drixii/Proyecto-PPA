@@ -340,6 +340,7 @@ export default function SubAdminOrders() {
               <thead>
                 <tr style={{background:'rgba(4,10,30,.6)', borderBottom:'1px solid rgba(255,255,255,.06)'}}>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-5 py-3" style={{color:'#64748b'}}>Order ID</th>
+                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Derivado</th>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Cliente</th>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Receptor</th>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Monto</th>
@@ -350,12 +351,12 @@ export default function SubAdminOrders() {
               </thead>
               <tbody>
                 {isLoading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} style={{borderBottom:'1px solid rgba(255,255,255,.04)'}}>{Array.from({ length: 6 }).map((__, j) => (
+                  <tr key={i} style={{borderBottom:'1px solid rgba(255,255,255,.04)'}}>{Array.from({ length: 7 }).map((__, j) => (
                     <td key={j} className="px-5 py-4"><div className="h-3 rounded animate-pulse w-24" style={{background:'rgba(255,255,255,.06)'}} /></td>
                   ))}</tr>
                 ))}
                 {!isLoading && orders.length === 0 && (
-                  <tr><td colSpan={7} className="px-5 py-16 text-center text-sm" style={{color:'#475569'}}>Sin órdenes</td></tr>
+                  <tr><td colSpan={8} className="px-5 py-16 text-center text-sm" style={{color:'#475569'}}>Sin órdenes</td></tr>
                 )}
                 {!isLoading && orders.map(order => (
                   <tr key={order.id} onClick={() => setSelectedOrder(order)} className="cursor-pointer transition-colors"
@@ -364,14 +365,20 @@ export default function SubAdminOrders() {
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="px-5 py-4"><span className="font-mono text-xs" style={{color:'#8aa0cc'}}>{order.order_number}</span></td>
                     <td className="px-4 py-4">
+                      {order.super_admin_name ? (
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{background:'rgba(56,189,248,.1)', color:'#38bdf8', border:'1px solid rgba(56,189,248,.2)', whiteSpace:'nowrap'}}>
+                          {order.super_admin_name}
+                        </span>
+                      ) : (
+                        <span className="text-xs" style={{color:'#475569'}}>—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 bg-gradient-to-br from-blue-400 to-blue-700 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0">
                           {order.sender_name?.[0]?.toUpperCase()}
                         </div>
-                        <div>
-                          <span className="text-sm font-medium" style={{color:'#eaf2ff'}}>{order.sender_name}</span>
-                          {order.super_admin_name && <p className="text-[10px]" style={{color:'#475569'}}>via {order.super_admin_name}</p>}
-                        </div>
+                        <span className="text-sm font-medium" style={{color:'#eaf2ff'}}>{order.sender_name}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4">

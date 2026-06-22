@@ -322,7 +322,8 @@ def get_stats(db: Session = Depends(get_db), _admin: User = Depends(require_supe
         .all()
     )
     volume_today = db.query(func.sum(Order.amount_sent)).filter(
-        Order.created_at >= today_start, Order.created_at <= today_end
+        Order.created_at >= today_start, Order.created_at <= today_end,
+        Order.super_admin_id == _admin.id,
     ).scalar() or 0
     recent = today_q.order_by(Order.created_at.asc()).all()
     return {
