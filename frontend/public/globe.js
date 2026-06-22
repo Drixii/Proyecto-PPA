@@ -4,15 +4,18 @@
   var cv,ctx,hero,gridTitle,pin,hint,W=0,H=0,rot=0,progress=0;
 
   var countries=[
-    { iso:'us', name:'EE.UU.',   lat:40.7,  lon:-74.0 },
-    { iso:'co', name:'Colombia', lat:4.7,   lon:-74.1 },
-    { iso:'cl', name:'Chile',    lat:-33.4, lon:-70.6 },
-    { iso:'mx', name:'México',   lat:19.4,  lon:-99.1 },
-    { iso:'br', name:'Brasil',   lat:-23.5, lon:-46.6 },
-    { iso:'es', name:'España',   lat:40.4,  lon:-3.7  },
-    { iso:'pe', name:'Perú',     lat:-12.0, lon:-77.0 },
-    { iso:'ar', name:'Argentina',lat:-34.6, lon:-58.4 },
-    { iso:'ca', name:'Canadá',   lat:43.7,  lon:-79.4 }
+    { iso:'us', name:'EE.UU.',    lat:40.7,  lon:-74.0 },
+    { iso:'ve', name:'Venezuela', lat:10.5,  lon:-66.9 },
+    { iso:'co', name:'Colombia',  lat:4.7,   lon:-74.1 },
+    { iso:'cl', name:'Chile',     lat:-33.4, lon:-70.6 },
+    { iso:'mx', name:'México',    lat:19.4,  lon:-99.1 },
+    { iso:'br', name:'Brasil',    lat:-23.5, lon:-46.6 },
+    { iso:'es', name:'España',    lat:40.4,  lon:-3.7  },
+    { iso:'gb', name:'R. Unido',  lat:51.5,  lon:-0.1  },
+    { iso:'ng', name:'Nigeria',   lat:6.5,   lon:3.4   },
+    { iso:'ke', name:'Kenia',     lat:-1.3,  lon:36.8  },
+    { iso:'in', name:'India',     lat:19.1,  lon:72.9  },
+    { iso:'au', name:'Australia', lat:-33.9, lon:151.2 }
   ];
   var dots=[], arcs=[];
 
