@@ -307,7 +307,7 @@ function RewardsSection() {
                 {r.description && <p className="text-xs mb-2" style={{ color: '#8aa0cc' }}>{r.description}</p>}
                 <div className="mt-auto pt-3 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,.06)' }}>
                   <div>
-                    <span className="text-lg font-bold" style={{ color: '#fcd34d' }}>{r.points_cost.toLocaleString()} pts</span>
+                    <span className="text-lg font-bold" style={{ color: '#fcd34d' }}>{(r.points_cost ?? 0).toLocaleString()} pts</span>
                     <p className="text-[11px]" style={{ color: '#4ade80' }}>${(r.points_cost * clpRate).toLocaleString('es-CL')} CLP</p>
                   </div>
                   <div className="flex gap-1.5">

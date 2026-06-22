@@ -88,7 +88,7 @@ export default function OrderDetail() {
             </div>
             <div className="flex justify-between">
               <span style={{color:'#8aa0cc'}}>Comisión</span>
-              <span className="font-medium" style={{color:'#eaf2ff'}}>{data.fee.toLocaleString()} {data.currency_from}</span>
+              <span className="font-semibold" style={{color:'#4ade80'}}>$0 ✓</span>
             </div>
             <div className="flex justify-between">
               <span style={{color:'#8aa0cc'}}>Tasa</span>

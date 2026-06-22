@@ -51,9 +51,10 @@ function OrderDetailPanel({ order, onClose }) {
     },
   })
 
-  const proofUrl = order.payment_proof ? `/uploads/proofs/${order.payment_proof}` : null
+  const apiBase = import.meta.env.VITE_API_URL || ''
+  const proofUrl = order.payment_proof ? `${apiBase}/uploads/proofs/${order.payment_proof}` : null
   const proofIsImage = proofUrl && /\.(jpg|jpeg|png|webp)$/i.test(proofUrl)
-  const completionProofUrl = order.completion_proof_url || null
+  const completionProofUrl = order.completion_proof_url ? (order.completion_proof_url.startsWith('http') ? order.completion_proof_url : `${apiBase}${order.completion_proof_url}`) : null
   const completionIsImage = completionProofUrl && /\.(jpg|jpeg|png|webp)$/i.test(completionProofUrl)
 
   return (

@@ -403,7 +403,7 @@ export default function AdminUsers() {
                           {u.role === 'client' ? 'Cliente' : u.role === 'sub_admin' ? 'Sub-admin' : 'Admin'}
                         </span>
                       </td>
-                      <td className="px-4 py-4"><span className="text-xs" style={{color:'#8aa0cc'}}>{new Date(u.deleted_at).toLocaleDateString('es-CL')}</span></td>
+                      <td className="px-4 py-4"><span className="text-xs" style={{color:'#8aa0cc'}}>{u.deleted_at ? new Date(u.deleted_at).toLocaleDateString('es-CL') : '-'}</span></td>
                       <td className="px-4 py-4">
                         <span className="text-xs font-bold" style={{color: u.days_left <= 3 ? '#f87171' : u.days_left <= 7 ? '#fcd34d' : '#4ade80'}}>
                           {u.days_left} día{u.days_left !== 1 ? 's' : ''}

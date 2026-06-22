@@ -12,7 +12,10 @@ const SEND_CURRENCIES = [
   { code: 'PEN', iso2: 'pe', name: 'Sol Peruano' },
   { code: 'BRL', iso2: 'br', name: 'Real Brasileño' },
   { code: 'MXN', iso2: 'mx', name: 'Peso Mexicano' },
+  { code: 'ARS', iso2: 'ar', name: 'Peso Argentino' },
+  { code: 'CAD', iso2: 'ca', name: 'Dólar Canadiense' },
 ]
+const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD']
 const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
 
 const cflag = iso2 => `https://flagcdn.com/40x30/${iso2}.png`
@@ -158,8 +161,8 @@ function ToDropdown({ countries, value, onChange, onClose, mobile }) {
 // ── CalculatorDark ────────────────────────────────────────────────────────────
 export default function CalculatorDark({ onSend }) {
   const [fromCurrency, setFromCurrency] = useState('CLP')
-  const [toCountry, setToCountry]       = useState('Venezuela')
-  const [toCurrency, setToCurrency]     = useState('VES')
+  const [toCountry, setToCountry]       = useState('Colombia')
+  const [toCurrency, setToCurrency]     = useState('COP')
   const [displayAmount, setDisplayAmount] = useState('')
   const [result, setResult]     = useState(null)
   const [loading, setLoading]   = useState(false)
@@ -174,7 +177,7 @@ export default function CalculatorDark({ onSend }) {
     queryKey: ['countries'],
     queryFn: () => api.get('/rates/countries').then(r => r.data.data),
   })
-  const countries   = countriesData || []
+  const countries   = (countriesData || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency))
   const selectedFrom = SEND_CURRENCIES.find(c => c.code === fromCurrency)
   const rawAmount   = parseRaw(displayAmount)
 
@@ -332,6 +335,17 @@ export default function CalculatorDark({ onSend }) {
             </p>
           </div>
         </div>
+
+        {/* COMISIÓN */}
+        {result && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 6px 2px' }}>
+            <span style={{ fontSize: 12.5, color: '#8aa0cc' }}>Comisión</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              $0
+            </span>
+          </div>
+        )}
 
         {/* CTA */}
         <button className="calc-cta" onClick={() => onSend?.({ amount: rawAmount, fromCurrency, toCountry, toCurrency, result })}

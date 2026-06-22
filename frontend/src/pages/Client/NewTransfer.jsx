@@ -844,7 +844,7 @@ export default function NewTransfer() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-center mt-3 pt-3 text-xs" style={{borderTop:'1px solid rgba(56,189,248,.15)', color:'#8aa0cc'}}>
                     <div>Tasa: <span className="font-semibold" style={{color:'#aebfe2'}}>{calc.result.rate?.toFixed(4)}</span></div>
-                    <div>Comisión: <span className="font-semibold" style={{color:'#aebfe2'}}>{formatDisplay(calc.result.fee, calc.fromCurrency)} {calc.fromCurrency}</span></div>
+                    <div>Comisión: <span className="font-semibold" style={{color:'#4ade80'}}>$0 ✓</span></div>
                   </div>
                 </div>
               )}
