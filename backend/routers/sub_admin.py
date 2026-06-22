@@ -172,6 +172,12 @@ def sub_admin_stats(
         Order.updated_at < today_end,
     ).order_by(Order.updated_at.desc()).limit(30).all()
 
+    sa_ids = {o.super_admin_id for o in today_orders if o.super_admin_id}
+    sa_map = {}
+    if sa_ids:
+        sa_users = db.query(User).filter(User.id.in_(sa_ids)).all()
+        sa_map = {u.id: u.full_name for u in sa_users}
+
     return {
         "success": True,
         "data": {
@@ -186,6 +192,7 @@ def sub_admin_stats(
                     "receiver_name": o.receiver_name,
                     "receiver_country": o.receiver_country,
                     "status": o.status,
+                    "super_admin_name": sa_map.get(o.super_admin_id),
                     "updated_at": o.updated_at.isoformat() if o.updated_at else None,
                     "created_at": o.created_at.isoformat() if o.created_at else None,
                 }

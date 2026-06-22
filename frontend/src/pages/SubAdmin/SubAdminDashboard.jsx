@@ -153,13 +153,14 @@ export default function SubAdminDashboard() {
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{ color: '#8aa0cc' }}>Receptor</th>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3 hidden sm:table-cell" style={{ color: '#8aa0cc' }}>País</th>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{ color: '#8aa0cc' }}>Estado</th>
+                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3 hidden sm:table-cell" style={{ color: '#8aa0cc' }}>Derivado</th>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3 hidden md:table-cell" style={{ color: '#8aa0cc' }}>Hora</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,.06)' }}>
-                    {[1, 2, 3, 4, 5].map(j => (
+                    {[1, 2, 3, 4, 5, 6].map(j => (
                       <td key={j} className="px-4 py-4">
                         <div className="h-3 rounded animate-pulse w-20" style={{ background: 'rgba(255,255,255,.06)' }} />
                       </td>
@@ -168,7 +169,7 @@ export default function SubAdminDashboard() {
                 ))}
                 {!isLoading && (stats?.today_orders || []).length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-sm" style={{ color: '#475569' }}>
+                    <td colSpan={6} className="px-6 py-10 text-center text-sm" style={{ color: '#475569' }}>
                       Sin actividad hoy
                     </td>
                   </tr>
@@ -195,6 +196,14 @@ export default function SubAdminDashboard() {
                     </td>
                     <td className="px-4 py-3">
                       <StatusChip status={order.status} />
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {order.super_admin_name && (
+                        <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                          style={{ background: 'rgba(56,189,248,.1)', color: '#38bdf8', border: '1px solid rgba(56,189,248,.15)' }}>
+                          {order.super_admin_name}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       <span className="text-xs" style={{ color: '#8aa0cc' }}>{fmtDateShort(order.updated_at, tz)}</span>

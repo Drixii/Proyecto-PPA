@@ -568,7 +568,12 @@ function FloatingNotifications({ role }) {
                       {isStatus && !isMsg && nCol && <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center text-white text-[8px]" style={{ background: nCol.dot, borderColor: '#0a1628' }}>↑</div>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate" style={{ color: '#eaf2ff' }}>{role === 'admin' ? item.client_name : item.receiver_name}</p>
+                      <p className="text-xs font-semibold truncate" style={{ color: '#eaf2ff' }}>
+                        {(role === 'admin' || role === 'sub_admin') ? `Cliente: ${item.client_name || ''}` : item.receiver_name || ''}
+                      </p>
+                      {role === 'sub_admin' && item.super_admin_name && (
+                        <p className="text-[10px] truncate font-medium" style={{ color: '#38bdf8' }}>Derivado de {item.super_admin_name}</p>
+                      )}
                       <p className={`text-[11px] ${labelWeight} line-clamp-2`} style={{ color: labelColor }}>{item._label}</p>
                       <p className="text-[10px] line-clamp-2" style={{ color: '#64748b' }}>{item.order_number}{item.body ? ` · ${item.body}` : ''}</p>
                       {item.created_at && (

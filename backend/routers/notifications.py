@@ -11,6 +11,10 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 def _serialize(n: Notification, db: Session) -> dict:
     order = db.query(Order).filter(Order.id == n.order_id).first() if n.order_id else None
+    sa_name = None
+    if order and order.super_admin_id:
+        sa = db.query(User).filter(User.id == order.super_admin_id).first()
+        sa_name = sa.full_name if sa else None
     return {
         "id": n.id,
         "order_id": n.order_id,
@@ -24,6 +28,7 @@ def _serialize(n: Notification, db: Session) -> dict:
         "receiver_name": order.receiver_name if order else None,
         "order_number": order.order_number if order else None,
         "status": order.status if order else None,
+        "super_admin_name": sa_name,
     }
 
 

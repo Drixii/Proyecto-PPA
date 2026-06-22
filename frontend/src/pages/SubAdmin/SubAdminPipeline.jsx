@@ -27,6 +27,8 @@ function Row({ label, value }) {
 }
 
 function OrderDetail({ order, onClose }) {
+  const { user } = useStore()
+  const tz = userTz(user)
   const qc = useQueryClient()
   const [tab, setTab] = useState('resumen')
   const [showCompletePopup, setShowCompletePopup] = useState(false)
@@ -48,9 +50,10 @@ function OrderDetail({ order, onClose }) {
     },
   })
 
-  const proofUrl = order.payment_proof ? `/uploads/proofs/${order.payment_proof}` : null
+  const apiBase = import.meta.env.VITE_API_URL || ''
+  const proofUrl = order.payment_proof ? `${apiBase}/uploads/proofs/${order.payment_proof}` : null
   const proofIsImage = proofUrl && /\.(jpg|jpeg|png|webp)$/i.test(proofUrl)
-  const completionProofUrl = order.completion_proof_url || null
+  const completionProofUrl = order.completion_proof_url ? `${apiBase}${order.completion_proof_url}` : null
   const completionIsImage = completionProofUrl && /\.(jpg|jpeg|png|webp)$/i.test(completionProofUrl)
 
   return (
@@ -257,6 +260,7 @@ export default function SubAdminPipeline() {
   const tz = userTz(user)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [dateRange, setDateRange] = useState({ from: todayStart, to: todayEnd })
+  const [adminFilter, setAdminFilter] = useState('')
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -271,8 +275,9 @@ export default function SubAdminPipeline() {
     refetchInterval: 15000,
   })
 
+  const adminNames = [...new Set((data || []).map(o => o.super_admin_name).filter(Boolean))]
   const byStatus = (status) => (data || [])
-    .filter(o => o.status === status)
+    .filter(o => o.status === status && (!adminFilter || o.super_admin_name === adminFilter))
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 
   return (
@@ -282,6 +287,14 @@ export default function SubAdminPipeline() {
         <div className="px-6 py-3 flex items-center gap-4 shrink-0" style={{background:'rgba(6,13,40,.9)', borderBottom:'1px solid rgba(255,255,255,.07)'}}>
           <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Pipeline</h2>
           <DateRangePicker value={dateRange} onChange={setDateRange} />
+          {adminNames.length > 1 && (
+            <select value={adminFilter} onChange={e => setAdminFilter(e.target.value)}
+              className="text-xs rounded-lg px-2 py-1 outline-none"
+              style={{background:'rgba(255,255,255,.06)', color:'#eaf2ff', border:'1px solid rgba(255,255,255,.1)'}}>
+              <option value=''>Todos</option>
+              {adminNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
           <span className="text-xs ml-auto" style={{color:'#aebfe2'}}>actualiza cada 15s · {(data || []).length} órdenes</span>
         </div>
 

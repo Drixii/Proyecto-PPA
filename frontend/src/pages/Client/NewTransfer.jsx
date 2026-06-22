@@ -895,7 +895,7 @@ export default function NewTransfer() {
                     <button
                       onClick={() => {
                         setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult || calc.result }))
-                        submit()
+                        setShowConfirm(true)
                       }}
                       disabled={loading}
                       className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all text-base shadow-md shadow-green-200 flex items-center justify-center gap-2">
@@ -1015,45 +1015,45 @@ export default function NewTransfer() {
                 {loading ? 'Procesando...' : '✓ Confirmar envío'}
               </button>
 
-              {/* Confirmation modal */}
-              {showConfirm && (
-                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,.7)', backdropFilter:'blur(6px)' }}>
-                  <div className="w-full max-w-sm rounded-2xl p-6" style={{ background:'rgba(8,16,44,.98)', border:'1px solid rgba(56,189,248,.2)', boxShadow:'0 24px 64px rgba(0,0,0,.7)' }}>
-                    <h3 className="text-lg font-bold mb-1" style={{ color:'#eaf2ff' }}>¿Confirmar envío?</h3>
-                    <p className="text-xs mb-5" style={{ color:'#8aa0cc' }}>Revisa los datos antes de continuar</p>
+            </div>
+          )}
 
-                    <div className="space-y-0 rounded-xl overflow-hidden mb-5" style={{ border:'1px solid rgba(255,255,255,.06)' }}>
-                      {[
-                        ['Receptor', receiver.receiver_name],
-                        ['País destino', receiver.receiver_country],
-                        ['Cuenta', receiver.receiver_account || '—'],
-                        ['Banco', banksData?.find(b => String(b.id) === String(receiver.receiver_bank_id))?.name || payment.payment_bank || '—'],
-                        ['Envías', `${(rawAmount || parseFloat(calc.amount) || 0).toLocaleString()} ${calc.fromCurrency}`],
-                        ['Recibe', liveResult ? `${liveResult.amount_received?.toLocaleString()} ${calc.toCurrency}` : '—'],
-                        ['Método de pago', payment.payment_method || '—'],
-                      ].map(([label, value]) => (
-                        <div key={label} className="flex justify-between px-4 py-2.5" style={{ borderBottom:'1px solid rgba(255,255,255,.05)' }}>
-                          <span className="text-xs" style={{ color:'#64748b' }}>{label}</span>
-                          <span className="text-xs font-semibold text-right max-w-[55%]" style={{ color:'#aebfe2' }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
+          {showConfirm && (
+            <div className="fixed inset-0 z-[500] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,.7)', backdropFilter:'blur(6px)' }}>
+              <div className="w-full max-w-sm rounded-2xl p-6" style={{ background:'rgba(8,16,44,.98)', border:'1px solid rgba(56,189,248,.2)', boxShadow:'0 24px 64px rgba(0,0,0,.7)' }}>
+                <h3 className="text-lg font-bold mb-1" style={{ color:'#eaf2ff' }}>¿Confirmar envío?</h3>
+                <p className="text-xs mb-5" style={{ color:'#8aa0cc' }}>Revisa los datos antes de continuar</p>
 
-                    <div className="flex gap-3">
-                      <button onClick={() => setShowConfirm(false)}
-                        className="flex-1 py-3 rounded-xl text-sm font-medium transition-colors"
-                        style={{ background:'rgba(255,255,255,.06)', color:'#aebfe2', border:'1px solid rgba(255,255,255,.1)' }}>
-                        Cancelar
-                      </button>
-                      <button onClick={() => { setShowConfirm(false); submit() }} disabled={loading}
-                        className="flex-1 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-                        style={{ background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', color:'#fff', boxShadow:'0 4px 16px rgba(59,130,246,.4)' }}>
-                        {loading ? 'Procesando...' : 'Sí, enviar'}
-                      </button>
+                <div className="space-y-0 rounded-xl overflow-hidden mb-5" style={{ border:'1px solid rgba(255,255,255,.06)' }}>
+                  {[
+                    ['Receptor', receiver.receiver_name],
+                    ['País destino', receiver.receiver_country],
+                    ['Cuenta', receiver.receiver_account || '—'],
+                    ['Banco', banksData?.find(b => String(b.id) === String(receiver.receiver_bank_id))?.name || payment.payment_bank || '—'],
+                    ['Envías', `${(rawAmount || parseFloat(calc.amount) || 0).toLocaleString()} ${calc.fromCurrency}`],
+                    ['Recibe', liveResult ? `${liveResult.amount_received?.toLocaleString()} ${calc.toCurrency}` : '—'],
+                    ['Método de pago', payment.payment_method || '—'],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between px-4 py-2.5" style={{ borderBottom:'1px solid rgba(255,255,255,.05)' }}>
+                      <span className="text-xs" style={{ color:'#64748b' }}>{label}</span>
+                      <span className="text-xs font-semibold text-right max-w-[55%]" style={{ color:'#aebfe2' }}>{value}</span>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              )}
+
+                <div className="flex gap-3">
+                  <button onClick={() => setShowConfirm(false)}
+                    className="flex-1 py-3 rounded-xl text-sm font-medium transition-colors"
+                    style={{ background:'rgba(255,255,255,.06)', color:'#aebfe2', border:'1px solid rgba(255,255,255,.1)' }}>
+                    Cancelar
+                  </button>
+                  <button onClick={() => { setShowConfirm(false); submit() }} disabled={loading}
+                    className="flex-1 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                    style={{ background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', color:'#fff', boxShadow:'0 4px 16px rgba(59,130,246,.4)' }}>
+                    {loading ? 'Procesando...' : 'Sí, enviar'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
