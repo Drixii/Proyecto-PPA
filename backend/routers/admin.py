@@ -10,12 +10,15 @@ from models.user import User
 from models.setting import Setting
 from models.sub_admin_country import SubAdminCountry
 from models.point import PointTransaction
+from models.invite_code import InviteCode
+from models.admin_sub_admin import AdminSubAdmin
 from schemas.order import OrderOut, OrderStatusUpdate
 from datetime import datetime, timedelta
 from services.order_service import advance_order_status, find_sub_admin_for_country
 from auth.dependencies import require_admin, require_super_admin
 from passlib.context import CryptContext
 from utils.timezones import country_to_tz
+import secrets, os
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -77,7 +80,10 @@ def list_all_orders(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    query = db.query(Order).filter(Order.deleted_at == None).order_by(Order.created_at.asc())
+    query = db.query(Order).filter(
+        Order.deleted_at == None,
+        Order.super_admin_id == _admin.id,
+    ).order_by(Order.created_at.asc())
 
     # Status filter — evaluated first so it always takes precedence
     if status:
@@ -273,7 +279,7 @@ def approve_order(
         raise HTTPException(status_code=400, detail="La orden no tiene comprobante adjunto")
 
     # Assign sub-admin by receiver_country and advance to en_proceso
-    sub_admin_id = find_sub_admin_for_country(db, order.receiver_country)
+    sub_admin_id = find_sub_admin_for_country(db, order.receiver_country, order.super_admin_id)
     old_status = order.status
     order.status = "en_proceso"
     order.sub_admin_id = sub_admin_id
@@ -308,7 +314,7 @@ def get_stats(db: Session = Depends(get_db), _admin: User = Depends(require_supe
     now_utc = datetime.now(timezone.utc)
     today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
     today_end = now_utc.replace(hour=23, minute=59, second=59, microsecond=999999).replace(tzinfo=None)
-    today_q = db.query(Order).filter(Order.created_at >= today_start, Order.created_at <= today_end)
+    today_q = db.query(Order).filter(Order.created_at >= today_start, Order.created_at <= today_end, Order.super_admin_id == _admin.id)
     total = today_q.count()
     by_status = dict(
         today_q.with_entities(Order.status, func.count(Order.id))
@@ -337,10 +343,10 @@ def get_stats(db: Session = Depends(get_db), _admin: User = Depends(require_supe
 def get_admin_notifications(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
     from models.message import Message
 
-    # Orders with uploaded proof awaiting approval
+    # Orders with uploaded proof awaiting approval (filtered by admin ownership)
     pending = (
         db.query(Order)
-        .filter(Order.status == "en_aprobacion", Order.payment_proof.isnot(None))
+        .filter(Order.status == "en_aprobacion", Order.payment_proof.isnot(None), Order.super_admin_id == _admin.id)
         .order_by(Order.created_at.desc())
         .limit(20)
         .all()
@@ -350,7 +356,7 @@ def get_admin_notifications(db: Session = Depends(get_db), _admin: User = Depend
         db.query(Order, func.count(Message.id).label("cnt"))
         .join(Message, Message.order_id == Order.id)
         .join(User, Message.sender_id == User.id)
-        .filter(User.role == "client", Message.is_read == False)
+        .filter(User.role == "client", Message.is_read == False, Order.super_admin_id == _admin.id)
         .group_by(Order.id)
         .order_by(Order.updated_at.desc())
         .all()
@@ -423,10 +429,24 @@ def list_users(
     _admin: User = Depends(require_super_admin)
 ):
     q = db.query(User).filter(User.deleted_at == None)
-    if role:
-        q = q.filter(User.role == role)
+    if role == "client":
+        q = q.filter(User.role == "client", User.super_admin_id == _admin.id)
+    elif role == "sub_admin":
+        linked_ids = [r.sub_admin_id for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == _admin.id).all()]
+        q = q.filter(User.role == "sub_admin", User.id.in_(linked_ids)) if linked_ids else q.filter(User.role == "sub_admin", False)
+    elif role == "admin":
+        q = q.filter(User.role == "admin")
     else:
-        q = q.filter(User.role.in_(["client", "admin", "sub_admin"]))
+        # Combined: this admin's clients + linked sub-admins + all admins
+        linked_ids = [r.sub_admin_id for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == _admin.id).all()]
+        from sqlalchemy import or_
+        q = q.filter(
+            or_(
+                (User.role == "client") & (User.super_admin_id == _admin.id),
+                (User.role == "sub_admin") & (User.id.in_(linked_ids if linked_ids else [-1])),
+                User.role == "admin",
+            )
+        )
     users = q.order_by(User.created_at.desc()).all()
 
     result = []
@@ -474,6 +494,7 @@ def create_user_admin(
         country=data.country,
         timezone=tz,
         must_change_password=(data.role == 'sub_admin'),
+        super_admin_id=_admin.id if data.role == "client" else None,
     )
     db.add(user)
     db.commit()
@@ -483,6 +504,16 @@ def create_user_admin(
         for c in data.managed_countries:
             db.add(SubAdminCountry(user_id=user.id, country=c))
         db.commit()
+
+    # Link sub-admin to creating admin
+    if data.role == "sub_admin":
+        existing = db.query(AdminSubAdmin).filter(
+            AdminSubAdmin.admin_id == _admin.id,
+            AdminSubAdmin.sub_admin_id == user.id,
+        ).first()
+        if not existing:
+            db.add(AdminSubAdmin(admin_id=_admin.id, sub_admin_id=user.id))
+            db.commit()
 
     return {
         "success": True,
@@ -705,3 +736,111 @@ def restore_order(
     order.deleted_at = None
     db.commit()
     return {"success": True, "data": None, "message": f"Orden {order.order_number} restaurada"}
+
+
+# ── Invite Codes ───────────────────────────────────────────
+
+class InviteCodeCreate(BaseModel):
+    email: str
+
+
+@router.post("/invite-codes", response_model=dict)
+def create_invite_code(
+    data: InviteCodeCreate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    code = secrets.token_urlsafe(6).upper()[:8]
+    invite = InviteCode(
+        code=code,
+        email=data.email.strip().lower(),
+        super_admin_id=_admin.id,
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+    reg_url = f"{frontend_url}/register?code={code}"
+    return {
+        "success": True,
+        "data": {
+            "id": invite.id,
+            "code": invite.code,
+            "email": invite.email,
+            "registration_url": reg_url,
+            "is_used": invite.is_used,
+            "created_at": invite.created_at.isoformat() if invite.created_at else None,
+        },
+        "message": "Código generado exitosamente",
+    }
+
+
+@router.get("/invite-codes", response_model=dict)
+def list_invite_codes(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    codes = db.query(InviteCode).filter(
+        InviteCode.super_admin_id == _admin.id
+    ).order_by(InviteCode.created_at.desc()).all()
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+    result = []
+    for c in codes:
+        used_by_name = None
+        if c.used_by_id:
+            u = db.query(User).filter(User.id == c.used_by_id).first()
+            used_by_name = u.full_name if u else None
+        result.append({
+            "id": c.id,
+            "code": c.code,
+            "email": c.email,
+            "is_used": c.is_used,
+            "used_by_name": used_by_name,
+            "registration_url": f"{frontend_url}/register?code={c.code}",
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        })
+    return {"success": True, "data": result, "message": ""}
+
+
+# ── Sub-admin sharing ──────────────────────────────────────
+
+@router.post("/sub-admins/{sub_admin_id}/link", response_model=dict)
+def link_sub_admin(
+    sub_admin_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    sub = db.query(User).filter(User.id == sub_admin_id, User.role == "sub_admin").first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="Sub-admin no encontrado")
+    existing = db.query(AdminSubAdmin).filter(
+        AdminSubAdmin.admin_id == _admin.id,
+        AdminSubAdmin.sub_admin_id == sub_admin_id,
+    ).first()
+    if not existing:
+        db.add(AdminSubAdmin(admin_id=_admin.id, sub_admin_id=sub_admin_id))
+        db.commit()
+    return {"success": True, "data": None, "message": "Sub-admin vinculado"}
+
+
+@router.get("/sub-admins/available", response_model=dict)
+def list_available_sub_admins(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    all_sub_admins = db.query(User).filter(
+        User.role == "sub_admin",
+        User.is_active == True,
+        User.deleted_at == None,
+    ).all()
+    linked = {r.sub_admin_id for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == _admin.id).all()}
+    result = []
+    for sa in all_sub_admins:
+        result.append({
+            "id": sa.id,
+            "full_name": sa.full_name,
+            "email": sa.email,
+            "managed_countries": _sub_admin_countries(db, sa.id),
+            "linked": sa.id in linked,
+        })
+    return {"success": True, "data": result, "message": ""}

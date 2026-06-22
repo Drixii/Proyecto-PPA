@@ -17,5 +17,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     timezone = Column(String, default='America/Santiago', nullable=True)
     must_change_password = Column(Boolean, default=False)
+    super_admin_id = Column(Integer, nullable=True)
+    invite_code_used = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime, nullable=True)

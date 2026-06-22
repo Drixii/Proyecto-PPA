@@ -40,6 +40,8 @@ class Order(Base):
 
     # Sub-admin asignado (se asigna al aprobar o al crear con tarjeta)
     sub_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Super-admin propietario del cliente que hizo el envío
+    super_admin_id = Column(Integer, nullable=True, index=True)
 
     # Pago
     payment_method = Column(String, nullable=True)

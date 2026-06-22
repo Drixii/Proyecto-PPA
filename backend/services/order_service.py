@@ -24,8 +24,27 @@ def generate_order_number(db: Session) -> str:
     return f"CC-{year}-{count:04d}"
 
 
-def find_sub_admin_for_country(db: Session, country: str) -> Optional[int]:
+def find_sub_admin_for_country(db: Session, country: str, super_admin_id: Optional[int] = None) -> Optional[int]:
     from models.sub_admin_country import SubAdminCountry
+    from models.admin_sub_admin import AdminSubAdmin
+    # Prefer sub-admin linked to this super admin
+    if super_admin_id:
+        linked = [r.sub_admin_id for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == super_admin_id).all()]
+        if linked:
+            row = (
+                db.query(SubAdminCountry)
+                .join(User, User.id == SubAdminCountry.user_id)
+                .filter(
+                    SubAdminCountry.country == country,
+                    User.is_active == True,
+                    User.role == "sub_admin",
+                    User.id.in_(linked),
+                )
+                .first()
+            )
+            if row:
+                return row.user_id
+    # Fallback: any sub-admin for that country
     row = (
         db.query(SubAdminCountry)
         .join(User, User.id == SubAdminCountry.user_id)
@@ -51,11 +70,13 @@ def create_order(db: Session, data, client: User) -> Order:
     # Tarjeta → en_proceso con sub_admin asignado. Transferencia → en_aprobacion (sin asignar aún).
     is_card = (getattr(data, "payment_method", None) or "").lower() == "tarjeta"
     initial_status = "en_proceso" if is_card else "en_aprobacion"
-    sub_admin_id = find_sub_admin_for_country(db, data.receiver_country) if is_card else None
+    client_super_admin_id = getattr(client, "super_admin_id", None)
+    sub_admin_id = find_sub_admin_for_country(db, data.receiver_country, client_super_admin_id) if is_card else None
 
     order = Order(
         order_number=generate_order_number(db),
         client_id=client.id,
+        super_admin_id=client_super_admin_id,
         sender_name=data.sender_name,
         sender_id_type=data.sender_id_type,
         sender_id_num=data.sender_id_num,

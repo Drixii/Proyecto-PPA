@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     password: str
     phone: Optional[str] = None
     country: Optional[str] = None
+    invite_code: Optional[str] = None
 
 
 class UserLogin(BaseModel):

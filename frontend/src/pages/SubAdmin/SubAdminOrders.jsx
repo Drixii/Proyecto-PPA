@@ -240,6 +240,7 @@ export default function SubAdminOrders() {
   const qc = useQueryClient()
   const [dateRange, setDateRange] = useState({ from: todayStart, to: todayEnd })
   const [statusFilter, setStatusFilter] = useState('')
+  const [adminFilter, setAdminFilter] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [search, setSearch] = useState('')
 
@@ -258,8 +259,10 @@ export default function SubAdminOrders() {
     refetchInterval: 30000,
   })
 
+  const adminNames = [...new Set((data || []).map(o => o.super_admin_name).filter(Boolean))]
   const orders = (data || [])
     .filter(o => {
+      if (adminFilter && o.super_admin_name !== adminFilter) return false
       if (!search) return true
       const s = search.toLowerCase()
       return o.sender_name?.toLowerCase().includes(s)
@@ -306,6 +309,14 @@ export default function SubAdminOrders() {
               className="w-full rounded-xl pl-8 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
           </div>
+          {adminNames.length > 1 && (
+            <select value={adminFilter} onChange={e => setAdminFilter(e.target.value)}
+              className="rounded-xl px-3 py-2 text-xs focus:outline-none"
+              style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color: adminFilter ? '#fcd34d' : '#8aa0cc'}}>
+              <option value="">Todos los admins</option>
+              {adminNames.map(n => <option key={n}>{n}</option>)}
+            </select>
+          )}
         </div>
 
         {/* Summary cards */}
@@ -357,7 +368,10 @@ export default function SubAdminOrders() {
                         <div className="w-7 h-7 bg-gradient-to-br from-blue-400 to-blue-700 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0">
                           {order.sender_name?.[0]?.toUpperCase()}
                         </div>
-                        <span className="text-sm font-medium" style={{color:'#eaf2ff'}}>{order.sender_name}</span>
+                        <div>
+                          <span className="text-sm font-medium" style={{color:'#eaf2ff'}}>{order.sender_name}</span>
+                          {order.super_admin_name && <p className="text-[10px]" style={{color:'#475569'}}>via {order.super_admin_name}</p>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">

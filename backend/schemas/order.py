@@ -51,6 +51,7 @@ class OrderOut(BaseModel):
     fee: float
     status: str
     sub_admin_id: Optional[int]
+    super_admin_id: Optional[int] = None
     payment_method: Optional[str]
     payment_bank: Optional[str]
     payment_proof: Optional[str]

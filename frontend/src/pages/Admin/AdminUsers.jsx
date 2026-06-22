@@ -160,6 +160,10 @@ export default function AdminUsers() {
   const qc = useQueryClient()
   const [roleTab, setRoleTab] = useState('client')
   const [createModal, setCreateModal] = useState(false)
+  const [inviteModal, setInviteModal] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteResult, setInviteResult] = useState(null)
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
   const [pwdModal, setPwdModal] = useState(null)
   const [countriesModal, setCountriesModal] = useState(null)
   const [pointsModal, setPointsModal] = useState(null)
@@ -200,6 +204,22 @@ export default function AdminUsers() {
       showToast(res.data.message || 'Usuario creado')
     },
     onError: (err) => setFormError(err.response?.data?.detail || 'Error al crear usuario'),
+  })
+
+  const inviteMutation = useMutation({
+    mutationFn: (email) => api.post('/admin/invite-codes', { email }),
+    onSuccess: (res) => {
+      setInviteResult(res.data.data)
+      qc.invalidateQueries({ queryKey: ['admin-users', 'client'] })
+    },
+    onError: (err) => showToast(err.response?.data?.detail || 'Error al generar código', false),
+  })
+
+  const { data: inviteCodes = [] } = useQuery({
+    queryKey: ['admin-invite-codes'],
+    queryFn: () => api.get('/admin/invite-codes').then(r => r.data.data),
+    enabled: inviteModal,
+    staleTime: 0,
   })
 
   const pwdMutation = useMutation({
@@ -323,20 +343,27 @@ export default function AdminUsers() {
             {!trashView && roleTab !== 'admin' && (
               <button
                 onClick={() => {
-                  const pwd = generatePassword()
-                  setForm({ email: '', full_name: '', password: pwd, phone: '', country: '', managed_countries: [] })
-                  setPwdMode('generate')
-                  setPwdVisible(false)
-                  setCopied(false)
-                  setFormError('')
-                  setCreateModal(true)
+                  if (roleTab === 'client') {
+                    setInviteEmail('')
+                    setInviteResult(null)
+                    setInviteLinkCopied(false)
+                    setInviteModal(true)
+                  } else {
+                    const pwd = generatePassword()
+                    setForm({ email: '', full_name: '', password: pwd, phone: '', country: '', managed_countries: [] })
+                    setPwdMode('generate')
+                    setPwdVisible(false)
+                    setCopied(false)
+                    setFormError('')
+                    setCreateModal(true)
+                  }
                 }}
                 className="bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm shadow-blue-200 transition-all flex items-center gap-2"
               >
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                {roleTab === 'sub_admin' ? 'Nuevo sub-admin' : 'Nuevo cliente'}
+                {roleTab === 'sub_admin' ? 'Nuevo sub-admin' : 'Invitar cliente'}
               </button>
             )}
           </div>
@@ -560,6 +587,73 @@ export default function AdminUsers() {
           </div>
         </div>}
       </div>
+
+      {/* Invite client modal */}
+      {inviteModal && (
+        <Modal title="Invitar Cliente" onClose={() => setInviteModal(false)}>
+          <div className="space-y-4">
+            <form onSubmit={e => { e.preventDefault(); inviteMutation.mutate(inviteEmail) }} className="flex gap-2">
+              <input
+                type="email"
+                required
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                placeholder="correo@cliente.com"
+                className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
+              />
+              <button type="submit" disabled={inviteMutation.isPending}
+                className="bg-gradient-to-r from-blue-400 to-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-60 shrink-0">
+                {inviteMutation.isPending ? '...' : 'Generar'}
+              </button>
+            </form>
+
+            {inviteResult && (
+              <div className="rounded-xl p-4" style={{background:'rgba(74,222,128,.06)', border:'1px solid rgba(74,222,128,.2)'}}>
+                <p className="text-xs font-semibold mb-2" style={{color:'#4ade80'}}>✓ Enlace generado para {inviteResult.email}</p>
+                <div className="flex items-center gap-2 rounded-lg px-3 py-2 mb-2" style={{background:'rgba(0,0,0,.3)', border:'1px solid rgba(255,255,255,.08)'}}>
+                  <code className="flex-1 text-xs font-mono truncate" style={{color:'#fcd34d'}}>{inviteResult.registration_url}</code>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(inviteResult.registration_url); setInviteLinkCopied(true); setTimeout(() => setInviteLinkCopied(false), 2000) }}
+                    className="flex-1 text-xs font-semibold py-2 rounded-lg transition-colors"
+                    style={inviteLinkCopied ? {background:'rgba(74,222,128,.15)', color:'#4ade80', border:'1px solid rgba(74,222,128,.3)'} : {background:'rgba(255,255,255,.06)', color:'#8aa0cc', border:'1px solid rgba(255,255,255,.1)'}}>
+                    {inviteLinkCopied ? '✓ Copiado' : 'Copiar enlace'}
+                  </button>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(inviteResult.code) }}
+                    className="text-xs font-semibold px-3 py-2 rounded-lg font-mono"
+                    style={{background:'rgba(252,211,77,.08)', color:'#fcd34d', border:'1px solid rgba(252,211,77,.2)'}}>
+                    Código: {inviteResult.code}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {inviteCodes.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{color:'#64748b'}}>CÓDIGOS ANTERIORES</p>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {inviteCodes.map(c => (
+                    <div key={c.id} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.06)'}}>
+                      <code className="text-xs font-mono font-semibold" style={{color: c.is_used ? '#475569' : '#fcd34d'}}>{c.code}</code>
+                      <span className="text-xs flex-1 truncate" style={{color:'#64748b'}}>{c.email}</span>
+                      {c.is_used
+                        ? <span className="text-[10px] px-2 py-0.5 rounded-full" style={{background:'rgba(71,85,105,.2)', color:'#475569'}}>Usado · {c.used_by_name}</span>
+                        : <button onClick={() => { navigator.clipboard.writeText(c.registration_url) }}
+                            className="text-[10px] px-2 py-0.5 rounded-full" style={{background:'rgba(252,211,77,.1)', color:'#fcd34d', border:'1px solid rgba(252,211,77,.2)', cursor:'pointer'}}>
+                            Copiar
+                          </button>
+                      }
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {/* Create user modal */}
       {createModal && (

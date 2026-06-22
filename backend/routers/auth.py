@@ -28,6 +28,21 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def register(data: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email ya registrado")
+
+    # Validate invite code
+    super_admin_id = None
+    if data.invite_code:
+        from models.invite_code import InviteCode
+        code_row = db.query(InviteCode).filter(
+            InviteCode.code == data.invite_code.strip().upper(),
+            InviteCode.is_used == False,
+        ).first()
+        if not code_row:
+            raise HTTPException(status_code=400, detail="Código de invitación inválido o ya utilizado")
+        super_admin_id = code_row.super_admin_id
+    else:
+        raise HTTPException(status_code=400, detail="Se requiere un código de invitación para registrarse")
+
     hashed = pwd_context.hash(data.password)
     user = User(
         email=data.email,
@@ -36,8 +51,22 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
         phone=data.phone,
         country=data.country,
         timezone=country_to_tz(data.country),
+        super_admin_id=super_admin_id,
+        invite_code_used=data.invite_code.strip().upper() if data.invite_code else None,
     )
     db.add(user)
+    db.flush()
+
+    # Mark code as used
+    if data.invite_code:
+        from models.invite_code import InviteCode
+        code_row = db.query(InviteCode).filter(
+            InviteCode.code == data.invite_code.strip().upper(),
+        ).first()
+        if code_row:
+            code_row.is_used = True
+            code_row.used_by_id = user.id
+
     db.commit()
     db.refresh(user)
     token = create_access_token({"sub": str(user.id), "role": user.role})

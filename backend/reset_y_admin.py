@@ -1,6 +1,6 @@
 """
 Borra TODOS los usuarios, órdenes, notificaciones y mensajes.
-Luego crea el admin. Ejecutar en el servidor:
+Luego crea 2 super-admins. Ejecutar en el servidor:
     python reset_y_admin.py
 """
 from sqlalchemy import text
@@ -18,29 +18,41 @@ db = SessionLocal()
 
 try:
     # Borrar en orden correcto (respetar FK)
-    n_notif = db.execute(text("DELETE FROM notifications")).rowcount
-    n_msg   = db.execute(text("DELETE FROM messages")).rowcount
-    n_sac   = db.execute(text("DELETE FROM sub_admin_country")).rowcount
-    n_ord   = db.execute(text("DELETE FROM orders")).rowcount
-    n_usr   = db.execute(text("DELETE FROM users")).rowcount
+    db.execute(text("DELETE FROM notifications"))
+    db.execute(text("DELETE FROM messages"))
+    db.execute(text("DELETE FROM sub_admin_country"))
+    db.execute(text("DELETE FROM orders"))
+    db.execute(text("DELETE FROM invite_codes"))
+    db.execute(text("DELETE FROM admin_sub_admin"))
+    n_usr = db.execute(text("DELETE FROM users")).rowcount
     db.commit()
+    print(f"Base limpia: {n_usr} usuarios borrados")
 
-    print(f"Borrados: {n_notif} notificaciones, {n_msg} mensajes, "
-          f"{n_sac} países sub-admin, {n_ord} órdenes, {n_usr} usuarios")
-
-    # Crear admin con columna correcta (password, no hashed_password)
-    admin = User(
+    # Super-admin 1
+    admin1 = User(
         email="admin@casacambios.com",
-        full_name="Admin",
+        full_name="Admin Principal",
         password=pwd.hash("Admin2024!"),
         role="admin",
         is_active=True,
     )
-    db.add(admin)
+    db.add(admin1)
+    db.flush()
+
+    # Super-admin 2
+    admin2 = User(
+        email="admin2@casacambios.com",
+        full_name="Admin Secundario",
+        password=pwd.hash("Admin2024!"),
+        role="admin",
+        is_active=True,
+    )
+    db.add(admin2)
     db.commit()
-    print("Admin creado OK:")
-    print("  Email:    admin@casacambios.com")
-    print("  Password: Admin2024!")
+
+    print("Admins creados OK:")
+    print("  1. admin@casacambios.com  / Admin2024!")
+    print("  2. admin2@casacambios.com / Admin2024!")
 
 except Exception as e:
     db.rollback()

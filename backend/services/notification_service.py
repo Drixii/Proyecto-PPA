@@ -24,9 +24,11 @@ def notify(db: Session, recipient_id: int, order_id: int, kind: str, title: str,
     return n
 
 
-def notify_admins(db: Session, order_id: int, kind: str, title: str, body: str = None):
-    admins = db.query(User).filter(User.role == "admin", User.is_active == True).all()
-    for admin in admins:
+def notify_admins(db: Session, order_id: int, kind: str, title: str, body: str = None, super_admin_id: int = None):
+    q = db.query(User).filter(User.role == "admin", User.is_active == True)
+    if super_admin_id:
+        q = q.filter(User.id == super_admin_id)
+    for admin in q.all():
         notify(db, admin.id, order_id, kind, title, body, commit=False)
     db.commit()
 
@@ -45,8 +47,11 @@ def notify_new_order(db: Session, order: Order):
     if order.sub_admin_id:
         assigned_sa = db.query(User).filter(User.id == order.sub_admin_id).first()
 
-    # Notify all super-admins — include sub-admin name when card payment already assigned
-    admins = db.query(User).filter(User.role == "admin", User.is_active == True).all()
+    # Notify owning super-admin (or all if no owner set)
+    admin_q = db.query(User).filter(User.role == "admin", User.is_active == True)
+    if order.super_admin_id:
+        admin_q = admin_q.filter(User.id == order.super_admin_id)
+    admins = admin_q.all()
     for admin in admins:
         if assigned_sa:
             title = f"Pedido (tarjeta) de {order.sender_name}"
@@ -65,7 +70,7 @@ def notify_new_order(db: Session, order: Order):
         )
     else:
         from services.order_service import find_sub_admin_for_country
-        sub_admin_id = find_sub_admin_for_country(db, order.receiver_country)
+        sub_admin_id = find_sub_admin_for_country(db, order.receiver_country, getattr(order, 'super_admin_id', None))
         if sub_admin_id:
             notify(db, sub_admin_id, order.id, "new_order",
                 title=f"Nuevo pedido para {order.receiver_country}",
@@ -88,10 +93,12 @@ def notify_status_change(db: Session, order: Order, old_status: str, new_status:
         commit=False,
     )
 
-    # When completado: notify super-admins (sub-admin confirmed the order)
+    # When completado: notify owning super-admin (or all if no owner)
     if new_status == "completado":
-        admins = db.query(User).filter(User.role == "admin", User.is_active == True).all()
-        for admin in admins:
+        admin_q = db.query(User).filter(User.role == "admin", User.is_active == True)
+        if order.super_admin_id:
+            admin_q = admin_q.filter(User.id == order.super_admin_id)
+        for admin in admin_q.all():
             notify(db, admin.id, order.id, "status_change",
                 title=f"Orden completada: {order.order_number}",
                 body=f"{order.sender_name} → {order.receiver_name} ({order.receiver_country})",
@@ -110,9 +117,11 @@ def notify_message(db: Session, order: Order, sender: User, content: str):
             body=preview,
         )
     else:
-        # Notify super-admins
-        admins = db.query(User).filter(User.role == "admin", User.is_active == True).all()
-        for admin in admins:
+        # Notify owning super-admin (or all if no owner)
+        admin_q = db.query(User).filter(User.role == "admin", User.is_active == True)
+        if order.super_admin_id:
+            admin_q = admin_q.filter(User.id == order.super_admin_id)
+        for admin in admin_q.all():
             notify(db, admin.id, order.id, "message",
                 title=f"Mensaje de {sender.full_name}",
                 body=preview,

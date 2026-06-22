@@ -29,6 +29,11 @@ def _order_with_bank(order, db: Session) -> dict:
     else:
         data["receiver_bank_name"] = None
     data["completion_proof_url"] = f"/uploads/completions/{order.completion_proof}" if order.completion_proof else None
+    if order.super_admin_id:
+        sa = db.query(User).filter(User.id == order.super_admin_id).first()
+        data["super_admin_name"] = sa.full_name if sa else None
+    else:
+        data["super_admin_name"] = None
     return data
 
 
