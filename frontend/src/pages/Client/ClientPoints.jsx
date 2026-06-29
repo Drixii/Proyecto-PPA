@@ -104,6 +104,7 @@ function ParticlesBg() {
 
 function RedeemModal({ reward, currentPoints, onClose, onSuccess }) {
   const qc = useQueryClient()
+  const apiBase = import.meta.env.VITE_API_URL || ''
   const [result, setResult] = useState(null)
 
   const mut = useMutation({
@@ -158,7 +159,7 @@ function RedeemModal({ reward, currentPoints, onClose, onSuccess }) {
             </div>
             <div className="px-6 py-5">
               {reward.image_url && (
-                <img src={reward.image_url} alt={reward.name}
+                <img src={apiBase + reward.image_url} alt={reward.name}
                   className="w-full h-32 object-cover rounded-xl mb-4" />
               )}
               <p className="font-semibold text-base mb-1" style={{ color: '#eaf2ff' }}>{reward.name}</p>
@@ -216,6 +217,7 @@ export default function ClientPoints() {
   const { user } = useStore()
   const tz = userTz(user)
   const qc = useQueryClient()
+  const apiBase = import.meta.env.VITE_API_URL || ''
   const [redeemModal, setRedeemModal] = useState(null)
   const [section, setSection] = useState('catalog') // 'catalog' | 'history'
 
@@ -318,7 +320,7 @@ export default function ClientPoints() {
                         {/* Image */}
                         <div className="h-44 relative overflow-hidden" style={{ background: 'rgba(4,10,30,.9)' }}>
                           {r.image_url
-                            ? <img src={r.image_url} alt={r.name} className="w-full h-full object-cover" />
+                            ? <img src={apiBase + r.image_url} alt={r.name} className="w-full h-full object-cover" />
                             : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke={canRedeem ? 'rgba(253,211,77,.4)' : 'rgba(255,255,255,.12)'} strokeWidth="1.2">

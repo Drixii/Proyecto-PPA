@@ -20,11 +20,12 @@ function IcoGift() {
 // ── Reward form modal ─────────────────────────────────────
 function RewardModal({ reward, clpRate, onClose, onSaved }) {
   const qc = useQueryClient()
+  const apiBase = import.meta.env.VITE_API_URL || ''
   const [name, setName] = useState(reward?.name || '')
   const [desc, setDesc] = useState(reward?.description || '')
   const [cost, setCost] = useState(reward ? String(reward.points_cost) : '')
   const [active, setActive] = useState(reward ? reward.active : true)
-  const [imgPreview, setImgPreview] = useState(reward?.image_url || null)
+  const [imgPreview, setImgPreview] = useState(reward?.image_url ? apiBase + reward.image_url : null)
   const [imgFile, setImgFile] = useState(null)
   const fileRef = useRef()
 
@@ -236,6 +237,7 @@ function ConfigSection() {
 // ── Section: Rewards ──────────────────────────────────────
 function RewardsSection() {
   const qc = useQueryClient()
+  const apiBase = import.meta.env.VITE_API_URL || ''
   const [modal, setModal] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -286,7 +288,7 @@ function RewardsSection() {
             <div key={r.id} className="rounded-2xl overflow-hidden flex flex-col" style={GLASS}>
               <div className="h-36 relative overflow-hidden" style={{ background: 'rgba(4,10,30,.8)' }}>
                 {r.image_url
-                  ? <img src={r.image_url} alt={r.name} className="w-full h-full object-cover" />
+                  ? <img src={apiBase + r.image_url} alt={r.name} className="w-full h-full object-cover" />
                   : (
                     <div className="w-full h-full flex items-center justify-center">
                       <svg width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="rgba(253,211,77,.3)" strokeWidth="1.2">
