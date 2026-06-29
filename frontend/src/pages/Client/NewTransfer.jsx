@@ -263,7 +263,17 @@ export default function NewTransfer() {
   }
 
   const handleFromCurrencyChange = (code) => {
-    setCalc(prev => ({ ...prev, fromCurrency: code }))
+    let newCountry = null, newCurrency = null
+    if (calc.toCurrency === code) {
+      const avail = (countriesRaw || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== code)
+      if (avail.length > 0) { newCountry = avail[0].country; newCurrency = avail[0].currency }
+    }
+    setCalc(prev => ({
+      ...prev,
+      fromCurrency: code,
+      ...(newCountry ? { toCountry: newCountry, toCurrency: newCurrency } : {}),
+    }))
+    if (newCountry) setReceiver(r => ({ ...r, receiver_country: newCountry }))
     if (displayAmount) {
       const num = parseRaw(displayAmount)
       if (num) setDisplayAmount(formatDisplay(num, code))
@@ -281,7 +291,7 @@ export default function NewTransfer() {
     queryKey: ['countries'],
     queryFn: () => api.get('/rates/countries').then(r => r.data.data),
   })
-  const countriesData = (countriesRaw || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency))
+  const countriesData = (countriesRaw || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== calc.fromCurrency)
 
   const { data: banksData } = useQuery({
     queryKey: ['banks', receiver.receiver_country],

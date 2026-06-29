@@ -177,7 +177,7 @@ export default function CalculatorDark({ onSend }) {
     queryKey: ['countries'],
     queryFn: () => api.get('/rates/countries').then(r => r.data.data),
   })
-  const countries   = (countriesData || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency))
+  const countries   = (countriesData || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== fromCurrency)
   const selectedFrom = SEND_CURRENCIES.find(c => c.code === fromCurrency)
   const rawAmount   = parseRaw(displayAmount)
 
@@ -240,6 +240,10 @@ export default function CalculatorDark({ onSend }) {
   const handleFromChange = code => {
     setFromCurrency(code); setResult(null); setRateError(false); setFromOpen(false)
     if (displayAmount) { const n = parseRaw(displayAmount); if (n) setDisplayAmount(fmt(n, code)) }
+    if (toCurrency === code) {
+      const next = (countriesData || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== code)
+      if (next.length > 0) { setToCountry(next[0].country); setToCurrency(next[0].currency) }
+    }
   }
   const handleCountryChange = c => { setToCountry(c.country); setToCurrency(c.currency); setResult(null); setRateError(null); setToOpen(false) }
 
