@@ -60,39 +60,36 @@ function CurrencyDropdown({ label, value, onChange, options, ratesFrom }) {
   const sel = options.find(o => o.cur === value)
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</label>
+    <div ref={ref} style={{ position: 'relative', zIndex: open ? 200 : 'auto' }}>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{label}</label>
       <button type="button" onClick={() => setOpen(v => !v)}
-        style={{ ...INP, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%', textAlign: 'left' }}>
+        style={{ ...INP, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', width: '100%', textAlign: 'left', overflow: 'hidden' }}>
         {sel && <FlagImg cur={sel.cur} size={22} />}
-        <div style={{ flex: 1 }}>
-          <span style={{ fontWeight: 700, color: '#eaf2ff' }}>{sel?.cur}</span>
-          <span style={{ marginLeft: 6, fontSize: 12, color: '#8aa0cc' }}>{sel?.label}</span>
-          {sel?.rate != null && ratesFrom && (
-            <span style={{ marginLeft: 8, fontSize: 11, color: '#38bdf8', fontFamily: 'monospace' }}>
-              1 {ratesFrom} = {fmt(sel.rate, sel.cur)} {sel.cur}
-            </span>
-          )}
-        </div>
-        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+        <span style={{ fontWeight: 700, color: '#eaf2ff', whiteSpace: 'nowrap' }}>{sel?.cur}</span>
+        {sel?.rate != null && ratesFrom ? (
+          <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+            1 {ratesFrom} = {fmt(sel.rate, sel.cur)} {sel.cur}
+          </span>
+        ) : (
+          <span style={{ fontSize: 12, color: '#8aa0cc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{sel?.label}</span>
+        )}
+        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5" style={{ flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
       </button>
 
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 300, background: 'rgba(8,17,48,.99)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,.7)' }}>
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999, background: 'rgba(8,17,48,.99)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,.85)', maxHeight: 320, overflowY: 'auto' }}>
           {options.map(o => (
             <button key={o.cur} type="button" onClick={() => { onChange(o.cur); setOpen(false) }}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: value === o.cur ? 'rgba(56,189,248,.1)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
               <FlagImg cur={o.cur} size={20} />
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 700, fontSize: 14, color: '#eaf2ff' }}>{o.cur}</span>
-                <span style={{ marginLeft: 6, fontSize: 12, color: '#8aa0cc' }}>{o.label}</span>
-              </div>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#eaf2ff', whiteSpace: 'nowrap', width: 36, flexShrink: 0 }}>{o.cur}</span>
+              <span style={{ fontSize: 12, color: '#8aa0cc', whiteSpace: 'nowrap', flex: 1 }}>{o.label}</span>
               {o.rate != null && ratesFrom && (
                 <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                   1 {ratesFrom} = {fmt(o.rate, o.cur)} {o.cur}
                 </span>
               )}
-              {value === o.cur && <span style={{ color: '#38bdf8', fontSize: 12 }}>✓</span>}
+              {value === o.cur && <span style={{ color: '#38bdf8', fontSize: 12, marginLeft: 4 }}>✓</span>}
             </button>
           ))}
         </div>
