@@ -8,7 +8,7 @@ import { useStore } from '../../store/useStore'
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
 const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
-const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD']
+const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD','VES']
 
 const SEND_CURRENCIES = [
   { code: 'CLP', iso2: 'cl', name: 'Peso Chileno' },

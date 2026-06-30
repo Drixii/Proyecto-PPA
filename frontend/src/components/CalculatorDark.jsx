@@ -15,7 +15,7 @@ const SEND_CURRENCIES = [
   { code: 'ARS', iso2: 'ar', name: 'Peso Argentino' },
   { code: 'CAD', iso2: 'ca', name: 'Dólar Canadiense' },
 ]
-const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD']
+const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD','VES']
 const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
 
 const cflag = iso2 => `https://flagcdn.com/40x30/${iso2}.png`
