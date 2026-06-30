@@ -890,24 +890,56 @@ class CommissionRuleDelete(BaseModel):
 def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require_super_admin)):
     global_default = float(_get_setting(db, "commission_pct") or "1.5")
 
+    # Reglas específicas (from→to real)
     global_rules = {
         f"{r.from_currency}_{r.to_currency}": r.commission_pct
-        for r in db.query(CommissionRule).filter(CommissionRule.super_admin_id == None).all()
+        for r in db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == None,
+            CommissionRule.to_currency != '*',
+        ).all()
     }
     my_rules = {
         f"{r.from_currency}_{r.to_currency}": r.commission_pct
-        for r in db.query(CommissionRule).filter(CommissionRule.super_admin_id == admin.id).all()
+        for r in db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == admin.id,
+            CommissionRule.to_currency != '*',
+        ).all()
     }
+
+    # % base por país origen (to_currency='*')
+    my_from_defaults = {
+        r.from_currency: r.commission_pct
+        for r in db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == admin.id,
+            CommissionRule.to_currency == '*',
+        ).all()
+    }
+    global_from_defaults = {
+        r.from_currency: r.commission_pct
+        for r in db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == None,
+            CommissionRule.to_currency == '*',
+        ).all()
+    }
+
+    def _effective(fc, tc):
+        k = f"{fc}_{tc}"
+        if k in my_rules:
+            return my_rules[k], "mine"
+        if k in global_rules:
+            return global_rules[k], "global_rule"
+        if fc in my_from_defaults:
+            return my_from_defaults[fc], "from_default_mine"
+        if fc in global_from_defaults:
+            return global_from_defaults[fc], "from_default_global"
+        return global_default, "default"
 
     matrix = []
     for fc in COMMISSION_CURRENCIES:
         for tc in COMMISSION_CURRENCIES:
             if fc == tc:
                 continue
-            key = f"{fc}_{tc}"
-            my_pct = my_rules.get(key)
-            global_pct = global_rules.get(key)
-            effective = my_pct if my_pct is not None else (global_pct if global_pct is not None else global_default)
+            eff, src = _effective(fc, tc)
             matrix.append({
                 "from_currency": fc,
                 "to_currency": tc,
@@ -915,10 +947,10 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
                 "to_label": CURRENCY_LABELS.get(tc, tc),
                 "from_flag": CURRENCY_FLAGS.get(fc, ""),
                 "to_flag": CURRENCY_FLAGS.get(tc, ""),
-                "my_pct": my_pct,
-                "global_pct": global_pct,
-                "effective_pct": effective,
-                "source": "mine" if my_pct is not None else ("global_rule" if global_pct is not None else "default"),
+                "my_pct": my_rules.get(f"{fc}_{tc}"),
+                "global_pct": global_rules.get(f"{fc}_{tc}"),
+                "effective_pct": eff,
+                "source": src,
             })
 
     return {
@@ -926,12 +958,30 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
         "data": {
             "matrix": matrix,
             "global_default": global_default,
+            "my_from_defaults": my_from_defaults,
+            "global_from_defaults": global_from_defaults,
             "currencies": COMMISSION_CURRENCIES,
             "labels": CURRENCY_LABELS,
             "flags": CURRENCY_FLAGS,
         },
         "message": "",
     }
+
+
+@router.get("/commissions/all-rates", response_model=dict)
+def get_all_rates_for_base(
+    from_currency: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    from services.exchange_service import get_rate
+    rates = {}
+    for tc in COMMISSION_CURRENCIES:
+        if tc == from_currency:
+            continue
+        r = get_rate(db, from_currency, tc)
+        rates[tc] = r
+    return {"success": True, "data": rates, "message": ""}
 
 
 @router.put("/commissions", response_model=dict)

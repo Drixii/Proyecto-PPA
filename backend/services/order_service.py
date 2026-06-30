@@ -11,7 +11,7 @@ from typing import Optional
 def _get_commission(db: Session, from_currency: str = None, to_currency: str = None, super_admin_id: int = None) -> float:
     from models.commission_rule import CommissionRule
 
-    # 1. Regla específica del super admin para esta ruta
+    # 1. Regla específica del super admin para esta ruta exacta
     if super_admin_id and from_currency and to_currency:
         rule = db.query(CommissionRule).filter(
             CommissionRule.super_admin_id == super_admin_id,
@@ -21,7 +21,7 @@ def _get_commission(db: Session, from_currency: str = None, to_currency: str = N
         if rule:
             return rule.commission_pct
 
-    # 2. Regla global para esta ruta (super_admin_id IS NULL)
+    # 2. Regla global para esta ruta exacta
     if from_currency and to_currency:
         rule = db.query(CommissionRule).filter(
             CommissionRule.super_admin_id == None,
@@ -31,7 +31,27 @@ def _get_commission(db: Session, from_currency: str = None, to_currency: str = N
         if rule:
             return rule.commission_pct
 
-    # 3. Comisión global genérica
+    # 3. % base del super admin para este país origen (to_currency='*')
+    if super_admin_id and from_currency:
+        rule = db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == super_admin_id,
+            CommissionRule.from_currency == from_currency,
+            CommissionRule.to_currency == '*',
+        ).first()
+        if rule:
+            return rule.commission_pct
+
+    # 4. % base global para este país origen
+    if from_currency:
+        rule = db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == None,
+            CommissionRule.from_currency == from_currency,
+            CommissionRule.to_currency == '*',
+        ).first()
+        if rule:
+            return rule.commission_pct
+
+    # 5. Comisión global genérica
     row = db.query(Setting).filter(Setting.key == "commission_pct").first()
     if row:
         try:
