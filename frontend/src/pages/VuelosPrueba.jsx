@@ -76,7 +76,7 @@ function localToIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-function DatePicker({ label, value, onChange, minDate }) {
+function DatePicker({ label, value, onChange, minDate, lightMode = false }) {
   const today = new Date(); today.setHours(0,0,0,0)
   const min = minDate ? isoToLocal(minDate) : today
   const selected = isoToLocal(value)
@@ -141,12 +141,16 @@ function DatePicker({ label, value, onChange, minDate }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</label>
+      {label && !lightMode && <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</label>}
       <button type="button" onClick={() => setOpen(v => !v)}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(6,13,40,.8)', border: `1px solid ${value ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.12)'}`, borderRadius: 12, color: value ? '#eaf2ff' : '#8aa0cc', padding: '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
-        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={value ? '#38bdf8' : '#8aa0cc'} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        <span style={{ flex: 1 }}>{displayLabel}</span>
-        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          background: lightMode ? 'transparent' : 'rgba(6,13,40,.8)',
+          border: lightMode ? 'none' : `1px solid ${value ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.12)'}`,
+          borderRadius: lightMode ? 0 : 12,
+          color: lightMode ? (value ? '#0f172a' : '#94a3b8') : (value ? '#eaf2ff' : '#8aa0cc'),
+          padding: lightMode ? '4px 0' : '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={value ? '#0ea5e9' : '#94a3b8'} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span style={{ flex: 1, fontWeight: value ? 600 : 400 }}>{displayLabel}</span>
       </button>
 
       {open && (
@@ -199,7 +203,7 @@ function DatePicker({ label, value, onChange, minDate }) {
 }
 
 // ── Airport selector ──────────────────────────────────────────────────────────
-function AirportPicker({ label, value, onChange, exclude }) {
+function AirportPicker({ label, value, onChange, exclude, lightMode = false }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef()
@@ -222,19 +226,24 @@ function AirportPicker({ label, value, onChange, exclude }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</label>
+      {label && !lightMode && <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</label>}
       <button type="button" onClick={() => { setOpen(v => !v); setSearch('') }}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(6,13,40,.8)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, color: '#eaf2ff', padding: '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          background: lightMode ? 'transparent' : 'rgba(6,13,40,.8)',
+          border: lightMode ? 'none' : '1px solid rgba(255,255,255,.12)',
+          borderRadius: lightMode ? 0 : 12,
+          color: lightMode ? '#0f172a' : '#eaf2ff',
+          padding: lightMode ? '4px 0' : '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
         {selected ? (
           <>
             <img src={flag(selected.iso2)} alt="" style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} />
             <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 15 }}>{selected.iata}</span>
-            <span style={{ flex: 1, fontSize: 13, color: '#aebfe2' }}>{selected.city}</span>
+            <span style={{ flex: 1, fontSize: 13, color: lightMode ? '#475569' : '#aebfe2' }}>{selected.city}</span>
           </>
         ) : (
-          <span style={{ color: '#8aa0cc' }}>Seleccionar aeropuerto...</span>
+          <span style={{ color: lightMode ? '#94a3b8' : '#8aa0cc' }}>Seleccionar aeropuerto...</span>
         )}
-        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+        {!lightMode && <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>}
       </button>
 
       {open && (
@@ -302,80 +311,115 @@ function SearchStep({ onResults }) {
     }
   }
 
+  const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.07em' }
+  const field = { background: 'transparent', border: 'none', outline: 'none', color: '#0f172a', fontSize: 14, width: '100%', cursor: 'pointer', fontFamily: 'inherit' }
+
   return (
-    <div style={{ ...GLASS, padding: 32, maxWidth: 680, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg,#38bdf8,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>✈️</div>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#eaf2ff' }}>Buscar Vuelos</h2>
-          <p style={{ margin: 0, fontSize: 12, color: '#8aa0cc' }}>Powered by Duffel · Modo prueba</p>
+    <div>
+      {/* ── Hero banner ── */}
+      <div style={{ position: 'relative', width: '100%', height: 'clamp(220px,38vw,420px)', overflow: 'hidden' }}>
+        <img src="/banner-vuelos.png" alt="Vuelos" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%' }} />
+        {/* gradient overlay */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(6,13,34,.15) 0%, rgba(6,13,34,.55) 100%)' }} />
+        {/* text */}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 20px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 999, padding: '5px 16px', marginBottom: 14 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80' }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '.1em' }}>MODO PRUEBA · DUFFEL API</span>
+          </div>
+          <h1 style={{ margin: '0 0 8px', fontSize: 'clamp(24px,5vw,52px)', fontWeight: 900, color: '#fff', lineHeight: 1.1, textShadow: '0 2px 20px rgba(0,0,0,.4)' }}>
+            ¿A dónde quieres volar?
+          </h1>
+          <p style={{ margin: 0, fontSize: 'clamp(13px,2vw,17px)', color: 'rgba(255,255,255,.8)', textShadow: '0 1px 8px rgba(0,0,0,.4)' }}>
+            Busca y reserva vuelos reales en segundos
+          </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {[false, true].map(rt => (
-          <button key={String(rt)} type="button" onClick={() => setRoundTrip(rt)}
-            style={{ padding: '8px 20px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', background: roundTrip === rt ? 'rgba(56,189,248,.2)' : 'rgba(255,255,255,.06)', color: roundTrip === rt ? '#38bdf8' : '#8aa0cc', outline: roundTrip === rt ? '1px solid rgba(56,189,248,.4)' : 'none' }}>
-            {rt ? 'Ida y vuelta' : 'Solo ida'}
-          </button>
-        ))}
+      {/* ── Search card (sobresale del banner) ── */}
+      <div style={{ maxWidth: 1100, margin: '-52px auto 0', padding: '0 20px 40px', position: 'relative', zIndex: 10 }}>
+        <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 8px 48px rgba(0,0,0,.18)', overflow: 'visible' }}>
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 2, padding: '14px 20px 0', borderBottom: '1px solid #f1f5f9' }}>
+            {[false, true].map(rt => (
+              <button key={String(rt)} type="button" onClick={() => setRoundTrip(rt)}
+                style={{ padding: '8px 18px', borderRadius: '10px 10px 0 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
+                  background: roundTrip === rt ? '#fff' : 'transparent',
+                  color: roundTrip === rt ? '#0ea5e9' : '#94a3b8',
+                  borderBottom: roundTrip === rt ? '2px solid #0ea5e9' : '2px solid transparent' }}>
+                {rt ? '⇄ Ida y vuelta' : '→ Solo ida'}
+              </button>
+            ))}
+          </div>
+
+          {/* Fields row */}
+          <form onSubmit={handleSearch}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 0 }}>
+
+              {/* Origen */}
+              <div style={{ padding: '14px 18px', borderRight: '1px solid #f1f5f9' }}>
+                <label style={lbl}>✈ Origen</label>
+                <AirportPicker label="" value={origin} onChange={setOrigin} exclude={destination} lightMode />
+              </div>
+
+              {/* Swap btn + Destino */}
+              <div style={{ padding: '14px 18px', borderRight: '1px solid #f1f5f9', position: 'relative' }}>
+                <button type="button" onClick={() => { const t = origin; setOrigin(destination); setDestination(t) }}
+                  style={{ position: 'absolute', left: -14, top: '50%', transform: 'translateY(-50%)', zIndex: 5, width: 28, height: 28, borderRadius: '50%', background: '#fff', border: '2px solid #e2e8f0', color: '#0ea5e9', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.1)' }}>
+                  ⇄
+                </button>
+                <label style={lbl}>⚑ Destino</label>
+                <AirportPicker label="" value={destination} onChange={setDestination} exclude={origin} lightMode />
+              </div>
+
+              {/* Fecha ida */}
+              <div style={{ padding: '14px 18px', borderRight: '1px solid #f1f5f9' }}>
+                <label style={lbl}>📅 Fecha ida</label>
+                <DatePicker label="" value={date} onChange={v => { setDate(v || ''); if (returnDate && v && v >= returnDate) setReturnDate('') }} lightMode />
+              </div>
+
+              {/* Fecha vuelta (condicional) */}
+              {roundTrip && (
+                <div style={{ padding: '14px 18px', borderRight: '1px solid #f1f5f9' }}>
+                  <label style={lbl}>📅 Fecha vuelta</label>
+                  <DatePicker label="" value={returnDate} onChange={v => setReturnDate(v || '')} minDate={date || undefined} lightMode />
+                </div>
+              )}
+
+              {/* Pasajeros */}
+              <div style={{ padding: '14px 18px', borderRight: '1px solid #f1f5f9' }}>
+                <label style={lbl}>👤 Pasajeros</label>
+                <select value={passengers} onChange={e => setPassengers(e.target.value)} style={{ ...field, color: '#0f172a' }}>
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} {n === 1 ? 'pasajero' : 'pasajeros'}</option>)}
+                </select>
+              </div>
+
+              {/* Cabina */}
+              <div style={{ padding: '14px 18px', borderRight: '1px solid #f1f5f9' }}>
+                <label style={lbl}>💺 Cabina</label>
+                <select value={cabin} onChange={e => setCabin(e.target.value)} style={{ ...field, color: '#0f172a' }}>
+                  {CABIN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              {/* Botón buscar */}
+              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'stretch' }}>
+                <button type="submit" disabled={loading || !origin || !destination || !date || (roundTrip && !returnDate)}
+                  style={{ flex: 1, background: loading ? '#7dd3fc' : 'linear-gradient(135deg,#0ea5e9,#0284c7)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 54 }}>
+                  <span style={{ fontSize: 18 }}>🔍</span>
+                  <span>{loading ? 'Buscando...' : 'Buscar'}</span>
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div style={{ margin: '0 20px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#dc2626' }}>
+                {error}
+              </div>
+            )}
+          </form>
+        </div>
       </div>
-
-      <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Origin / Destination con botón swap */}
-        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'end' }}>
-          <AirportPicker label="Origen" value={origin} onChange={setOrigin} exclude={destination} />
-          <button type="button" onClick={() => { const t = origin; setOrigin(destination); setDestination(t) }}
-            style={{ position: 'absolute', left: '50%', bottom: 12, transform: 'translateX(-50%)', zIndex: 10, width: 32, height: 32, borderRadius: '50%', background: 'rgba(56,189,248,.2)', border: '1px solid rgba(56,189,248,.4)', color: '#38bdf8', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            ⇄
-          </button>
-          <AirportPicker label="Destino" value={destination} onChange={setDestination} exclude={origin} />
-        </div>
-
-        {/* Fechas */}
-        <div style={{ display: 'grid', gridTemplateColumns: roundTrip ? '1fr 1fr' : '1fr', gap: 12 }}>
-          <DatePicker
-            label="Fecha de ida"
-            value={date}
-            onChange={v => { setDate(v || ''); if (returnDate && v && v >= returnDate) setReturnDate('') }}
-          />
-          {roundTrip && (
-            <DatePicker
-              label="Fecha de vuelta"
-              value={returnDate}
-              onChange={v => setReturnDate(v || '')}
-              minDate={date || undefined}
-            />
-          )}
-        </div>
-
-        {/* Pasajeros + Cabina */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>Pasajeros</label>
-            <select value={passengers} onChange={e => setPassengers(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
-              {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} {n === 1 ? 'pasajero' : 'pasajeros'}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>Cabina</label>
-            <select value={cabin} onChange={e => setCabin(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
-              {CABIN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-        </div>
-
-        {error && (
-          <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#fca5a5' }}>
-            {error}
-          </div>
-        )}
-
-        <button type="submit" disabled={loading || !origin || !destination || !date || (roundTrip && !returnDate)}
-          style={{ padding: '14px', fontSize: 15, fontWeight: 700, color: '#061027', background: loading ? 'rgba(56,189,248,.4)' : 'linear-gradient(135deg,#7dd3fc,#38bdf8)', border: 'none', borderRadius: 14, cursor: loading ? 'not-allowed' : 'pointer', marginTop: 4 }}>
-          {loading ? 'Buscando vuelos...' : 'Buscar vuelos →'}
-        </button>
-      </form>
     </div>
   )
 }
@@ -642,23 +686,36 @@ export default function VuelosPrueba() {
   const [selectedOffer, setSelectedOffer] = useState(null)
   const [booking, setBooking] = useState(null)
 
+  const isSearch = step === 'search'
+
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#060d22 0%,#0a1628 60%,#06142e 100%)', padding: '40px 20px', fontFamily: "'Space Grotesk',system-ui,sans-serif" }}>
-      <style>{`@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}} input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1) opacity(.5)} select option{background:#0a1628;color:#eaf2ff}`}</style>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#060d22 0%,#0a1628 60%,#06142e 100%)', fontFamily: "'Space Grotesk',system-ui,sans-serif" }}>
+      <style>{`
+        @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+        input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1) opacity(.5)}
+        select option{background:#0a1628;color:#eaf2ff}
+        @media(max-width:700px){.search-grid{grid-template-columns:1fr 1fr !important}}
+        @media(max-width:420px){.search-grid{grid-template-columns:1fr !important}}
+      `}</style>
 
-      <div style={{ maxWidth: 820, margin: '0 auto 32px' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(56,189,248,.1)', border: '1px solid rgba(56,189,248,.25)', borderRadius: 999, padding: '4px 14px', marginBottom: 16 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', animation: 'pulse 1.5s infinite' }} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#38bdf8', letterSpacing: '.08em' }}>MODO PRUEBA · DUFFEL API</span>
+      {!isSearch && (
+        <div style={{ padding: '32px 20px 0' }}>
+          <div style={{ maxWidth: 820, margin: '0 auto 24px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(56,189,248,.1)', border: '1px solid rgba(56,189,248,.25)', borderRadius: 999, padding: '4px 14px', marginBottom: 14 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', animation: 'pulse 1.5s infinite' }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#38bdf8', letterSpacing: '.08em' }}>MODO PRUEBA · DUFFEL API</span>
+            </div>
+            <h1 style={{ margin: 0, fontSize: 'clamp(22px,4vw,34px)', fontWeight: 800, color: '#fff' }}>Vuelos ✈️</h1>
+          </div>
         </div>
-        <h1 style={{ margin: 0, fontSize: 'clamp(22px,4vw,34px)', fontWeight: 800, color: '#fff' }}>Vuelos ✈️</h1>
-        <p style={{ margin: '6px 0 0', fontSize: 14, color: '#8aa0cc' }}>Busca y reserva vuelos reales con Duffel</p>
-      </div>
+      )}
 
-      {step === 'search' && <SearchStep onResults={d => { setSearchData(d); setStep('results') }} />}
-      {step === 'results' && searchData && <ResultsStep data={searchData} onSelect={o => { setSelectedOffer(o); setStep('passengers') }} onBack={() => setStep('search')} />}
-      {step === 'passengers' && selectedOffer && <PassengerForm offer={selectedOffer} onBook={b => { setBooking(b); setStep('success') }} onBack={() => setStep('results')} />}
-      {step === 'success' && booking && <SuccessStep booking={booking} onReset={() => { setStep('search'); setSearchData(null); setSelectedOffer(null); setBooking(null) }} />}
+      <div style={isSearch ? {} : { padding: '0 20px 40px' }}>
+        {step === 'search' && <SearchStep onResults={d => { setSearchData(d); setStep('results') }} />}
+        {step === 'results' && searchData && <ResultsStep data={searchData} onSelect={o => { setSelectedOffer(o); setStep('passengers') }} onBack={() => setStep('search')} />}
+        {step === 'passengers' && selectedOffer && <PassengerForm offer={selectedOffer} onBook={b => { setBooking(b); setStep('success') }} onBack={() => setStep('results')} />}
+        {step === 'success' && booking && <SuccessStep booking={booking} onReset={() => { setStep('search'); setSearchData(null); setSelectedOffer(null); setBooking(null) }} />}
+      </div>
     </div>
   )
 }
