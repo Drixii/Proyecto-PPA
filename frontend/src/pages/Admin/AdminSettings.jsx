@@ -140,7 +140,7 @@ function RateTester({ commData }) {
   }
 
   return (
-    <div style={{ ...GLASS, padding: '24px 28px' }}>
+    <div style={{ ...GLASS, padding: '24px 28px', position: 'relative', zIndex: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(74,222,128,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📊</div>
         <div>
@@ -265,7 +265,7 @@ function CommissionMatrix({ data, onSaved }) {
   const countryName = cur => (labels[cur] || cur).replace(/ \(.*\)/, '')
 
   return (
-    <div style={{ ...GLASS, padding: '24px 28px' }}>
+    <div style={{ ...GLASS, padding: '24px 28px', position: 'relative', zIndex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(129,140,248,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🗂</div>
         <div>
