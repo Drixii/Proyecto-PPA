@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import api from '../services/api'
 
 // ── Aeropuertos por país ──────────────────────────────────────────────────────
@@ -87,15 +88,14 @@ function DatePicker({ label, value, onChange, minDate, lightMode = false }) {
   }
   const [view, setView] = useState(initView)
   const [open, setOpen] = useState(false)
-  const ref = useRef()
 
   useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+    if (!open) return
+    const h = e => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [open])
 
-  // When minDate changes and selected < minDate, clear
   useEffect(() => {
     if (selected && min && selected < min) onChange(null)
   }, [minDate])
@@ -104,7 +104,6 @@ function DatePicker({ label, value, onChange, minDate, lightMode = false }) {
   const nextMonth = () => setView(v => v.m === 11 ? { y: v.y+1, m: 0  } : { y: v.y, m: v.m+1 })
 
   const firstDay = new Date(view.y, view.m, 1)
-  // Monday-start: sunday=0 → shift to 6
   const startDow = (firstDay.getDay() + 6) % 7
   const daysInMonth = new Date(view.y, view.m+1, 0).getDate()
   const cells = []
@@ -119,85 +118,73 @@ function DatePicker({ label, value, onChange, minDate, lightMode = false }) {
     setOpen(false)
   }
 
-  const isDisabled = d => {
-    if (!d) return true
-    const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0)
-    return dt < min
-  }
-  const isToday = d => {
-    if (!d) return false
-    const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0)
-    return dt.getTime() === today.getTime()
-  }
-  const isSelected = d => {
-    if (!d || !selected) return false
-    const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0)
-    return dt.getTime() === selected.getTime()
-  }
+  const isDisabled = d => { if (!d) return true; const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0); return dt < min }
+  const isToday    = d => { if (!d) return false; const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0); return dt.getTime() === today.getTime() }
+  const isSelected = d => { if (!d || !selected) return false; const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0); return dt.getTime() === selected.getTime() }
 
   const displayLabel = selected
-    ? selected.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
-    : 'Seleccionar fecha...'
+    ? selected.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'Seleccionar...'
+
+  const calendar = open && createPortal(
+    <div onClick={() => setOpen(false)}
+      style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: 'rgba(8,17,48,.99)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 20, boxShadow: '0 32px 80px rgba(0,0,0,.9)', padding: '20px 18px', width: 310 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <button type="button" onClick={prevMonth} style={{ background: 'rgba(255,255,255,.07)', border: 'none', borderRadius: 8, color: '#8aa0cc', width: 32, height: 32, cursor: 'pointer', fontSize: 16 }}>‹</button>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#eaf2ff' }}>{MONTHS_ES[view.m]} {view.y}</span>
+          <button type="button" onClick={nextMonth} style={{ background: 'rgba(255,255,255,.07)', border: 'none', borderRadius: 8, color: '#8aa0cc', width: 32, height: 32, cursor: 'pointer', fontSize: 16 }}>›</button>
+        </div>
+        {/* Day headers */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 6 }}>
+          {DAYS_ES.map(d => (
+            <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#8aa0cc', padding: '4px 0', textTransform: 'uppercase' }}>{d}</div>
+          ))}
+        </div>
+        {/* Days */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+          {cells.map((d, i) => {
+            const dis = isDisabled(d); const sel = isSelected(d); const tod = isToday(d)
+            return (
+              <button key={i} type="button" onClick={() => pick(d)} disabled={dis || !d}
+                style={{ height: 36, width: '100%', border: 'none', borderRadius: 8, cursor: (dis || !d) ? 'default' : 'pointer', fontSize: 13, fontWeight: sel ? 700 : 400,
+                  background: sel ? 'linear-gradient(135deg,#38bdf8,#818cf8)' : tod ? 'rgba(56,189,248,.12)' : 'transparent',
+                  color: !d ? 'transparent' : sel ? '#061027' : dis ? 'rgba(255,255,255,.2)' : '#eaf2ff',
+                  outline: tod && !sel ? '1px solid rgba(56,189,248,.4)' : 'none' }}
+                onMouseEnter={e => { if (!dis && d && !sel) e.currentTarget.style.background = 'rgba(56,189,248,.15)' }}
+                onMouseLeave={e => { if (!sel) e.currentTarget.style.background = tod ? 'rgba(56,189,248,.12)' : 'transparent' }}>
+                {d || ''}
+              </button>
+            )
+          })}
+        </div>
+        {value && (
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: '#8aa0cc' }}>{displayLabel}</span>
+            <button type="button" onClick={() => { onChange(null); setOpen(false) }} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: 12, cursor: 'pointer' }}>Limpiar</button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  )
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div>
       {label && !lightMode && <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</label>}
       <button type="button" onClick={() => setOpen(v => !v)}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           background: lightMode ? 'transparent' : 'rgba(6,13,40,.8)',
           border: lightMode ? 'none' : `1px solid ${value ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.12)'}`,
           borderRadius: lightMode ? 0 : 12,
           color: lightMode ? (value ? '#0f172a' : '#94a3b8') : (value ? '#eaf2ff' : '#8aa0cc'),
-          padding: lightMode ? '4px 0' : '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
-        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={value ? '#0ea5e9' : '#94a3b8'} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        <span style={{ flex: 1, fontWeight: value ? 600 : 400 }}>{displayLabel}</span>
+          padding: lightMode ? '4px 0' : '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={value ? '#0ea5e9' : '#94a3b8'} strokeWidth="2" style={{ flexShrink: 0 }}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span style={{ fontWeight: value ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayLabel}</span>
       </button>
-
-      {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 400, background: 'rgba(8,17,48,.99)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 18, boxShadow: '0 24px 60px rgba(0,0,0,.8)', padding: '18px 16px', minWidth: 280 }}>
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <button type="button" onClick={prevMonth} style={{ background: 'rgba(255,255,255,.07)', border: 'none', borderRadius: 8, color: '#8aa0cc', width: 30, height: 30, cursor: 'pointer', fontSize: 14 }}>‹</button>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#eaf2ff' }}>{MONTHS_ES[view.m]} {view.y}</span>
-            <button type="button" onClick={nextMonth} style={{ background: 'rgba(255,255,255,.07)', border: 'none', borderRadius: 8, color: '#8aa0cc', width: 30, height: 30, cursor: 'pointer', fontSize: 14 }}>›</button>
-          </div>
-          {/* Day headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 6 }}>
-            {DAYS_ES.map(d => (
-              <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#8aa0cc', padding: '4px 0', textTransform: 'uppercase', letterSpacing: '.05em' }}>{d}</div>
-            ))}
-          </div>
-          {/* Days grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
-            {cells.map((d, i) => {
-              const dis = isDisabled(d)
-              const sel = isSelected(d)
-              const tod = isToday(d)
-              return (
-                <button key={i} type="button" onClick={() => pick(d)} disabled={dis || !d}
-                  style={{
-                    height: 34, width: '100%', border: 'none', borderRadius: 8, cursor: (dis || !d) ? 'default' : 'pointer', fontSize: 13, fontWeight: sel ? 700 : 400,
-                    background: sel ? 'linear-gradient(135deg,#38bdf8,#818cf8)' : tod ? 'rgba(56,189,248,.12)' : 'transparent',
-                    color: !d ? 'transparent' : sel ? '#061027' : dis ? 'rgba(255,255,255,.2)' : '#eaf2ff',
-                    outline: tod && !sel ? '1px solid rgba(56,189,248,.4)' : 'none',
-                    transition: 'background .15s',
-                  }}
-                  onMouseEnter={e => { if (!dis && d && !sel) e.currentTarget.style.background = 'rgba(56,189,248,.15)' }}
-                  onMouseLeave={e => { if (!sel) e.currentTarget.style.background = tod ? 'rgba(56,189,248,.12)' : 'transparent' }}>
-                  {d || ''}
-                </button>
-              )
-            })}
-          </div>
-          {/* Footer */}
-          {value && (
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: '#8aa0cc' }}>{displayLabel}</span>
-              <button type="button" onClick={() => { onChange(null); setOpen(false) }} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: 12, cursor: 'pointer', padding: '2px 6px' }}>Limpiar</button>
-            </div>
-          )}
-        </div>
-      )}
+      {calendar}
     </div>
   )
 }
@@ -206,13 +193,18 @@ function DatePicker({ label, value, onChange, minDate, lightMode = false }) {
 function AirportPicker({ label, value, onChange, exclude, lightMode = false }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const ref = useRef()
+  const inputRef = useRef()
 
   useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+    if (!open) return
+    const h = e => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [open])
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 50)
+  }, [open])
 
   const filtered = AIRPORTS.filter(a =>
     a.iata !== exclude &&
@@ -224,57 +216,69 @@ function AirportPicker({ label, value, onChange, exclude, lightMode = false }) {
 
   const selected = AIRPORTS.find(a => a.iata === value)
 
+  const modal = open && createPortal(
+    <div onClick={() => setOpen(false)}
+      style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: 'rgba(8,17,48,.99)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 20, boxShadow: '0 32px 80px rgba(0,0,0,.9)', width: 420, maxWidth: '100%', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>✈ {label || 'Aeropuerto'}</span>
+          <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#8aa0cc', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+        {/* Search */}
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+          <input ref={inputRef} value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar ciudad, país o código IATA..."
+            style={{ width: '100%', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, color: '#eaf2ff', padding: '10px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+        {/* List */}
+        <div style={{ maxHeight: 340, overflowY: 'auto', padding: '6px 0' }}>
+          {filtered.length === 0
+            ? <p style={{ textAlign: 'center', color: '#8aa0cc', fontSize: 13, padding: '20px 0' }}>Sin resultados</p>
+            : filtered.map(a => (
+              <button key={a.iata} type="button"
+                onClick={() => { onChange(a.iata); setOpen(false); setSearch('') }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', background: value === a.iata ? 'rgba(56,189,248,.1)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                onMouseEnter={e => { if (value !== a.iata) e.currentTarget.style.background = 'rgba(255,255,255,.05)' }}
+                onMouseLeave={e => { if (value !== a.iata) e.currentTarget.style.background = 'transparent' }}>
+                <img src={flag(a.iso2)} alt="" style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />
+                <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#38bdf8', width: 38, flexShrink: 0 }}>{a.iata}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, color: '#eaf2ff', fontWeight: 600 }}>{a.city}</div>
+                  <div style={{ fontSize: 11, color: '#8aa0cc' }}>{a.country}</div>
+                </div>
+                {value === a.iata && <span style={{ color: '#38bdf8', fontSize: 14 }}>✓</span>}
+              </button>
+            ))
+          }
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div>
       {label && !lightMode && <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</label>}
-      <button type="button" onClick={() => { setOpen(v => !v); setSearch('') }}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+      <button type="button" onClick={() => setOpen(true)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           background: lightMode ? 'transparent' : 'rgba(6,13,40,.8)',
           border: lightMode ? 'none' : '1px solid rgba(255,255,255,.12)',
           borderRadius: lightMode ? 0 : 12,
           color: lightMode ? '#0f172a' : '#eaf2ff',
-          padding: lightMode ? '4px 0' : '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
+          padding: lightMode ? '4px 0' : '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box', overflow: 'hidden' }}>
         {selected ? (
           <>
             <img src={flag(selected.iso2)} alt="" style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} />
-            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 15 }}>{selected.iata}</span>
-            <span style={{ flex: 1, fontSize: 13, color: lightMode ? '#475569' : '#aebfe2' }}>{selected.city}</span>
+            <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 16, flexShrink: 0 }}>{selected.iata}</span>
+            <span style={{ fontSize: 12, color: lightMode ? '#475569' : '#aebfe2', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selected.city}</span>
           </>
         ) : (
-          <span style={{ color: lightMode ? '#94a3b8' : '#8aa0cc' }}>Seleccionar aeropuerto...</span>
+          <span style={{ color: lightMode ? '#94a3b8' : '#8aa0cc', whiteSpace: 'nowrap' }}>Seleccionar...</span>
         )}
-        {!lightMode && <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>}
       </button>
-
-      {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 300, background: 'rgba(10,20,52,.98)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,.7)' }}>
-          <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-            <input
-              autoFocus
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar ciudad o código..."
-              style={{ width: '100%', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 8, color: '#eaf2ff', padding: '8px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
-          <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-            {filtered.length === 0
-              ? <p style={{ textAlign: 'center', color: '#8aa0cc', fontSize: 13, padding: '16px 0' }}>Sin resultados</p>
-              : filtered.map(a => (
-                <button key={a.iata} type="button"
-                  onClick={() => { onChange(a.iata); setOpen(false) }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: value === a.iata ? 'rgba(56,189,248,.12)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                  <img src={flag(a.iso2)} alt="" style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />
-                  <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: '#38bdf8', width: 36, flexShrink: 0 }}>{a.iata}</span>
-                  <span style={{ flex: 1, fontSize: 13, color: '#eaf2ff' }}>{a.city}</span>
-                  <span style={{ fontSize: 11, color: '#8aa0cc' }}>{a.country}</span>
-                  {value === a.iata && <span style={{ color: '#38bdf8' }}>✓</span>}
-                </button>
-              ))
-            }
-          </div>
-        </div>
-      )}
+      {modal}
     </div>
   )
 }
