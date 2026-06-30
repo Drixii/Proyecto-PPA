@@ -4,15 +4,16 @@
   var cv,ctx,hero,gridTitle,pin,hint,W=0,H=0,rot=0,progress=0;
 
   var countries=[
-    { iso:'cl', name:'Chile',     lat:-33.4, lon:-70.6 },
-    { iso:'co', name:'Colombia',  lat:4.7,   lon:-74.1 },
+    { iso:'ca', name:'Canadá',    lat:43.7,  lon:-79.4 },
     { iso:'us', name:'EE.UU.',    lat:40.7,  lon:-74.0 },
-    { iso:'es', name:'España',    lat:40.4,  lon:-3.7  },
+    { iso:'mx', name:'México',    lat:19.4,  lon:-99.1 },
+    { iso:'co', name:'Colombia',  lat:4.7,   lon:-74.1 },
+    { iso:'ve', name:'Venezuela', lat:10.5,  lon:-66.9 },
     { iso:'pe', name:'Perú',      lat:-12.0, lon:-77.0 },
     { iso:'br', name:'Brasil',    lat:-23.5, lon:-46.6 },
-    { iso:'mx', name:'México',    lat:19.4,  lon:-99.1 },
     { iso:'ar', name:'Argentina', lat:-34.6, lon:-58.4 },
-    { iso:'ca', name:'Canadá',    lat:43.7,  lon:-79.4 }
+    { iso:'cl', name:'Chile',     lat:-33.4, lon:-70.6 },
+    { iso:'es', name:'España',    lat:40.4,  lon:-3.7  }
   ];
   var dots=[], arcs=[];
 
@@ -71,7 +72,7 @@
 
   function grid(){
     var n=countries.length;
-    var cols=W<720?3:4;
+    var cols=W<720?2:5;
     var fr=W<720?26:33;
     var cellW=fr*2+(W<720?36:78);
     var cellH=fr*2+50;
@@ -277,7 +278,7 @@
       var nn=Math.max(1,Math.round(48*rr));
       for(var k=0;k<nn;k++)dots.push([lat*Math.PI/180,(k/nn)*Math.PI*2]);
     }
-    var defs=[[0,1],[0,7],[1,2],[1,3],[2,8],[2,3],[4,0],[4,1],[5,7],[5,3],[6,2],[6,3]];
+    var defs=[[0,1],[1,2],[1,3],[2,3],[3,4],[3,9],[4,9],[5,8],[5,6],[6,7],[7,8],[8,9]];
     arcs=defs.map(function(d,i){return {a:countries[d[0]].vec,b:countries[d[1]].vec,off:i/12,spd:0.055+((i*2)%6)*0.009};});
     anim=requestAnimationFrame(frame);
   }
