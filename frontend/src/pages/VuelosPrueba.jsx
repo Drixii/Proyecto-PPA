@@ -574,8 +574,10 @@ function PassengerForm({ offer, onBook, onBack }) {
                 <input value={pax.family_name} onChange={e => update(i, 'family_name', e.target.value)} required placeholder="Pérez" style={inp} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, color: '#8aa0cc', marginBottom: 5 }}>Fecha de nacimiento</label>
-                <input type="date" value={pax.born_on} onChange={e => update(i, 'born_on', e.target.value)} required style={inp} />
+                <label style={{ display: 'block', fontSize: 11, color: '#8aa0cc', marginBottom: 5 }}>Fecha de nacimiento <span style={{ color: '#fbbf24' }}>(18+ años)</span></label>
+                <input type="date" value={pax.born_on} onChange={e => update(i, 'born_on', e.target.value)} required
+                  max={(() => { const d = new Date(); d.setFullYear(d.getFullYear()-18); return d.toISOString().split('T')[0] })()}
+                  style={inp} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 11, color: '#8aa0cc', marginBottom: 5 }}>Teléfono (+código país)</label>

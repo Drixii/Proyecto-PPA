@@ -1,5 +1,6 @@
 import os
 import httpx
+from datetime import date as date_type
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -88,17 +89,41 @@ async def get_offer(offer_id: str):
 
 @router.post("/book")
 async def book_flight(body: BookRequest):
+    # Validate all passengers are 18+ (offer type=adult)
+    today = date_type.today()
+    for i, p in enumerate(body.passengers):
+        try:
+            born = date_type.fromisoformat(p.born_on)
+        except ValueError:
+            raise HTTPException(422, f"Pasajero {i+1}: fecha de nacimiento inválida")
+        age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+        if age < 18:
+            raise HTTPException(422, f"Pasajero {i+1} ({p.given_name}): debe tener al menos 18 años (adulto). Ingresa tu fecha de nacimiento real.")
+
+    # Strip `id` if empty — Duffel rejects extra fields; include only fields Duffel expects
+    pax_payload = []
+    for p in body.passengers:
+        d = p.model_dump()
+        if not d.get("id"):
+            d.pop("id", None)
+        pax_payload.append(d)
+
     payload = {
         "data": {
             "selected_offers": [body.offer_id],
             "payments": [{"type": "balance", "currency": body.currency, "amount": body.amount}],
-            "passengers": [p.model_dump() for p in body.passengers],
+            "passengers": pax_payload,
         }
     }
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{DUFFEL_BASE}/air/orders", json=payload, headers=_headers())
     if r.status_code >= 400:
-        raise HTTPException(r.status_code, r.json().get("errors", r.text))
+        try:
+            errs = r.json().get("errors", [])
+            msg = errs[0].get("message", r.text) if errs else r.text
+        except Exception:
+            msg = r.text
+        raise HTTPException(r.status_code, msg)
     data = r.json()["data"]
     return {
         "order_id": data["id"],
