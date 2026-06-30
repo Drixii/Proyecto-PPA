@@ -429,13 +429,10 @@ function SearchStep({ onResults }) {
 }
 
 // ── Step 2: Results ───────────────────────────────────────────────────────────
-function OfferCard({ offer, onSelect }) {
+function OfferCard({ offer }) {
   const sl = offer.slices[0]
   return (
-    <div onClick={() => onSelect(offer)}
-      style={{ ...GLASS, padding: '20px 24px', cursor: 'pointer', transition: 'border-color .2s, box-shadow .2s' }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(56,189,248,.4)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(56,189,248,.1)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.08)'; e.currentTarget.style.boxShadow = 'none' }}>
+    <div style={{ ...GLASS, padding: '20px 24px', cursor: 'default', transition: 'border-color .2s, box-shadow .2s' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         {/* Aerolínea */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 140 }}>
@@ -478,8 +475,8 @@ function OfferCard({ offer, onSelect }) {
             {fmt_price(offer.total_amount, offer.total_currency)}
           </p>
           <p style={{ margin: '2px 0 8px', fontSize: 11, color: '#8aa0cc' }}>por persona</p>
-          <div style={{ display: 'inline-block', padding: '5px 14px', background: 'rgba(56,189,248,.15)', border: '1px solid rgba(56,189,248,.3)', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#38bdf8' }}>
-            Seleccionar →
+          <div style={{ display: 'inline-block', padding: '5px 14px', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#8aa0cc' }}>
+            Próximamente
           </div>
         </div>
       </div>
@@ -506,7 +503,7 @@ function OfferCard({ offer, onSelect }) {
   )
 }
 
-function ResultsStep({ data, onSelect, onBack }) {
+function ResultsStep({ data, onBack }) {
   const { offers } = data
   return (
     <div style={{ maxWidth: 820, margin: '0 auto' }}>
@@ -520,7 +517,7 @@ function ResultsStep({ data, onSelect, onBack }) {
       {offers.length === 0
         ? <div style={{ ...GLASS, padding: 40, textAlign: 'center' }}><p style={{ color: '#8aa0cc' }}>No hay vuelos disponibles para esta ruta y fecha.</p></div>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {offers.map(o => <OfferCard key={o.id} offer={o} onSelect={onSelect} />)}
+            {offers.map(o => <OfferCard key={o.id} offer={o} />)}
           </div>
       }
     </div>
@@ -716,7 +713,7 @@ export default function VuelosPrueba() {
 
       <div style={isSearch ? {} : { padding: '0 20px 40px' }}>
         {step === 'search' && <SearchStep onResults={d => { setSearchData(d); setStep('results') }} />}
-        {step === 'results' && searchData && <ResultsStep data={searchData} onSelect={o => { setSelectedOffer(o); setStep('passengers') }} onBack={() => setStep('search')} />}
+        {step === 'results' && searchData && <ResultsStep data={searchData} onBack={() => setStep('search')} />}
         {step === 'passengers' && selectedOffer && <PassengerForm offer={selectedOffer} onBook={b => { setBooking(b); setStep('success') }} onBack={() => setStep('results')} />}
         {step === 'success' && booking && <SuccessStep booking={booking} onReset={() => { setStep('search'); setSearchData(null); setSelectedOffer(null); setBooking(null) }} />}
       </div>
