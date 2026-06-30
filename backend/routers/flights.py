@@ -7,7 +7,6 @@ from typing import Optional
 router = APIRouter(prefix="/api/flights", tags=["flights"])
 
 DUFFEL_BASE = "https://api.duffel.com"
-DUFFEL_VERSION = "v2"
 
 
 def _headers():
@@ -16,7 +15,7 @@ def _headers():
         raise HTTPException(500, "DUFFEL_API_KEY no configurada")
     return {
         "Authorization": f"Bearer {key}",
-        "Duffel-Version": DUFFEL_VERSION,
+        "Duffel-Version": "v2",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
@@ -59,12 +58,18 @@ async def search_flights(body: SearchRequest):
             "slices": [s.model_dump() for s in body.slices],
             "passengers": [{"type": "adult"} for _ in range(body.passengers)],
             "cabin_class": body.cabin_class,
+            "return_offers": True,
         }
     }
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         r = await client.post(f"{DUFFEL_BASE}/air/offer_requests", json=payload, headers=_headers())
     if r.status_code >= 400:
-        raise HTTPException(r.status_code, r.json().get("errors", r.text))
+        try:
+            errs = r.json().get("errors", [])
+            msg = errs[0].get("message", r.text) if errs else r.text
+        except Exception:
+            msg = r.text
+        raise HTTPException(r.status_code, msg)
     data = r.json()["data"]
     return {
         "offer_request_id": data["id"],
