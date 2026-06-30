@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import FinexyLayout from '../../components/FinexyLayout'
 import api from '../../services/api'
@@ -47,53 +48,72 @@ const SRC_STYLE = {
   default:            { color: '#8aa0cc', label: 'Defecto' },
 }
 
-// ── Currency Dropdown with live rate ──────────────────────────────────────────
-function CurrencyDropdown({ label, value, onChange, options, ratesFrom }) {
+// ── Currency Popup (portal — encima de todo) ──────────────────────────────────
+function CurrencyPopup({ label, value, onChange, options, ratesFrom }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef()
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-
   const sel = options.find(o => o.cur === value)
 
-  return (
-    <div ref={ref} style={{ position: 'relative', zIndex: open ? 200 : 'auto' }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{label}</label>
-      <button type="button" onClick={() => setOpen(v => !v)}
-        style={{ ...INP, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', width: '100%', textAlign: 'left', overflow: 'hidden' }}>
-        {sel && <FlagImg cur={sel.cur} size={22} />}
-        <span style={{ fontWeight: 700, color: '#eaf2ff', whiteSpace: 'nowrap' }}>{sel?.cur}</span>
-        {sel?.rate != null && ratesFrom ? (
-          <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-            1 {ratesFrom} = {fmt(sel.rate, sel.cur)} {sel.cur}
-          </span>
-        ) : (
-          <span style={{ fontSize: 12, color: '#8aa0cc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{sel?.label}</span>
-        )}
-        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5" style={{ flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-      </button>
-
-      {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999, background: 'rgba(8,17,48,.99)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,.85)', maxHeight: 320, overflowY: 'auto' }}>
+  const modal = open && createPortal(
+    <div
+      onClick={() => setOpen(false)}
+      style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: 'rgba(8,17,48,.98)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 20, boxShadow: '0 32px 80px rgba(0,0,0,.9)', width: 360, maxWidth: '92vw', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#eaf2ff' }}>Seleccionar {label.toLowerCase()}</span>
+          <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#8aa0cc', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+        {/* Options */}
+        <div style={{ maxHeight: 400, overflowY: 'auto', padding: '8px 0' }}>
           {options.map(o => (
-            <button key={o.cur} type="button" onClick={() => { onChange(o.cur); setOpen(false) }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: value === o.cur ? 'rgba(56,189,248,.1)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-              <FlagImg cur={o.cur} size={20} />
-              <span style={{ fontWeight: 700, fontSize: 14, color: '#eaf2ff', whiteSpace: 'nowrap', width: 36, flexShrink: 0 }}>{o.cur}</span>
-              <span style={{ fontSize: 12, color: '#8aa0cc', whiteSpace: 'nowrap', flex: 1 }}>{o.label}</span>
-              {o.rate != null && ratesFrom && (
-                <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                  1 {ratesFrom} = {fmt(o.rate, o.cur)} {o.cur}
-                </span>
+            <button key={o.cur} type="button"
+              onClick={() => { onChange(o.cur); setOpen(false) }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', background: value === o.cur ? 'rgba(56,189,248,.1)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background .12s' }}
+              onMouseEnter={e => { if (value !== o.cur) e.currentTarget.style.background = 'rgba(255,255,255,.05)' }}
+              onMouseLeave={e => { if (value !== o.cur) e.currentTarget.style.background = 'transparent' }}>
+              <FlagImg cur={o.cur} size={24} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15, color: '#eaf2ff' }}>{o.cur}</span>
+                  <span style={{ fontSize: 12, color: '#8aa0cc' }}>{o.label}</span>
+                </div>
+                {o.rate != null && ratesFrom && (
+                  <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace' }}>
+                    1 {ratesFrom} = {fmt(o.rate, o.cur)} {o.cur}
+                  </span>
+                )}
+              </div>
+              {value === o.cur && (
+                <span style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(56,189,248,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8', fontSize: 11, flexShrink: 0 }}>✓</span>
               )}
-              {value === o.cur && <span style={{ color: '#38bdf8', fontSize: 12, marginLeft: 4 }}>✓</span>}
             </button>
           ))}
         </div>
-      )}
+      </div>
+    </div>,
+    document.body
+  )
+
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</label>
+      <button type="button" onClick={() => setOpen(true)}
+        style={{ ...INP, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', overflow: 'hidden' }}>
+        {sel && <FlagImg cur={sel.cur} size={22} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontWeight: 700, color: '#eaf2ff' }}>{sel?.cur}</span>
+          {sel?.rate != null && ratesFrom ? (
+            <span style={{ marginLeft: 8, fontSize: 11, color: '#38bdf8', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+              1 {ratesFrom} = {fmt(sel.rate, sel.cur)} {sel.cur}
+            </span>
+          ) : (
+            <span style={{ marginLeft: 8, fontSize: 12, color: '#8aa0cc', whiteSpace: 'nowrap' }}>{sel?.label}</span>
+          )}
+        </div>
+        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5" style={{ flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      {modal}
     </div>
   )
 }
@@ -150,8 +170,8 @@ function RateTester({ commData }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
-        <CurrencyDropdown label="Desde" value={fromCur} onChange={setFromCur} options={fromOptions} ratesFrom={null} />
-        <CurrencyDropdown label="Hacia" value={toCur} onChange={setToCur} options={toOptions} ratesFrom={fromCur} />
+        <CurrencyPopup label="Desde" value={fromCur} onChange={setFromCur} options={fromOptions} ratesFrom={null} />
+        <CurrencyPopup label="Hacia" value={toCur} onChange={setToCur} options={toOptions} ratesFrom={fromCur} />
         <div>
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>Monto a enviar</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -267,7 +287,9 @@ function CommissionMatrix({ data, onSaved }) {
   return (
     <div style={{ ...GLASS, padding: '24px 28px', position: 'relative', zIndex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(129,140,248,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🗂</div>
+        <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(129,140,248,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="#818cf8" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 3v18M3 6a3 3 0 013-3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6z"/></svg>
+          </div>
         <div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Comisiones por ruta</h3>
           <p style={{ margin: 0, fontSize: 12, color: '#8aa0cc' }}>Selecciona moneda origen y configura cada destino</p>
