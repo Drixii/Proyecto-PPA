@@ -21,6 +21,7 @@ import SubAdminOrders from './pages/SubAdmin/SubAdminOrders'
 import AdminProfile from './pages/Admin/AdminProfile'
 import AdminPoints from './pages/Admin/AdminPoints'
 import ClientPoints from './pages/Client/ClientPoints'
+import VuelosPrueba from './pages/VuelosPrueba'
 
 function roleHome(role) {
   if (role === 'admin') return '/admin'
@@ -169,6 +170,7 @@ export default function App() {
         <Route path="/sub-admin/orders" element={<RequireAuth role="sub_admin"><SubAdminOrders /></RequireAuth>} />
         <Route path="/sub-admin/profile" element={<RequireAuth role="sub_admin"><AdminProfile /></RequireAuth>} />
 
+        <Route path="/Vuelos-prueba" element={<VuelosPrueba />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
