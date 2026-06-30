@@ -30,6 +30,14 @@ def _run_migrations():
         "ALTER TABLE users ADD COLUMN super_admin_id INTEGER",
         "ALTER TABLE users ADD COLUMN invite_code_used VARCHAR",
         "ALTER TABLE orders ADD COLUMN super_admin_id INTEGER",
+        """CREATE TABLE IF NOT EXISTS commission_rules (
+            id SERIAL PRIMARY KEY,
+            super_admin_id INTEGER,
+            from_currency VARCHAR NOT NULL,
+            to_currency VARCHAR NOT NULL,
+            commission_pct FLOAT NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )""",
     ]
     for sql in migrations:
         with engine.connect() as conn:

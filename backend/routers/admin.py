@@ -12,6 +12,7 @@ from models.sub_admin_country import SubAdminCountry
 from models.point import PointTransaction
 from models.invite_code import InviteCode
 from models.admin_sub_admin import AdminSubAdmin
+from models.commission_rule import CommissionRule
 from schemas.order import OrderOut, OrderStatusUpdate
 from datetime import datetime, timedelta
 from services.order_service import advance_order_status, find_sub_admin_for_country
@@ -853,3 +854,167 @@ def list_available_sub_admins(
             "linked": sa.id in linked,
         })
     return {"success": True, "data": result, "message": ""}
+
+
+# ── Commission rules ──────────────────────────────────────────────────────────
+
+COMMISSION_CURRENCIES = ["CLP", "COP", "USD", "EUR", "PEN", "BRL", "MXN", "ARS", "CAD", "VES"]
+
+CURRENCY_LABELS = {
+    "CLP": "Chile (CLP)", "COP": "Colombia (COP)", "USD": "EE.UU. (USD)",
+    "EUR": "España/Europa (EUR)", "PEN": "Perú (PEN)", "BRL": "Brasil (BRL)",
+    "MXN": "México (MXN)", "ARS": "Argentina (ARS)", "CAD": "Canadá (CAD)",
+    "VES": "Venezuela (VES)",
+}
+
+CURRENCY_FLAGS = {
+    "CLP": "🇨🇱", "COP": "🇨🇴", "USD": "🇺🇸", "EUR": "🇪🇸",
+    "PEN": "🇵🇪", "BRL": "🇧🇷", "MXN": "🇲🇽", "ARS": "🇦🇷",
+    "CAD": "🇨🇦", "VES": "🇻🇪",
+}
+
+
+class CommissionRuleIn(BaseModel):
+    from_currency: str
+    to_currency: str
+    commission_pct: float
+    apply_to_all: bool = False
+
+
+class CommissionRuleDelete(BaseModel):
+    from_currency: str
+    to_currency: str
+
+
+@router.get("/commissions", response_model=dict)
+def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require_super_admin)):
+    global_default = float(_get_setting(db, "commission_pct") or "1.5")
+
+    global_rules = {
+        f"{r.from_currency}_{r.to_currency}": r.commission_pct
+        for r in db.query(CommissionRule).filter(CommissionRule.super_admin_id == None).all()
+    }
+    my_rules = {
+        f"{r.from_currency}_{r.to_currency}": r.commission_pct
+        for r in db.query(CommissionRule).filter(CommissionRule.super_admin_id == admin.id).all()
+    }
+
+    matrix = []
+    for fc in COMMISSION_CURRENCIES:
+        for tc in COMMISSION_CURRENCIES:
+            if fc == tc:
+                continue
+            key = f"{fc}_{tc}"
+            my_pct = my_rules.get(key)
+            global_pct = global_rules.get(key)
+            effective = my_pct if my_pct is not None else (global_pct if global_pct is not None else global_default)
+            matrix.append({
+                "from_currency": fc,
+                "to_currency": tc,
+                "from_label": CURRENCY_LABELS.get(fc, fc),
+                "to_label": CURRENCY_LABELS.get(tc, tc),
+                "from_flag": CURRENCY_FLAGS.get(fc, ""),
+                "to_flag": CURRENCY_FLAGS.get(tc, ""),
+                "my_pct": my_pct,
+                "global_pct": global_pct,
+                "effective_pct": effective,
+                "source": "mine" if my_pct is not None else ("global_rule" if global_pct is not None else "default"),
+            })
+
+    return {
+        "success": True,
+        "data": {
+            "matrix": matrix,
+            "global_default": global_default,
+            "currencies": COMMISSION_CURRENCIES,
+            "labels": CURRENCY_LABELS,
+            "flags": CURRENCY_FLAGS,
+        },
+        "message": "",
+    }
+
+
+@router.put("/commissions", response_model=dict)
+def set_commission_rule(
+    data: CommissionRuleIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    if data.from_currency == data.to_currency:
+        raise HTTPException(400, "from y to no pueden ser iguales")
+    if data.commission_pct < 0 or data.commission_pct > 100:
+        raise HTTPException(400, "Comisión debe estar entre 0 y 100")
+
+    def _upsert(sa_id):
+        rule = db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == sa_id,
+            CommissionRule.from_currency == data.from_currency,
+            CommissionRule.to_currency == data.to_currency,
+        ).first()
+        if rule:
+            rule.commission_pct = data.commission_pct
+            rule.updated_at = datetime.utcnow()
+        else:
+            db.add(CommissionRule(
+                super_admin_id=sa_id,
+                from_currency=data.from_currency,
+                to_currency=data.to_currency,
+                commission_pct=data.commission_pct,
+            ))
+
+    if data.apply_to_all:
+        _upsert(None)
+        all_admins = db.query(User).filter(User.role == "admin", User.is_active == True, User.deleted_at == None).all()
+        for a in all_admins:
+            _upsert(a.id)
+    else:
+        _upsert(admin.id)
+
+    db.commit()
+    return {"success": True, "data": {}, "message": "Comisión guardada"}
+
+
+@router.delete("/commissions", response_model=dict)
+def delete_commission_rule(
+    data: CommissionRuleDelete,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    db.query(CommissionRule).filter(
+        CommissionRule.super_admin_id == admin.id,
+        CommissionRule.from_currency == data.from_currency,
+        CommissionRule.to_currency == data.to_currency,
+    ).delete()
+    db.commit()
+    return {"success": True, "data": {}, "message": "Regla eliminada"}
+
+
+@router.get("/commissions/preview", response_model=dict)
+def preview_commission(
+    from_currency: str,
+    to_currency: str,
+    amount: float,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    from services.order_service import _get_commission
+    from services.exchange_service import get_rate
+    pct = _get_commission(db, from_currency, to_currency, admin.id)
+    rate = get_rate(db, from_currency, to_currency)
+    fee = round(amount * pct / 100, 2)
+    net = amount - fee
+    received = round(net * rate, 2) if rate else None
+    return {
+        "success": True,
+        "data": {
+            "from_currency": from_currency,
+            "to_currency": to_currency,
+            "amount": amount,
+            "commission_pct": pct,
+            "fee": fee,
+            "net_amount": net,
+            "rate": rate,
+            "amount_received": received,
+        },
+        "message": "",
+    }

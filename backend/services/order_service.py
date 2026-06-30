@@ -8,7 +8,30 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
-def _get_commission(db: Session) -> float:
+def _get_commission(db: Session, from_currency: str = None, to_currency: str = None, super_admin_id: int = None) -> float:
+    from models.commission_rule import CommissionRule
+
+    # 1. Regla específica del super admin para esta ruta
+    if super_admin_id and from_currency and to_currency:
+        rule = db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == super_admin_id,
+            CommissionRule.from_currency == from_currency,
+            CommissionRule.to_currency == to_currency,
+        ).first()
+        if rule:
+            return rule.commission_pct
+
+    # 2. Regla global para esta ruta (super_admin_id IS NULL)
+    if from_currency and to_currency:
+        rule = db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id == None,
+            CommissionRule.from_currency == from_currency,
+            CommissionRule.to_currency == to_currency,
+        ).first()
+        if rule:
+            return rule.commission_pct
+
+    # 3. Comisión global genérica
     row = db.query(Setting).filter(Setting.key == "commission_pct").first()
     if row:
         try:
@@ -63,14 +86,14 @@ def create_order(db: Session, data, client: User) -> Order:
     if not rate:
         raise ValueError(f"Tasa no disponible: {data.currency_from} -> {data.currency_to}")
 
-    commission_pct = _get_commission(db)
+    client_super_admin_id = getattr(client, "super_admin_id", None)
+    commission_pct = _get_commission(db, data.currency_from, data.currency_to, client_super_admin_id)
     fee = round(data.amount_sent * commission_pct / 100, 2)
     amount_received = round((data.amount_sent - fee) * rate, 2)
 
     # Tarjeta → en_proceso con sub_admin asignado. Transferencia → en_aprobacion (sin asignar aún).
     is_card = (getattr(data, "payment_method", None) or "").lower() == "tarjeta"
     initial_status = "en_proceso" if is_card else "en_aprobacion"
-    client_super_admin_id = getattr(client, "super_admin_id", None)
     sub_admin_id = find_sub_admin_for_country(db, data.receiver_country, client_super_admin_id) if is_card else None
 
     order = Order(
