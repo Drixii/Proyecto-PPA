@@ -63,6 +63,141 @@ function fmt_price(amount, currency) {
   return `${currency} ${parseFloat(amount).toLocaleString('es-CL', { minimumFractionDigits: 2 })}`
 }
 
+// ── Date picker ──────────────────────────────────────────────────────────────
+const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const DAYS_ES   = ['Lu','Ma','Mi','Ju','Vi','Sa','Do']
+
+function isoToLocal(iso) {
+  if (!iso) return null
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+function localToIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+function DatePicker({ label, value, onChange, minDate }) {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const min = minDate ? isoToLocal(minDate) : today
+  const selected = isoToLocal(value)
+
+  const initView = () => {
+    const base = selected || min
+    return { y: base.getFullYear(), m: base.getMonth() }
+  }
+  const [view, setView] = useState(initView)
+  const [open, setOpen] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  // When minDate changes and selected < minDate, clear
+  useEffect(() => {
+    if (selected && min && selected < min) onChange(null)
+  }, [minDate])
+
+  const prevMonth = () => setView(v => v.m === 0 ? { y: v.y-1, m: 11 } : { y: v.y, m: v.m-1 })
+  const nextMonth = () => setView(v => v.m === 11 ? { y: v.y+1, m: 0  } : { y: v.y, m: v.m+1 })
+
+  const firstDay = new Date(view.y, view.m, 1)
+  // Monday-start: sunday=0 → shift to 6
+  const startDow = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(view.y, view.m+1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  const pick = d => {
+    if (!d) return
+    const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0)
+    if (dt < min) return
+    onChange(localToIso(dt))
+    setOpen(false)
+  }
+
+  const isDisabled = d => {
+    if (!d) return true
+    const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0)
+    return dt < min
+  }
+  const isToday = d => {
+    if (!d) return false
+    const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0)
+    return dt.getTime() === today.getTime()
+  }
+  const isSelected = d => {
+    if (!d || !selected) return false
+    const dt = new Date(view.y, view.m, d); dt.setHours(0,0,0,0)
+    return dt.getTime() === selected.getTime()
+  }
+
+  const displayLabel = selected
+    ? selected.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Seleccionar fecha...'
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</label>
+      <button type="button" onClick={() => setOpen(v => !v)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(6,13,40,.8)', border: `1px solid ${value ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.12)'}`, borderRadius: 12, color: value ? '#eaf2ff' : '#8aa0cc', padding: '12px 16px', fontSize: 14, cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={value ? '#38bdf8' : '#8aa0cc'} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span style={{ flex: 1 }}>{displayLabel}</span>
+        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 400, background: 'rgba(8,17,48,.99)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 18, boxShadow: '0 24px 60px rgba(0,0,0,.8)', padding: '18px 16px', minWidth: 280 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <button type="button" onClick={prevMonth} style={{ background: 'rgba(255,255,255,.07)', border: 'none', borderRadius: 8, color: '#8aa0cc', width: 30, height: 30, cursor: 'pointer', fontSize: 14 }}>‹</button>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#eaf2ff' }}>{MONTHS_ES[view.m]} {view.y}</span>
+            <button type="button" onClick={nextMonth} style={{ background: 'rgba(255,255,255,.07)', border: 'none', borderRadius: 8, color: '#8aa0cc', width: 30, height: 30, cursor: 'pointer', fontSize: 14 }}>›</button>
+          </div>
+          {/* Day headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 6 }}>
+            {DAYS_ES.map(d => (
+              <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#8aa0cc', padding: '4px 0', textTransform: 'uppercase', letterSpacing: '.05em' }}>{d}</div>
+            ))}
+          </div>
+          {/* Days grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+            {cells.map((d, i) => {
+              const dis = isDisabled(d)
+              const sel = isSelected(d)
+              const tod = isToday(d)
+              return (
+                <button key={i} type="button" onClick={() => pick(d)} disabled={dis || !d}
+                  style={{
+                    height: 34, width: '100%', border: 'none', borderRadius: 8, cursor: (dis || !d) ? 'default' : 'pointer', fontSize: 13, fontWeight: sel ? 700 : 400,
+                    background: sel ? 'linear-gradient(135deg,#38bdf8,#818cf8)' : tod ? 'rgba(56,189,248,.12)' : 'transparent',
+                    color: !d ? 'transparent' : sel ? '#061027' : dis ? 'rgba(255,255,255,.2)' : '#eaf2ff',
+                    outline: tod && !sel ? '1px solid rgba(56,189,248,.4)' : 'none',
+                    transition: 'background .15s',
+                  }}
+                  onMouseEnter={e => { if (!dis && d && !sel) e.currentTarget.style.background = 'rgba(56,189,248,.15)' }}
+                  onMouseLeave={e => { if (!sel) e.currentTarget.style.background = tod ? 'rgba(56,189,248,.12)' : 'transparent' }}>
+                  {d || ''}
+                </button>
+              )
+            })}
+          </div>
+          {/* Footer */}
+          {value && (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: '#8aa0cc' }}>{displayLabel}</span>
+              <button type="button" onClick={() => { onChange(null); setOpen(false) }} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: 12, cursor: 'pointer', padding: '2px 6px' }}>Limpiar</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Airport selector ──────────────────────────────────────────────────────────
 function AirportPicker({ label, value, onChange, exclude }) {
   const [open, setOpen] = useState(false)
@@ -151,7 +286,7 @@ function SearchStep({ onResults }) {
 
   const handleSearch = async (e) => {
     e.preventDefault()
-    if (!origin || !destination || !date) return
+    if (!origin || !destination || !date || (roundTrip && !returnDate)) return
     setError(null)
     setLoading(true)
     try {
@@ -199,15 +334,18 @@ function SearchStep({ onResults }) {
 
         {/* Fechas */}
         <div style={{ display: 'grid', gridTemplateColumns: roundTrip ? '1fr 1fr' : '1fr', gap: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>Fecha de ida</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} required style={inp} />
-          </div>
+          <DatePicker
+            label="Fecha de ida"
+            value={date}
+            onChange={v => { setDate(v || ''); if (returnDate && v && v >= returnDate) setReturnDate('') }}
+          />
           {roundTrip && (
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>Fecha de vuelta</label>
-              <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} required style={inp} />
-            </div>
+            <DatePicker
+              label="Fecha de vuelta"
+              value={returnDate}
+              onChange={v => setReturnDate(v || '')}
+              minDate={date || undefined}
+            />
           )}
         </div>
 
@@ -233,7 +371,7 @@ function SearchStep({ onResults }) {
           </div>
         )}
 
-        <button type="submit" disabled={loading || !origin || !destination || !date}
+        <button type="submit" disabled={loading || !origin || !destination || !date || (roundTrip && !returnDate)}
           style={{ padding: '14px', fontSize: 15, fontWeight: 700, color: '#061027', background: loading ? 'rgba(56,189,248,.4)' : 'linear-gradient(135deg,#7dd3fc,#38bdf8)', border: 'none', borderRadius: 14, cursor: loading ? 'not-allowed' : 'pointer', marginTop: 4 }}>
           {loading ? 'Buscando vuelos...' : 'Buscar vuelos →'}
         </button>
