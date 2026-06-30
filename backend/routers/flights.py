@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(prefix="/flights", tags=["flights"])
+router = APIRouter(prefix="/api/flights", tags=["flights"])
 
 DUFFEL_BASE = "https://api.duffel.com"
 DUFFEL_VERSION = "v2"
