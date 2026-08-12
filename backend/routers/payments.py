@@ -140,7 +140,12 @@ def save_stripe_keys(
     from services import secret_store as ss
 
     campos = [
-        (data.secret_key, stripe_service.CLAVE_SECRETA, ("sk_test_", "sk_live_"), "clave secreta"),
+        # rk_ son las claves restringidas. Se aceptan, pero tienen que llevar
+        # permisos de PaymentIntents y de Connect (cuentas y enlaces de alta);
+        # si les falta alguno, Stripe responde con un error de permisos al
+        # usarla, no al guardarla.
+        (data.secret_key, stripe_service.CLAVE_SECRETA,
+         ("sk_test_", "sk_live_", "rk_test_", "rk_live_"), "clave secreta"),
         (data.publishable_key, stripe_service.CLAVE_PUBLICA, ("pk_test_", "pk_live_"), "clave publicable"),
         (data.webhook_secret, stripe_service.CLAVE_WEBHOOK, ("whsec_",), "secreto del webhook"),
         (data.connect_webhook_secret, stripe_service.CLAVE_WEBHOOK_CONNECT, ("whsec_",), "secreto del webhook de Connect"),
