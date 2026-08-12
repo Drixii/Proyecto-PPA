@@ -45,6 +45,11 @@ fi
 say "3/9 Creando usuario de aplicacion"
 id -u "$APP_USER" &>/dev/null || adduser --system --group --home "$APP_DIR" "$APP_USER"
 
+# adduser deja el home en 750, y nginx corre como www-data: sin permiso de
+# paso no puede leer frontend/dist y todas las páginas devuelven 404.
+# El .env queda en 600, así que los secretos siguen protegidos.
+chmod 755 "$APP_DIR"
+
 say "4/9 Configurando Postgres"
 DB_PASS=$(openssl rand -hex 24)
 # ALTER en el ELSE, no solo CREATE: al reejecutar el script se genera un
