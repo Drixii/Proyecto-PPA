@@ -94,6 +94,7 @@ def list_all_orders(
     sub_admin_id: Optional[int] = None,
     country: Optional[str] = None,
     all_orders: bool = False,
+    paid_only: bool = False,
     page: int = Query(1, ge=1),
     page_size: int = Query(200, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -131,6 +132,12 @@ def list_all_orders(
         else:
             query = query.filter(Order.sub_admin_id == sub_admin_id)
 
+    # Órdenes cuyo dinero ya entró. 'pendiente_pago' es una tarjeta creada y
+    # sin cobrar: aparece en el pipeline, donde se ve el flujo, pero no en la
+    # lista de órdenes ni en los totales, que son el registro de lo recibido.
+    if paid_only:
+        query = query.filter(Order.status != "pendiente_pago")
+
     if country:
         query = query.filter(Order.receiver_country == country)
 
@@ -165,15 +172,7 @@ def list_all_orders(
     # Agrupado por moneda porque el cliente elige la divisa de origen
     # (CLP, COP, USD, EUR...) y sumar montos de monedas distintas no significa
     # nada.
-    totals = [
-        {
-            "currency": row[0],
-            "count": row[1],
-            "amount_sent": float(row[2] or 0),
-            "completed_count": row[3],
-            "completed_amount_sent": float(row[4] or 0),
-        }
-        for row in (
+    filas = (
             query.order_by(None)  # el ORDER BY created_at rompe el GROUP BY
             .with_entities(
                 Order.currency_from,
@@ -182,11 +181,35 @@ def list_all_orders(
                 func.count(case((Order.status == "completado", Order.id))),
                 func.sum(case((Order.status == "completado", Order.amount_sent), else_=0)),
             )
-            .group_by(Order.currency_from)
-            .all()
-        )
-    ]
-    totals.sort(key=lambda t: t["amount_sent"], reverse=True)
+        .group_by(Order.currency_from)
+        .all()
+    )
+
+    # Cada moneda, además, convertida a pesos chilenos. Un panel con "320.000
+    # CLP" y "20.000 USD" en columnas separadas no dice cuánto se movió: hay
+    # que sumarlo de cabeza a la tasa del día. Con el equivalente calculado, el
+    # desglose pasa a ser el detalle y no la única lectura posible.
+    from services.exchange_service import get_rate
+
+    totals = []
+    total_clp = 0.0
+    for row in filas:
+        moneda = row[0]
+        monto = float(row[2] or 0)
+        completado = float(row[4] or 0)
+        tasa = 1.0 if moneda == "CLP" else (get_rate(db, moneda, "CLP") or 0)
+        equivalente = monto * tasa if tasa else None
+        if equivalente:
+            total_clp += equivalente
+        totals.append({
+            "currency": moneda,
+            "count": row[1],
+            "amount_sent": monto,
+            "completed_count": row[3],
+            "completed_amount_sent": completado,
+            "amount_clp": equivalente,
+        })
+    totals.sort(key=lambda t: t["amount_clp"] or t["amount_sent"], reverse=True)
 
     orders = query.offset((page - 1) * page_size).limit(page_size).all()
     order_ids = [o.id for o in orders]
@@ -209,6 +232,7 @@ def list_all_orders(
             "items": items,
             "total": total,
             "totals": totals,
+            "total_clp": total_clp,
             "page": page,
             "page_size": page_size,
         },

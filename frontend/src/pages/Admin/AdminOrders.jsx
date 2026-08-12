@@ -25,7 +25,6 @@ const STATUS_DOT = {
 
 const STATUSES_DEFAULT = [
   { key: '', label: 'Todos' },
-  { key: 'pendiente_pago', label: 'Pendiente de pago', dot: 'bg-yellow-400' },
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400' },
   { key: 'en_proceso', label: 'En Proceso', dot: 'bg-blue-500' },
   { key: 'completado', label: 'Completado', dot: 'bg-green-500' },
@@ -112,6 +111,9 @@ export default function AdminOrders() {
   const apiParams = {
     page_size: 500,
     all_orders: true,
+    // Sin las tarjetas creadas y sin cobrar: esta pantalla es el registro de
+    // lo recibido. Quien quiera ver el flujo completo tiene el pipeline.
+    paid_only: true,
     ...(dateRange ? {
       date_from: dateRange.from.toISOString(),
       date_to: dateRange.to.toISOString(),
@@ -131,6 +133,8 @@ export default function AdminOrders() {
   // Totales por moneda, calculados en el backend sobre toda la consulta:
   // la lista viene paginada a 500, sumar aquí daría de menos al superarlas.
   const totals = result?.totals || []
+  const totalClp = result?.total_clp || 0
+  const variasMonedas = totals.length > 1
 
   const orders = [...data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 
@@ -232,46 +236,66 @@ export default function AdminOrders() {
           </div>
         </div>
 
-        {/* Monto total — respeta los filtros activos (fecha, encargado,
-            estado, búsqueda). Una tarjeta por moneda: el cliente elige la
-            divisa de origen, así que sumar CLP con USD no significaría nada. */}
+        {/* Monto recibido. Antes se listaba una cifra por moneda sin más, y
+            con dos monedas en pantalla no había forma de saber cuánto se
+            movió en total sin convertirlo a mano. Ahora manda el equivalente
+            en pesos y el desglose queda como detalle. */}
         <div className="rounded-2xl p-5 mb-3" style={GLASS}>
-          <div className="flex items-baseline justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color:'#64748b' }}>
-              Monto total {isToday ? 'de hoy' : 'del período'}
-              {filterMode.type === 'subadmin' && ` · ${filterMode.name}`}
-            </p>
-            {totals.length > 1 && (
-              <p className="text-[11px]" style={{ color:'#64748b' }}>separado por moneda de envío</p>
-            )}
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color:'#64748b' }}>
+            Recibido {isToday ? 'hoy' : 'en el período'}
+            {filterMode.type === 'subadmin' && ` · ${filterMode.name}`}
+          </p>
 
-          {isLoading && (
-            <div className="h-8 w-48 rounded animate-pulse" style={{ background:'rgba(255,255,255,.06)' }} />
-          )}
+          {isLoading && <div className="h-9 w-52 rounded animate-pulse mt-3" style={{ background:'rgba(255,255,255,.06)' }} />}
 
           {!isLoading && totals.length === 0 && (
-            <p className="text-sm" style={{ color:'#475569' }}>Sin montos en el período seleccionado</p>
+            <p className="text-sm mt-2" style={{ color:'#475569' }}>Nada recibido en el período seleccionado</p>
           )}
 
           {!isLoading && totals.length > 0 && (
-            <div className="flex flex-wrap gap-x-10 gap-y-4">
-              {totals.map(t => (
-                <div key={t.currency}>
-                  <p className="text-3xl font-bold leading-none" style={{ color:'#eaf2ff' }}>
-                    {fmtMoney(t.amount_sent, t.currency)}
-                    <span className="text-base font-semibold ml-1.5" style={{ color:'#8aa0cc' }}>{t.currency}</span>
-                  </p>
-                  <p className="text-xs mt-1.5" style={{ color:'#8aa0cc' }}>
-                    {t.count} orden{t.count !== 1 ? 'es' : ''}
-                    <span style={{ color:'#475569' }}> · </span>
-                    <span className="text-green-500">
-                      {fmtMoney(t.completed_amount_sent, t.currency)} completado
-                    </span>
-                  </p>
+            <>
+              <div className="flex items-baseline gap-3 flex-wrap mt-2">
+                <p className="text-4xl font-bold leading-none" style={{ color:'#eaf2ff' }}>
+                  ${fmtMoney(totalClp, 'CLP')}
+                </p>
+                <span className="text-sm font-semibold" style={{ color:'#8aa0cc' }}>CLP</span>
+                <span className="text-xs" style={{ color:'#475569' }}>
+                  {orders.length} orden{orders.length !== 1 ? 'es' : ''}
+                  {variasMonedas && ' · convertido a la tasa de hoy'}
+                </span>
+              </div>
+
+              {/* Desglose: solo aporta cuando hay más de una moneda */}
+              {variasMonedas && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {totals.map(t => (
+                    <div key={t.currency} className="rounded-xl px-3.5 py-2.5"
+                      style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)' }}>
+                      <p className="text-sm font-semibold" style={{ color:'#eaf2ff' }}>
+                        {fmtMoney(t.amount_sent, t.currency)}
+                        <span className="text-xs ml-1" style={{ color:'#8aa0cc' }}>{t.currency}</span>
+                      </p>
+                      <p className="text-[11px] mt-0.5" style={{ color:'#64748b' }}>
+                        {t.count} orden{t.count !== 1 ? 'es' : ''}
+                        {t.amount_clp != null && t.currency !== 'CLP' && (
+                          <> · ${fmtMoney(t.amount_clp, 'CLP')} CLP</>
+                        )}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+
+              <p className="text-xs mt-4" style={{ color:'#64748b' }}>
+                Ya entregado al destinatario:{' '}
+                <span className="text-green-500 font-semibold">
+                  ${fmtMoney(totals.reduce((a, t) => {
+                    const tasa = t.amount_clp && t.amount_sent ? t.amount_clp / t.amount_sent : (t.currency === 'CLP' ? 1 : 0)
+                    return a + t.completed_amount_sent * tasa
+                  }, 0), 'CLP')} CLP
+                </span>
+              </p>
+            </>
           )}
         </div>
 
