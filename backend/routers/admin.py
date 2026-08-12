@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from typing import Optional, List
 from pydantic import BaseModel
 from database import get_db
@@ -140,6 +140,36 @@ def list_all_orders(
             query = query.filter(Order.created_at <= dt)
 
     total = query.count()
+
+    # Totales por moneda. Se calculan aquí, sobre la consulta completa, y no
+    # sumando los items en el frontend: esa lista viene paginada, así que a
+    # partir de page_size órdenes el total mostrado sería menor que el real.
+    # Agrupado por moneda porque el cliente elige la divisa de origen
+    # (CLP, COP, USD, EUR...) y sumar montos de monedas distintas no significa
+    # nada.
+    totals = [
+        {
+            "currency": row[0],
+            "count": row[1],
+            "amount_sent": float(row[2] or 0),
+            "completed_count": row[3],
+            "completed_amount_sent": float(row[4] or 0),
+        }
+        for row in (
+            query.order_by(None)  # el ORDER BY created_at rompe el GROUP BY
+            .with_entities(
+                Order.currency_from,
+                func.count(Order.id),
+                func.sum(Order.amount_sent),
+                func.count(case((Order.status == "completado", Order.id))),
+                func.sum(case((Order.status == "completado", Order.amount_sent), else_=0)),
+            )
+            .group_by(Order.currency_from)
+            .all()
+        )
+    ]
+    totals.sort(key=lambda t: t["amount_sent"], reverse=True)
+
     orders = query.offset((page - 1) * page_size).limit(page_size).all()
     order_ids = [o.id for o in orders]
     points_map = {}
@@ -160,6 +190,7 @@ def list_all_orders(
         "data": {
             "items": items,
             "total": total,
+            "totals": totals,
             "page": page,
             "page_size": page_size,
         },

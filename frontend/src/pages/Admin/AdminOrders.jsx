@@ -36,6 +36,17 @@ const STATUSES_ALL = [
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
+// Monedas sin decimales: mostrar "200.000 CLP", no "200.000,00 CLP".
+const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
+
+function fmtMoney(amount, currency) {
+  const decimals = INTEGER_CURRENCIES.includes(currency) ? 0 : 2
+  return (amount || 0).toLocaleString('es-CL', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
 export default function AdminOrders() {
   const [searchParams] = useSearchParams()
   const location = useLocation()
@@ -89,6 +100,15 @@ export default function AdminOrders() {
   const isFiltered = filterMode.type !== 'none'
   const STATUSES = isFiltered ? STATUSES_ALL : STATUSES_DEFAULT
 
+  // La búsqueda va al backend (antes se filtraba en el cliente). Así los
+  // totales, que se calculan en el servidor, cuadran con lo que se ve en la
+  // tabla — y de paso busca también por teléfono, RUT y cuenta.
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
   // Derive API params from filterMode
   const apiParams = {
     page_size: 500,
@@ -98,25 +118,22 @@ export default function AdminOrders() {
       date_to: dateRange.to.toISOString(),
     } : {}),
     status: statusFilter || undefined,
+    q: debouncedSearch || undefined,
     ...(filterMode.type === 'subadmin' ? { sub_admin_id: filterMode.id } : {}),
   }
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['admin-orders-filtered', dateRange, statusFilter, filterMode],
-    queryFn: () => api.get('/admin/orders', { params: apiParams }).then(r => r.data.data.items),
+  const { data: result, isLoading, refetch } = useQuery({
+    queryKey: ['admin-orders-filtered', dateRange, statusFilter, filterMode, debouncedSearch],
+    queryFn: () => api.get('/admin/orders', { params: apiParams }).then(r => r.data.data),
     refetchInterval: 30000,
   })
 
-  const orders = (data || [])
-    .filter(o => {
-      if (!search) return true
-      const s = search.toLowerCase()
-      return o.sender_name?.toLowerCase().includes(s)
-        || o.receiver_name?.toLowerCase().includes(s)
-        || o.order_number?.toLowerCase().includes(s)
-        || o.receiver_country?.toLowerCase().includes(s)
-    })
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+  const data = result?.items || []
+  // Totales por moneda, calculados en el backend sobre toda la consulta:
+  // la lista viene paginada a 500, sumar aquí daría de menos al superarlas.
+  const totals = result?.totals || []
+
+  const orders = [...data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 
   const isToday = dateRange?.from.toDateString() === new Date().toDateString()
     && dateRange?.to.toDateString() === new Date().toDateString()
@@ -129,6 +146,9 @@ export default function AdminOrders() {
           <div>
             <h1 className="text-2xl font-bold">
               Órdenes {isToday ? '— Hoy' : ''}
+              {filterMode.type === 'subadmin' && (
+                <span className="font-normal" style={{ color:'#38bdf8' }}> · {filterMode.name}</span>
+              )}
             </h1>
             <p className="text-sm mt-1" style={{ color:'#8aa0cc' }}>
               {orders.length} resultado{orders.length !== 1 ? 's' : ''} en el período seleccionado
@@ -211,6 +231,49 @@ export default function AdminOrders() {
               style={{ background:'rgba(8,16,44,.85)', border:'1px solid rgba(255,255,255,.08)', color:'#eaf2ff' }}
             />
           </div>
+        </div>
+
+        {/* Monto total — respeta los filtros activos (fecha, encargado,
+            estado, búsqueda). Una tarjeta por moneda: el cliente elige la
+            divisa de origen, así que sumar CLP con USD no significaría nada. */}
+        <div className="rounded-2xl p-5 mb-3" style={GLASS}>
+          <div className="flex items-baseline justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color:'#64748b' }}>
+              Monto total {isToday ? 'de hoy' : 'del período'}
+              {filterMode.type === 'subadmin' && ` · ${filterMode.name}`}
+            </p>
+            {totals.length > 1 && (
+              <p className="text-[11px]" style={{ color:'#64748b' }}>separado por moneda de envío</p>
+            )}
+          </div>
+
+          {isLoading && (
+            <div className="h-8 w-48 rounded animate-pulse" style={{ background:'rgba(255,255,255,.06)' }} />
+          )}
+
+          {!isLoading && totals.length === 0 && (
+            <p className="text-sm" style={{ color:'#475569' }}>Sin montos en el período seleccionado</p>
+          )}
+
+          {!isLoading && totals.length > 0 && (
+            <div className="flex flex-wrap gap-x-10 gap-y-4">
+              {totals.map(t => (
+                <div key={t.currency}>
+                  <p className="text-3xl font-bold leading-none" style={{ color:'#eaf2ff' }}>
+                    {fmtMoney(t.amount_sent, t.currency)}
+                    <span className="text-base font-semibold ml-1.5" style={{ color:'#8aa0cc' }}>{t.currency}</span>
+                  </p>
+                  <p className="text-xs mt-1.5" style={{ color:'#8aa0cc' }}>
+                    {t.count} orden{t.count !== 1 ? 'es' : ''}
+                    <span style={{ color:'#475569' }}> · </span>
+                    <span className="text-green-500">
+                      {fmtMoney(t.completed_amount_sent, t.currency)} completado
+                    </span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Summary cards */}
