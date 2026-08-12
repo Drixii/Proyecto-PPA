@@ -127,7 +127,18 @@ systemctl daemon-reload
 systemctl enable ppa-api
 systemctl start ppa-api
 
+# Certificado de origen para que Cloudflare (modo SSL "Full") pueda conectar.
+# Sin él, nginx no escucha en 443 y Cloudflare devuelve error 521.
+if [ ! -f /etc/ssl/certs/ppa-origin.crt ]; then
+    openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+        -keyout /etc/ssl/private/ppa-origin.key \
+        -out /etc/ssl/certs/ppa-origin.crt \
+        -subj "/CN=${SITE_NAME:-api.ksatokio.com}"
+fi
+
 install -m 644 "$APP_DIR/deploy/nginx-ppa.conf" /etc/nginx/sites-available/ppa-api
+sed -i "s/NOMBRE_DEL_SITIO/${SITE_NAME:-api.ksatokio.com}/" /etc/nginx/sites-available/ppa-api
+ufw allow 443/tcp > /dev/null 2>&1 || true
 ln -sf /etc/nginx/sites-available/ppa-api /etc/nginx/sites-enabled/ppa-api
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
