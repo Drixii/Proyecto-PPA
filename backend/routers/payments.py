@@ -111,23 +111,63 @@ def get_stripe_keys(
     """
     from services import secret_store as ss
 
-    secreta = ss.get_secret(db, stripe_service.CLAVE_SECRETA)
-    webhook = ss.get_secret(db, stripe_service.CLAVE_WEBHOOK)
-    connect = ss.get_secret(db, stripe_service.CLAVE_WEBHOOK_CONNECT)
+    modo = stripe_service.get_mode()
+    k = stripe_service.clave_de
+
+    def leer(nombre, m):
+        return ss.get_secret(db, k(nombre, m))
+
+    secreta = leer(stripe_service.CLAVE_SECRETA, modo)
+    webhook = leer(stripe_service.CLAVE_WEBHOOK, modo)
+    connect = leer(stripe_service.CLAVE_WEBHOOK_CONNECT, modo)
+
+    # Qué hay guardado en el OTRO modo, para que el interruptor avise antes de
+    # cambiar en vez de dejar el cobro apagado sin explicación.
+    otro = "live" if modo == "test" else "test"
+    otro_listo = bool(leer(stripe_service.CLAVE_SECRETA, otro) and leer(stripe_service.CLAVE_WEBHOOK, otro))
 
     return {
         "success": True,
         "data": {
+            "modo": modo,
             "secret_key": ss.mask(secreta),
             "publishable_key": stripe_service.publishable_key(),
             "webhook_secret": ss.mask(webhook),
             "connect_webhook_secret": ss.mask(connect),
-            "modo_prueba": bool(secreta and secreta.startswith("sk_test")),
+            "listo": bool(secreta and webhook),
+            "otro_modo_listo": otro_listo,
             # Si la clave viene del .env no se puede editar desde aquí: se
             # sobrescribiría la de la base y seguiría mandando la del entorno.
-            "desde_env": bool(not secreta and os.environ.get("STRIPE_SECRET_KEY")),
+            "desde_env": bool(not secreta and modo == "live" and os.environ.get("STRIPE_SECRET_KEY")),
         },
         "message": "",
+    }
+
+
+class ModoIn(BaseModel):
+    modo: str
+
+
+@router.put("/stripe/mode", response_model=dict)
+def cambiar_modo(
+    data: ModoIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Cambia entre claves de prueba y reales.
+
+    No borra nada: cada juego de claves se queda en su sitio y esto solo
+    decide cuál se usa. Cambiar a un modo sin claves apaga el pago con
+    tarjeta, que es lo correcto — mejor oculto que cobrando con las claves
+    equivocadas.
+    """
+    if data.modo not in stripe_service.MODOS:
+        raise HTTPException(status_code=400, detail="Modo inválido")
+    stripe_service.set_mode(db, data.modo)
+    return {
+        "success": True,
+        "data": {"modo": data.modo, "listo": stripe_service.is_configured()},
+        "message": "Modo de prueba activado" if data.modo == "test" else "Modo real activado",
     }
 
 
@@ -157,6 +197,8 @@ def save_stripe_keys(
         (data.connect_webhook_secret, stripe_service.CLAVE_WEBHOOK_CONNECT, ("whsec_",), "secreto del webhook de Connect"),
     ]
 
+    modo = stripe_service.get_mode()
+
     guardadas = []
     for valor, clave, prefijos, etiqueta in campos:
         if valor is None:
@@ -165,7 +207,7 @@ def save_stripe_keys(
         if not valor:
             continue
         if valor == "BORRAR":
-            ss.set_secret(db, clave, "")
+            ss.set_secret(db, stripe_service.clave_de(clave, modo), "")
             guardadas.append(f"{etiqueta} borrada")
             continue
         if not valor.startswith(prefijos):
@@ -173,7 +215,20 @@ def save_stripe_keys(
                 status_code=400,
                 detail=f"La {etiqueta} debería empezar por {' o '.join(prefijos)}",
             )
-        ss.set_secret(db, clave, valor)
+        # Pegar una clave real teniendo puesto el modo prueba (o al revés) es
+        # el error que acaba cobrando de verdad a un cliente sin querer. El
+        # prefijo lo delata, así que se rechaza en vez de guardarlo.
+        if "_test_" in valor and modo == "live":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Esa {etiqueta} es de prueba y estás en modo real. Cambia el interruptor a «Prueba» y vuelve a pegarla.",
+            )
+        if "_live_" in valor and modo == "test":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Esa {etiqueta} es real y estás en modo prueba. Cambia el interruptor a «Real» y vuelve a pegarla.",
+            )
+        ss.set_secret(db, stripe_service.clave_de(clave, modo), valor)
         guardadas.append(etiqueta)
 
     if not guardadas:

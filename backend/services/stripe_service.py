@@ -22,24 +22,67 @@ from database import SessionLocal
 # Claves guardadas desde Ajustes → Integraciones de pago (cifradas, ver
 # services/secret_store.py). Las variables de entorno siguen funcionando como
 # respaldo para no romper una instalación ya configurada por .env.
+#
+# Se guardan DOS juegos, prueba y real, y un interruptor elige cuál manda. Sin
+# esto, alternar entre probar y cobrar de verdad obligaba a borrar y volver a
+# pegar tres claves cada vez — y equivocarse significa cobrar de verdad a un
+# cliente creyendo que estabas probando.
 CLAVE_SECRETA = "stripe_secret_key"
 CLAVE_PUBLICA = "stripe_publishable_key"
 CLAVE_WEBHOOK = "stripe_webhook_secret"
 CLAVE_WEBHOOK_CONNECT = "stripe_connect_webhook_secret"
 
+MODOS = ("test", "live")
+AJUSTE_MODO = "stripe_mode"
 
-def _config(nombre: str, env: str) -> str:
-    """Valor guardado en la base; si no hay, el del .env."""
+
+def get_mode() -> str:
+    """Modo activo: 'test' o 'live'. Por defecto real, que es lo que había."""
+    from models.setting import Setting
+    db = SessionLocal()
+    try:
+        row = db.query(Setting).filter(Setting.key == AJUSTE_MODO).first()
+        valor = (row.value if row else "") or "live"
+    except Exception:
+        valor = "live"
+    finally:
+        db.close()
+    return valor if valor in MODOS else "live"
+
+
+def set_mode(db, modo: str) -> None:
+    from models.setting import Setting
+    if modo not in MODOS:
+        raise ValueError(f"Modo inválido: {modo}")
+    row = db.query(Setting).filter(Setting.key == AJUSTE_MODO).first()
+    if row:
+        row.value = modo
+    else:
+        db.add(Setting(key=AJUSTE_MODO, value=modo))
+    db.commit()
+
+
+def clave_de(nombre: str, modo: str | None = None) -> str:
+    """Nombre real bajo el que se guarda: stripe_secret_key_test / _live."""
+    return f"{nombre}_{modo or get_mode()}"
+
+
+def _config(nombre: str, env: str, modo: str | None = None) -> str:
+    """Valor guardado para el modo activo; si no hay, el del .env."""
     from services.secret_store import get_secret
     db = SessionLocal()
     try:
-        valor = get_secret(db, nombre)
+        valor = get_secret(db, clave_de(nombre, modo))
     except Exception as e:
         print(f"[stripe] no se pudo leer '{nombre}' de la base: {e}")
         valor = None
     finally:
         db.close()
-    return (valor or os.environ.get(env, "")).strip()
+    # El .env solo respalda el modo real: unas claves de producción en un
+    # archivo no deberían activarse al pulsar "modo prueba".
+    if not valor and (modo or get_mode()) == "live":
+        valor = os.environ.get(env, "")
+    return (valor or "").strip()
 
 
 def secret_key() -> str:

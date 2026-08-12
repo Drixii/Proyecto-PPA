@@ -108,6 +108,21 @@ async def lifespan(app: FastAPI):
         creados = seed_countries_if_empty(db)
         if creados:
             log.info("Países sembrados: %s", creados)
+
+        # Las claves de Stripe pasaron a guardarse por modo (prueba/real). Las
+        # que ya estaban puestas son las reales: se mueven a su sitio para que
+        # el cobro no se apague al desplegar esto.
+        from models.setting import Setting
+        for base in ("stripe_secret_key", "stripe_publishable_key",
+                     "stripe_webhook_secret", "stripe_connect_webhook_secret"):
+            vieja = db.query(Setting).filter(Setting.key == base).first()
+            if not vieja:
+                continue
+            if not db.query(Setting).filter(Setting.key == f"{base}_live").first():
+                db.add(Setting(key=f"{base}_live", value=vieja.value))
+                log.info("Clave '%s' movida al modo real", base)
+            db.delete(vieja)
+        db.commit()
         await fetch_and_store_rates(db)
     finally:
         db.close()

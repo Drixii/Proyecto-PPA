@@ -507,6 +507,19 @@ function StripeKeysForm() {
     queryFn: () => api.get('/payments/stripe/keys').then(r => r.data.data),
   })
 
+  const cambiarModo = useMutation({
+    mutationFn: (modo) => api.put('/payments/stripe/mode', { modo }),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      qc.invalidateQueries({ queryKey: ['stripe-keys'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      qc.invalidateQueries({ queryKey: ['stripe-account'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => setError(e.response?.data?.detail || 'No se pudo cambiar de modo'),
+  })
+
   const guardar = useMutation({
     mutationFn: (body) => api.put('/payments/stripe/keys', body),
     onSuccess: (r) => {
@@ -539,9 +552,11 @@ function StripeKeysForm() {
         <div style={{ textAlign: 'left' }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Claves de Stripe</h3>
           <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
-            {claves?.secret_key
-              ? <>Configuradas · <span style={{ color: claves.modo_prueba ? '#fcd34d' : '#4ade80' }}>{claves.modo_prueba ? 'modo prueba' : 'modo real'}</span></>
-              : 'Sin configurar - el pago con tarjeta esta oculto para los clientes'}
+            {claves?.listo
+              ? 'Cobrando con las claves de este modo'
+              : claves?.secret_key
+                ? 'Falta el secreto del webhook — el pago con tarjeta sigue oculto'
+                : 'Sin configurar — el pago con tarjeta está oculto para los clientes'}
           </p>
         </div>
         <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
@@ -549,6 +564,40 @@ function StripeKeysForm() {
 
       {abierto && (
         <div style={{ marginTop: 18 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4, padding: 4, marginBottom: 16,
+            background: 'rgba(4,10,30,.6)', borderRadius: 12, border: '1px solid rgba(255,255,255,.07)',
+          }}>
+            {[
+              { v: 'test', txt: 'Modo prueba', hint: 'Cobros falsos con la tarjeta 4242' },
+              { v: 'live', txt: 'Modo real', hint: 'Cobra dinero de verdad' },
+            ].map(({ v, txt, hint }) => {
+              const activo = claves?.modo === v
+              return (
+                <button
+                  key={v}
+                  onClick={() => cambiarModo.mutate(v)}
+                  disabled={cambiarModo.isPending || activo}
+                  title={hint}
+                  style={{
+                    flex: 1, padding: '9px 12px', borderRadius: 9, border: 'none', cursor: activo ? 'default' : 'pointer',
+                    fontSize: 12.5, fontWeight: 700,
+                    background: activo ? (v === 'test' ? 'rgba(251,191,36,.16)' : 'rgba(74,222,128,.16)') : 'transparent',
+                    color: activo ? (v === 'test' ? '#fcd34d' : '#4ade80') : '#8aa0cc',
+                  }}
+                >
+                  {txt}
+                </button>
+              )
+            })}
+          </div>
+
+          <p style={{ margin: '-6px 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+            Cada modo guarda sus propias claves. Cambiar de modo no borra nada: las de
+            {claves?.modo === 'test' ? ' producción' : ' prueba'} siguen guardadas
+            {claves?.otro_modo_listo ? ' y listas' : ', pero incompletas'}.
+          </p>
+
           {claves?.desde_env && (
             <p style={{ margin: '0 0 14px', fontSize: 12.5, color: '#fcd34d', background: 'rgba(251,191,36,.08)', padding: '9px 12px', borderRadius: 8, lineHeight: 1.6 }}>
               Ahora mismo las claves vienen del archivo .env del servidor. Si guardas aqui, mandaran las nuevas.
@@ -573,10 +622,10 @@ function StripeKeysForm() {
           ))}
 
           <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
-            Se guardan cifradas y no vuelven a salir de aqui: una vez guardadas solo se ven
+            Se guardan cifradas y no vuelven a salir de aquí: una vez guardadas solo se ven
             enmascaradas. Para borrar una, escribe <code style={{ color: '#8aa0cc' }}>BORRAR</code> en su campo.
-            Empieza con las claves de prueba (<code style={{ color: '#8aa0cc' }}>sk_test_</code>) y la
-            tarjeta 4242 4242 4242 4242 antes de pasar a las reales.
+            Las claves tienen que ser del modo seleccionado arriba — pegar una de producción
+            estando en prueba se rechaza.
           </p>
 
           {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
