@@ -11,7 +11,16 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_DAYS: int = 7
     FEE_PERCENTAGE: float = 1.5  # 1.5% comisión por defecto
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # extra="ignore" es obligatorio: pydantic-settings carga TODAS las claves
+    # del .env como entradas del modelo y por defecto aborta ante cualquiera
+    # que no sea un campo de esta clase. El .env de producción también lleva
+    # DATABASE_URL, FRONTEND_URL, DUFFEL_API_KEY y SPACES_*, que se leen por
+    # os.environ en otros módulos. Sin esto, la app no arranca.
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
