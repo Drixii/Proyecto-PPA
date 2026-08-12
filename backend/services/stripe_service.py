@@ -152,8 +152,20 @@ def login_link(account_id: str) -> str:
     return stripe.Account.create_login_link(account_id).url
 
 
+def webhook_secret() -> str:
+    return _config(CLAVE_WEBHOOK, "STRIPE_WEBHOOK_SECRET")
+
+
 def is_configured() -> bool:
-    return bool(secret_key())
+    """Si se puede ofrecer el pago con tarjeta.
+
+    Exige TAMBIÉN el secreto del webhook, no solo la clave secreta. Sin él se
+    cobra la tarjeta pero el aviso de Stripe no se puede verificar, así que la
+    orden nunca pasa a en_proceso: el cliente paga de verdad y su envío se
+    queda parado, sin que quede registrado que pagó. Es mejor no ofrecer el
+    método que ofrecerlo a medias.
+    """
+    return bool(secret_key() and webhook_secret())
 
 
 def publishable_key() -> str:
