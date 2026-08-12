@@ -35,7 +35,8 @@ class Order(Base):
     amount_received = Column(Float, nullable=False)
     fee = Column(Float, default=0)
 
-    # Estado: en_aprobacion | en_proceso | completado | rechazado
+    # Estado: pendiente_pago | en_aprobacion | en_proceso | completado | rechazado
+    # pendiente_pago: tarjeta creada y sin cobrar; la mueve el webhook de Stripe
     # rechazado no es final: al subir un comprobante nuevo vuelve a en_aprobacion
     status = Column(String, default="en_aprobacion", index=True)
     rejection_reason = Column(String, nullable=True)

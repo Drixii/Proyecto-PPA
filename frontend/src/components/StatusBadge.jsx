@@ -1,4 +1,5 @@
 const COLORS = {
+  pendiente_pago: 'bg-yellow-100 text-yellow-900',
   en_aprobacion: 'bg-orange-100 text-orange-800',
   en_proceso: 'bg-blue-100 text-blue-800',
   completado: 'bg-green-100 text-green-800',
@@ -6,6 +7,7 @@ const COLORS = {
 }
 
 const LABELS = {
+  pendiente_pago: 'Pendiente de pago',
   en_aprobacion: 'En Aprobación',
   en_proceso: 'En Proceso',
   completado: 'Completado',

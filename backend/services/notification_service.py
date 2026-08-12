@@ -12,6 +12,7 @@ STATUS_LABELS = {
     "en_proceso": "En Proceso",
     "completado": "Completado",
     "rechazado": "Rechazado",
+    "pendiente_pago": "Pendiente de pago",
 }
 
 

@@ -16,9 +16,14 @@ export default function OrderCard({ order, isAdmin = false, onView, assignedName
         <span className="font-mono text-xs" style={{ color:'#8aa0cc' }}>{order.order_number}</span>
         <StatusBadge status={order.status} />
       </div>
+      {/* La misma tarjeta la ven dos roles distintos y el nombre que recibe
+          significa cosas opuestas: al super-admin le llega el encargado al
+          que se derivó, al sub-admin le llega el admin dueño del cliente.
+          Decía "Cliente de" en ambos casos, así que el super-admin leía que
+          su propio cliente era del encargado. */}
       {assignedName && (
         <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color:'#64748b' }}>
-          Cliente de {assignedName}
+          {user?.role === 'sub_admin' ? 'Cliente de' : 'Derivado a'} {assignedName}
         </p>
       )}
       <p className="font-semibold text-sm" style={{ color:'#eaf2ff' }}>

@@ -20,6 +20,7 @@ const COLUMNS_DEFAULT = [
 // además esperan al cliente, no al admin. Quien las quiera ver las tiene en
 // Órdenes con su propio filtro.
 const COLUMNS_ALL = [
+  { key: 'pendiente_pago', label: 'Pendiente de pago', dot: 'bg-yellow-400', bg: 'border-t-yellow-400' },
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400', bg: 'border-t-orange-400' },
   { key: 'en_proceso',    label: 'En Proceso',    dot: 'bg-blue-500',   bg: 'border-t-blue-500'   },
   { key: 'completado',    label: 'Completado',    dot: 'bg-green-500',  bg: 'border-t-green-500'  },

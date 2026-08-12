@@ -98,6 +98,13 @@ ZERO_DECIMAL_CURRENCIES = {
 }
 
 
+# Monedas de origen en las que se acepta tarjeta. La cuenta de Stripe liquida
+# en dólares y euros, así que un cliente que envía desde Chile o Colombia paga
+# por transferencia: ofrecerle la tarjeta sería cobrarle con una conversión
+# que no controlamos y que se come el margen.
+CARD_CURRENCIES = ("USD", "EUR")
+
+
 class StripeNotConfigured(RuntimeError):
     pass
 

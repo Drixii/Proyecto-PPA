@@ -478,11 +478,13 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
 const TRANSFER_STATUS_STEPS = ['en_aprobacion', 'en_proceso', 'completado']
 const CARD_STATUS_STEPS = ['en_proceso', 'completado']
 const CLIENT_STATUS_LABELS = {
+  pendiente_pago: 'Pendiente de pago',
   en_aprobacion: 'En Aprobación',
   en_proceso: 'En Proceso',
   completado: 'Completado',
 }
 const STATUS_TIMELINE = {
+  pendiente_pago: { label: 'Pendiente de pago', desc: 'Tu envío se procesa en cuanto completes el pago.' },
   en_aprobacion: { label: 'En aprobación', desc: 'Tu comprobante está siendo revisado por el operador.' },
   en_proceso: { label: 'En proceso', desc: 'El operador está procesando el envío.' },
   completado: { label: 'Completado', desc: 'El receptor recibió el dinero exitosamente.' },
@@ -585,7 +587,7 @@ export function ClientOrderPanel({ order }) {
       {/* Tarjeta sin pagar: se creó la orden pero el cobro no llegó a pasar
           (cerró el formulario, falló la tarjeta...). Se puede pagar aquí sin
           volver a rellenar el envío. */}
-      {order.payment_method === 'tarjeta' && !order.paid_at && order.status === 'en_aprobacion' && (
+      {order.payment_method === 'tarjeta' && !order.paid_at && order.status === 'pendiente_pago' && (
         <div className="px-6 py-4 shrink-0" style={{background:'rgba(251,191,36,.08)', borderBottom:'1px solid rgba(251,191,36,.2)'}}>
           <p className="text-sm font-semibold mb-1" style={{color:'#fcd34d'}}>Pago pendiente</p>
           <p className="text-xs mb-3" style={{color:'#fcd34d'}}>

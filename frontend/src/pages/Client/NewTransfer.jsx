@@ -190,7 +190,11 @@ export default function NewTransfer() {
     queryFn: () => api.get('/payments/config').then(r => r.data.data),
     staleTime: 300000,
   })
+  // Solo se ofrece tarjeta si Stripe está configurado Y el cliente envía en
+  // una moneda que la cuenta admite (dólares o euros). Desde Chile o Colombia
+  // el método no aparece, en vez de aparecer y fallar al intentar cobrar.
   const cardEnabled = !!payCfg?.enabled
+    && (payCfg?.currencies || []).includes(calc.fromCurrency)
 
   const [calc, setCalc] = useState({
     amount: prefill.amount || '',

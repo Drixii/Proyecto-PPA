@@ -116,9 +116,14 @@ def create_order(db: Session, data, client: User) -> Order:
     # "portal de pago" era una pantalla decorativa. Cualquiera con cuenta
     # generaba una orden que el encargado veía lista para pagar al
     # destinatario sin haber puesto un peso.
-    # Ahora la tarjeta pasa por Stripe y solo el webhook firmado la mueve a
-    # en_proceso (routers/payments.py).
-    initial_status = "en_aprobacion"
+    #
+    # La tarjeta arranca en pendiente_pago y solo el webhook firmado de Stripe
+    # la mueve a en_proceso (routers/payments.py). Es un estado aparte y no
+    # en_aprobacion porque no hay nada que el admin pueda aprobar: se espera
+    # al cliente, no a él, y mezclarlas llenaba su bandeja de casos que no
+    # podía resolver.
+    is_card = (getattr(data, "payment_method", None) or "").lower() == "tarjeta"
+    initial_status = "pendiente_pago" if is_card else "en_aprobacion"
     sub_admin_id = None
 
     order = Order(
@@ -160,7 +165,7 @@ def create_order(db: Session, data, client: User) -> Order:
     return order
 
 
-STATUS_FLOW = ["en_aprobacion", "en_proceso", "completado"]
+STATUS_FLOW = ["pendiente_pago", "en_aprobacion", "en_proceso", "completado"]
 
 
 def _award_points(db: Session, order: Order):

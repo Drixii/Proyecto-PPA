@@ -39,6 +39,7 @@ def payment_config():
         "data": {
             "enabled": stripe_service.is_configured(),
             "publishable_key": stripe_service.publishable_key(),
+            "currencies": list(stripe_service.CARD_CURRENCIES),
         },
         "message": "",
     }
@@ -63,6 +64,11 @@ def create_intent(
         raise HTTPException(status_code=400, detail="Esta orden no es de pago con tarjeta")
     if order.paid_at:
         raise HTTPException(status_code=400, detail="Esta orden ya está pagada")
+    if (order.currency_from or "").upper() not in stripe_service.CARD_CURRENCIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El pago con tarjeta solo está disponible en {' y '.join(stripe_service.CARD_CURRENCIES)}",
+        )
 
     try:
         result = stripe_service.create_payment_intent(order, db)

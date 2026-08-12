@@ -16,6 +16,7 @@ const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate
 const todayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
 
 const STATUS_DOT = {
+  pendiente_pago: 'bg-yellow-400',
   en_aprobacion: 'bg-orange-400',
   en_proceso: 'bg-blue-500',
   completado: 'bg-green-500',
@@ -24,6 +25,7 @@ const STATUS_DOT = {
 
 const STATUSES_DEFAULT = [
   { key: '', label: 'Todos' },
+  { key: 'pendiente_pago', label: 'Pendiente de pago', dot: 'bg-yellow-400' },
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400' },
   { key: 'en_proceso', label: 'En Proceso', dot: 'bg-blue-500' },
   { key: 'completado', label: 'Completado', dot: 'bg-green-500' },

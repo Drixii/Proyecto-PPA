@@ -36,6 +36,12 @@ def _run_migrations():
         "ALTER TABLE orders ADD COLUMN rejection_reason VARCHAR",
         "ALTER TABLE orders ADD COLUMN payment_intent_id VARCHAR",
         "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP WITH TIME ZONE",
+        # Tarjetas creadas antes de que existiera pendiente_pago: estaban en
+        # en_aprobacion, esperando una aprobación que el admin no podía dar.
+        """UPDATE orders SET status = 'pendiente_pago'
+           WHERE lower(coalesce(payment_method,'')) = 'tarjeta'
+             AND paid_at IS NULL
+             AND status = 'en_aprobacion'""",
         # Deja una sola fila por par de monedas y luego impide que vuelvan a
         # duplicarse. El orden importa: el índice único no se puede crear
         # mientras existan duplicados. Se prefiere la fila manual (la puso un
