@@ -741,7 +741,11 @@ export default function AdminSettings() {
   return (
     <FinexyLayout>
       <style>{`select option { background: #0a1628; color: #eaf2ff; } input[type=number]::-webkit-inner-spin-button { opacity: 0.3 }`}</style>
-      <div style={{ padding: '24px', maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* 1400 y centrado, igual que Órdenes y el resto del panel. Estaba en
+          980 sin centrar, de cuando esta pantalla era una sola columna: con
+          la tabla de comisiones y los países al lado, sobraba pantalla a la
+          derecha y todo quedaba pegado a la izquierda. */}
+      <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {actual && (
             <button
