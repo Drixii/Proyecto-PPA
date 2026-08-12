@@ -11,13 +11,27 @@ import getpass
 import os
 import sys
 
-from database import SessionLocal, engine, Base
-from models.user import User
-from passlib.context import CryptContext
+# El .env se carga ANTES de importar database, que lee DATABASE_URL en tiempo
+# de import. systemd se lo pasa al servicio, pero una shell normal no: sin
+# esto el script caía al SQLite por defecto y creaba el admin en una base que
+# la aplicación no usa — decía "Admin creado" y no aparecía en ningún sitio.
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+from database import SessionLocal, engine, Base  # noqa: E402
+from models.user import User  # noqa: E402
+from passlib.context import CryptContext  # noqa: E402
 
 # Contraseñas que estuvieron en el repo o son triviales: se rechazan.
 BLOCKED = {"admin2024!", "admin", "admin123", "password", "123456", "cliente123!"}
 MIN_LENGTH = 12
+
+# Decirlo en voz alta: si por lo que sea acaba en SQLite, se ve al instante
+# en vez de descubrirlo cuando el login falla.
+print(f"Base de datos: {engine.url.render_as_string(hide_password=True)}")
+if engine.url.get_backend_name() == "sqlite":
+    print("  AVISO: es SQLite, no la base de producción. Revisa el .env.")
 
 Base.metadata.create_all(bind=engine)
 
