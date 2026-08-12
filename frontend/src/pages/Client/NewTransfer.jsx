@@ -235,6 +235,11 @@ export default function NewTransfer() {
   const [liveResult, setLiveResult] = useState(calc.result || null)
   const [liveLoading, setLiveLoading] = useState(false)
 
+  // Arriba del todo a propósito: `sendCurrencies` y `receiveCountries` se usan
+  // más abajo en este mismo componente, y declararlos después dejaba la página
+  // en blanco (ReferenceError por leer un const antes de inicializarlo).
+  const { sendCurrencies, receiveCountries } = useCountries()
+
   const rawAmount = parseRaw(displayAmount)
   const selectedFrom = sendCurrencies.find(c => c.code === calc.fromCurrency)
 
@@ -288,7 +293,6 @@ export default function NewTransfer() {
     setLiveResult(null)
   }
 
-  const { sendCurrencies, receiveCountries } = useCountries()
   const countriesData = receiveCountries.filter(c => c.currency !== calc.fromCurrency)
 
   // Si Ajustes quita el país o la moneda elegida, caer en una válida: si no,
