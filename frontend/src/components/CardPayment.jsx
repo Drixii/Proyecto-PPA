@@ -44,19 +44,19 @@ const FORMATO = {
 }
 const formatoDe = (marca) => FORMATO[marca] || FORMATO._
 
-/** Máscara de puntos que refleja CUÁNTOS caracteres se llevan escritos.
+/** Máscara de puntos del número, agrupada según la marca.
  *
- *  El valor real nunca sale del iframe de Stripe, pero el número de pulsaciones
- *  sí se puede seguir: Stripe emite un evento por tecla e informa de cuándo el
- *  campo está vacío y cuándo completo. Con eso la tarjeta se rellena de puntos
- *  al ritmo real de escritura sin que el dato pase jamás por aquí.
+ *  No refleja cuántos dígitos llevas escritos, y no por falta de ganas: Stripe
+ *  solo emite un evento cuando cambia algo de lo que expone —vacío, completo,
+ *  marca, error— y no uno por tecla. Contar pulsaciones daba saltos raros
+ *  (un punto al reconocer la marca y de golpe todos al completar), así que la
+ *  tarjeta muestra tres estados honestos: en blanco, rellenándose y lleno.
  */
-function mascara(escritos, { largo, grupos }) {
-  const puestos = Math.min(escritos, largo)
+function mascara({ grupos }, lleno) {
   let i = 0
   return grupos.map(n => {
     let bloque = ''
-    for (let j = 0; j < n; j++, i++) bloque += i < puestos ? '\u2022' : '\u00b7'
+    for (let j = 0; j < n; j++, i++) bloque += lleno ? '\u2022' : '\u00b7'
     return bloque
   }).join(' ')
 }
@@ -96,23 +96,27 @@ function Campo({ label, children, error }) {
  *  marca en cuanto se reconoce, copia el nombre según se escribe, marca cada
  *  bloque como relleno y gira al tocar el CVV.
  */
-function TarjetaVisual({ nombre, marca, escritos, girada }) {
+function TarjetaVisual({ nombre, marca, campos, girada }) {
   const fmt = formatoDe(marca)
-  const numero = mascara(escritos.numero, fmt)
-  const cvv = mascara(escritos.cvv, { largo: fmt.cvv, grupos: [fmt.cvv] })
 
-  const mes = escritos.caducidad >= 1 ? '\u2022' : '\u00b7'
-  const mes2 = escritos.caducidad >= 2 ? '\u2022' : '\u00b7'
-  const anio = escritos.caducidad >= 3 ? '\u2022' : '\u00b7'
-  const anio2 = escritos.caducidad >= 4 ? '\u2022' : '\u00b7'
-
-  const vivo = (n) => ({
-    color: n > 0 ? '#fff' : 'rgba(255,255,255,.34)',
-    transition: 'color .25s',
-  })
+  // El degradado en movimiento solo aparece en "escribiendo": comunica que el
+  // campo está a medias sin fingir un número de dígitos que no conocemos.
+  const pinta = (estado) => estado === 'completo'
+    ? { color: '#fff' }
+    : estado === 'escribiendo'
+      ? {
+          color: 'transparent',
+          backgroundImage: 'linear-gradient(90deg,#fff 0%,#fff 35%,rgba(255,255,255,.25) 55%,rgba(255,255,255,.25) 100%)',
+          backgroundSize: '250% 100%',
+          WebkitBackgroundClip: 'text',
+          backgroundClip: 'text',
+          animation: 'ppaRelleno 1.4s linear infinite',
+        }
+      : { color: 'rgba(255,255,255,.3)' }
 
   return (
     <div style={{ perspective: 1200 }}>
+      <style>{`@keyframes ppaRelleno { from { background-position: 120% 0 } to { background-position: -40% 0 } }`}</style>
       <div style={{
         position: 'relative', width: '100%', aspectRatio: '1.586',
         transformStyle: 'preserve-3d', transition: 'transform .6s cubic-bezier(.4,.2,.2,1)',
@@ -130,9 +134,9 @@ function TarjetaVisual({ nombre, marca, escritos, girada }) {
           <div style={{ marginTop: 'auto' }}>
             <p style={{
               margin: 0, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 18,
-              letterSpacing: '.1em', ...vivo(escritos.numero),
+              letterSpacing: '.1em', transition: 'color .25s', ...pinta(campos.numero),
             }}>
-              {numero}
+              {mascara(fmt, campos.numero === 'completo')}
             </p>
             <div className="flex items-end justify-between" style={{ marginTop: 14, gap: 12 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -140,15 +144,18 @@ function TarjetaVisual({ nombre, marca, escritos, girada }) {
                 <p style={{
                   margin: '2px 0 0', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  ...vivo(nombre ? 1 : 0),
+                  transition: 'color .25s', ...pinta(nombre ? 'completo' : 'vacio'),
                 }}>
                   {nombre || 'NOMBRE APELLIDO'}
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <p style={ETIQUETA}>VENCE</p>
-                <p style={{ margin: '2px 0 0', fontSize: 12.5, fontFamily: 'ui-monospace, Menlo, monospace', ...vivo(escritos.caducidad) }}>
-                  {mes}{mes2}/{anio}{anio2}
+                <p style={{
+                  margin: '2px 0 0', fontSize: 12.5, fontFamily: 'ui-monospace, Menlo, monospace',
+                  transition: 'color .25s', ...pinta(campos.caducidad),
+                }}>
+                  {campos.caducidad === 'completo' ? '\u2022\u2022/\u2022\u2022' : '\u00b7\u00b7/\u00b7\u00b7'}
                 </p>
               </div>
             </div>
@@ -163,9 +170,11 @@ function TarjetaVisual({ nombre, marca, escritos, girada }) {
             <div style={{ background: 'rgba(255,255,255,.92)', borderRadius: 5, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 12 }}>
               <span style={{
                 fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 15, letterSpacing: '.3em',
-                color: escritos.cvv > 0 ? '#0f172a' : 'rgba(15,23,42,.3)', transition: 'color .25s',
+                color: campos.cvv === 'completo' ? '#0f172a'
+                  : campos.cvv === 'escribiendo' ? 'rgba(15,23,42,.6)' : 'rgba(15,23,42,.28)',
+                transition: 'color .25s',
               }}>
-                {cvv}
+                {mascara({ largo: fmt.cvv, grupos: [fmt.cvv] }, campos.cvv === 'completo')}
               </span>
             </div>
             <p style={{ margin: '12px 0 0', fontSize: 9.5, color: 'rgba(255,255,255,.4)', lineHeight: 1.5 }}>
@@ -186,10 +195,8 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
 
   const [nombre, setNombre] = useState('')
   const [marca, setMarca] = useState('')
-  // Cuántos caracteres lleva escritos cada campo. Se cuenta un evento por
-  // tecla; al vaciarse vuelve a cero y al completarse salta al largo exacto,
-  // así que los extremos siempre quedan bien aunque el cliente borre a mitad.
-  const [escritos, setEscritos] = useState({ numero: 0, caducidad: 0, cvv: 0 })
+  // vacio | escribiendo | completo, por campo.
+  const [campos, setCampos] = useState({ numero: 'vacio', caducidad: 'vacio', cvv: 'vacio' })
   const [girada, setGirada] = useState(false)
   const [errores, setErrores] = useState({})
 
@@ -197,17 +204,22 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
   // y si está completo, así que la tarjeta puede reaccionar mientras se
   // escribe en vez de esperar al final. Lo que no llega es el contenido, así
   // que se marca el avance, no los dígitos.
-  const alCambiar = (campo, largo) => (e) => {
+  const alCambiar = (campo) => (e) => {
     setErrores(x => ({ ...x, [campo]: e.error?.message || '' }))
     if (campo === 'numero') setMarca(e.brand && e.brand !== 'unknown' ? e.brand : '')
-    setEscritos(prev => {
-      const actual = prev[campo]
-      const siguiente = e.empty ? 0
-        : e.complete ? largo()
-        : Math.min(actual + 1, largo() - 1)
-      return siguiente === actual ? prev : { ...prev, [campo]: siguiente }
+    setCampos(prev => {
+      const siguiente = e.empty ? 'vacio' : e.complete ? 'completo' : 'escribiendo'
+      return prev[campo] === siguiente ? prev : { ...prev, [campo]: siguiente }
     })
   }
+
+  // Pagar solo cuando Stripe da los tres campos por completos y hay titular.
+  // Antes el botón estaba siempre activo y pulsarlo a medias devolvía un error
+  // de Stripe, que es una forma fea de enterarse de que falta el CVV.
+  const listo = campos.numero === 'completo'
+    && campos.caducidad === 'completo'
+    && campos.cvv === 'completo'
+    && nombre.trim().length > 1
 
   const pagar = async (e) => {
     e.preventDefault()
@@ -248,18 +260,18 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
           <Campo label="Número de tarjeta" error={errores.numero}>
             <CardNumberElement
               options={{ ...TIPO_FORM, showIcon: false, placeholder: '1234 1234 1234 1234' }}
-              onChange={alCambiar('numero', () => formatoDe(marca).largo)}
+              onChange={alCambiar('numero')}
             />
           </Campo>
 
           <div className="grid grid-cols-2 gap-3">
             <Campo label="Vencimiento" error={errores.caducidad}>
-              <CardExpiryElement options={{ ...TIPO_FORM, placeholder: 'MM/AA' }} onChange={alCambiar('caducidad', () => 4)} />
+              <CardExpiryElement options={{ ...TIPO_FORM, placeholder: 'MM/AA' }} onChange={alCambiar('caducidad')} />
             </Campo>
             <Campo label="CVV" error={errores.cvv}>
               <CardCvcElement
                 options={{ ...TIPO_FORM, placeholder: '123' }}
-                onChange={alCambiar('cvv', () => formatoDe(marca).cvv)}
+                onChange={alCambiar('cvv')}
                 onFocus={() => setGirada(true)}
                 onBlur={() => setGirada(false)}
               />
@@ -292,10 +304,11 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
             </button>
             <button
               type="submit"
-              disabled={!stripe || enviando}
-              className="flex-1 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 disabled:opacity-40 text-white text-sm font-bold py-3 rounded-xl transition-all"
+              disabled={!stripe || enviando || !listo}
+              title={listo ? '' : 'Completa los datos de la tarjeta'}
+              className="flex-1 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold py-3 rounded-xl transition-all"
             >
-              {enviando ? 'Procesando...' : `Pagar ${amountLabel}`}
+              {enviando ? 'Procesando...' : listo ? `Pagar ${amountLabel}` : 'Completa la tarjeta'}
             </button>
           </div>
         </div>
@@ -304,7 +317,7 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
           <TarjetaVisual
             nombre={nombre}
             marca={marca}
-            escritos={escritos}
+            campos={campos}
             girada={girada}
           />
           <p className="text-[11px] mt-3 text-center" style={{ color: '#64748b' }}>
