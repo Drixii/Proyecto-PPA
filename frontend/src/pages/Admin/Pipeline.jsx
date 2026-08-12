@@ -12,14 +12,10 @@ import api from '../../services/api'
 const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 0, 0, 0)
 const todayEnd   = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 23, 59, 59)
 
-const COLUMNS_DEFAULT = [
-  { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400', bg: 'border-t-orange-400' },
-  { key: 'completado',    label: 'Completado',    dot: 'bg-green-500',  bg: 'border-t-green-500'  },
-]
-// "Rechazado" solo aquí: en la vista por defecto la API no las devuelve, y
-// además esperan al cliente, no al admin. Quien las quiera ver las tiene en
-// Órdenes con su propio filtro.
-const COLUMNS_ALL = [
+// Todas las columnas, siempre: el pipeline se abre mostrando el estado
+// completo. Existía una versión recortada (solo "en aprobación" y
+// "completado") para la vista sin filtro, pero esa vista ya no se usa.
+const COLUMNS = [
   { key: 'pendiente_pago', label: 'Pendiente de pago', dot: 'bg-yellow-400', bg: 'border-t-yellow-400' },
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400', bg: 'border-t-orange-400' },
   { key: 'en_proceso',    label: 'En Proceso',    dot: 'bg-blue-500',   bg: 'border-t-blue-500'   },
@@ -32,7 +28,11 @@ export default function Pipeline() {
   const location = useLocation()
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [dateRange, setDateRange] = useState({ from: todayStart, to: todayEnd })
-  const [filterMode, setFilterMode] = useState({ type: 'none' })
+  // Arranca en 'all' a propósito: el super-admin quiere ver todo su pipeline
+  // al entrar. Con 'none' la API devolvía solo lo accionable (en aprobación y
+  // completado) y faltaban las columnas de en proceso, pendiente de pago y
+  // rechazado, así que había que poner el filtro a mano cada vez.
+  const [filterMode, setFilterMode] = useState({ type: 'all' })
 
   useEffect(() => {
     if (location.state?.openOrderId) {
@@ -66,8 +66,6 @@ export default function Pipeline() {
     refetchInterval: 15000,
   })
 
-  const COLUMNS = filterMode.type === 'none' ? COLUMNS_DEFAULT : COLUMNS_ALL
-
   // Build name lookup for "Asignado" badge (only shown in 'all' mode)
   const idToName = {}
   const countryToName = {}
@@ -100,9 +98,9 @@ export default function Pipeline() {
             onChange={setFilterMode}
           />
 
-          {filterMode.type !== 'none' && (
+          {filterMode.type === 'subadmin' && (
             <button
-              onClick={() => setFilterMode({ type: 'none' })}
+              onClick={() => setFilterMode({ type: 'all' })}
               className="text-xs hover:text-red-400 flex items-center gap-1 transition-colors"
               style={{ color:'#8aa0cc' }}
             >
