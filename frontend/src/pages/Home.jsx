@@ -341,7 +341,7 @@ export default function Home() {
           <div id="grid-title" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, textAlign: 'center', paddingTop: '12vh', opacity: 0, pointerEvents: 'none' }}>
             <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Cobertura global</p>
             <h2 style={{ margin: 0, fontSize: 'clamp(26px,3.4vw,44px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff', lineHeight: 1.15 }}>
-              Conectados a los principales destinos de América Latina y el mundo
+              Conectamos a los principales destinos de<br />América Latina y el mundo
             </h2>
           </div>
 
