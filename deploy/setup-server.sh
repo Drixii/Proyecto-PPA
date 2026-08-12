@@ -40,10 +40,15 @@ id -u "$APP_USER" &>/dev/null || adduser --system --group --home "$APP_DIR" "$AP
 
 say "4/9 Configurando Postgres"
 DB_PASS=$(openssl rand -hex 24)
+# ALTER en el ELSE, no solo CREATE: al reejecutar el script se genera un
+# DB_PASS nuevo que acabaría en el .env, y sin este ALTER el rol conservaría
+# la clave vieja — la app no podría conectar.
 sudo -u postgres psql <<SQL
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ppa') THEN
     CREATE ROLE ppa LOGIN PASSWORD '$DB_PASS';
+  ELSE
+    ALTER ROLE ppa LOGIN PASSWORD '$DB_PASS';
   END IF;
 END \$\$;
 SQL
@@ -56,6 +61,9 @@ say "5/9 Clonando repositorio"
 # clone falla si el directorio destino existe. init + fetch sí funciona sobre
 # un directorio existente.
 mkdir -p "$APP_DIR"
+# $APP_DIR pertenece al usuario ppa (adduser lo creó como su home) pero git
+# corre como root: sin esto aborta con "detected dubious ownership".
+git config --global --add safe.directory "$APP_DIR"
 if [ ! -d "$APP_DIR/.git" ]; then
     git init -q "$APP_DIR"
     git -C "$APP_DIR" remote add origin "$REPO_URL"

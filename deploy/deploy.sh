@@ -13,6 +13,10 @@ say() { echo -e "\n=== $1 ==="; }
 
 [ "$(id -u)" -eq 0 ] || { echo "Ejecutar como root"; exit 1; }
 
+# $APP_DIR pertenece a ppa y este script corre como root: sin esto git aborta
+# con "detected dubious ownership".
+git config --global --add safe.directory "$APP_DIR"
+
 say "Backup previo (por si la migracion rompe algo)"
 /opt/ppa/deploy/backup-db.sh || { echo "Backup fallo. Se aborta el deploy."; exit 1; }
 
