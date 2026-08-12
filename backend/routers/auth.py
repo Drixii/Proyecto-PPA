@@ -152,8 +152,10 @@ def update_profile(
     }
 
 
+# def (no async): lectura de archivo + Pillow + escritura a disco son bloqueantes
+# y en async def congelarían el event loop para todos los demás usuarios.
 @router.post("/profile/avatar", response_model=dict)
-async def upload_avatar(
+def upload_avatar(
     avatar: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -161,7 +163,7 @@ async def upload_avatar(
     ext = os.path.splitext(avatar.filename or "")[1].lower()
     if ext not in (".jpg", ".jpeg", ".png", ".webp"):
         raise HTTPException(status_code=400, detail="Solo jpg/png/webp permitidos")
-    content = await avatar.read()
+    content = avatar.file.read()
     content = validate_and_convert(content)
     filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:8]}.webp"
     os.makedirs("uploads/avatars", exist_ok=True)

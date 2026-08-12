@@ -6,7 +6,10 @@ from database import engine
 import models  # noqa: F401 — registra todos los modelos en Base
 from database import Base
 from routers import auth, rates, orders, admin, chat, notifications, sub_admin, points, flights
+import logging
 import os
+
+log = logging.getLogger("ppa")
 os.makedirs("uploads/proofs", exist_ok=True)
 os.makedirs("uploads/completions", exist_ok=True)
 os.makedirs("uploads/avatars", exist_ok=True)
@@ -39,13 +42,21 @@ def _run_migrations():
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )""",
     ]
+    # Estas migraciones se reejecutan en cada arranque, así que "la columna ya
+    # existe" es el caso normal y se ignora. Cualquier otro fallo sí se registra:
+    # antes se tragaban todos por igual y un error real de esquema pasaba
+    # invisible hasta que reventaba un endpoint en producción.
+    already_applied = ("already exists", "duplicate column", "duplicate_column")
+
     for sql in migrations:
         with engine.connect() as conn:
             try:
                 conn.execute(text(sql))
                 conn.commit()
-            except Exception:
+            except Exception as exc:
                 conn.rollback()
+                if not any(marker in str(exc).lower() for marker in already_applied):
+                    log.warning("Migración falló: %s | %s", sql.split("\n")[0].strip(), exc)
 
     status_map = {
         "pagado": "en_proceso",
@@ -55,10 +66,14 @@ def _run_migrations():
     with engine.connect() as conn:
         try:
             for old, new in status_map.items():
-                conn.execute(text(f"UPDATE orders SET status = '{new}' WHERE status = '{old}'"))
+                conn.execute(
+                    text("UPDATE orders SET status = :new WHERE status = :old"),
+                    {"new": new, "old": old},
+                )
             conn.commit()
-        except Exception:
+        except Exception as exc:
             conn.rollback()
+            log.warning("Normalización de estados falló: %s", exc)
 
 
 @asynccontextmanager

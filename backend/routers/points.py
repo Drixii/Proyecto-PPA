@@ -278,8 +278,10 @@ def update_reward(reward_id: int, body: RewardCreate, db: Session = Depends(get_
     return {"data": _reward_to_dict(r)}
 
 
+# def (no async): lectura de archivo + Pillow + escritura a disco son bloqueantes
+# y en async def congelarían el event loop para todos los demás usuarios.
 @router.post("/admin/rewards/{reward_id}/image")
-async def upload_reward_image(reward_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
+def upload_reward_image(reward_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
     r = db.query(PointReward).filter(PointReward.id == reward_id).first()
     if not r:
         raise HTTPException(404, "Recompensa no encontrada")
@@ -290,7 +292,7 @@ async def upload_reward_image(reward_id: int, file: UploadFile = File(...), db: 
         old = os.path.join(REWARDS_DIR, r.image_filename)
         if os.path.exists(old):
             os.remove(old)
-    content = await file.read()
+    content = file.file.read()
     if ext != ".gif":
         content = validate_and_convert(content)
         ext = ".webp"

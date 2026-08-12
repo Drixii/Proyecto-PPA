@@ -101,8 +101,12 @@ def get_order(order_id: int, db: Session = Depends(get_db), current_user: User =
     return {"success": True, "data": OrderOut.model_validate(order).model_dump(), "message": ""}
 
 
+# def (no async): el endpoint lee el archivo, lo convierte con Pillow y escribe
+# a disco — todo bloqueante. En async def eso congela el event loop y con él
+# TODAS las demás peticiones y los WebSocket del chat. Como def normal, FastAPI
+# lo ejecuta en el threadpool, igual que el resto de endpoints.
 @router.post("/{order_id}/upload-proof", response_model=dict)
-async def upload_proof(
+def upload_proof(
     order_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -119,7 +123,7 @@ async def upload_proof(
     if ext not in allowed:
         raise HTTPException(status_code=400, detail="Tipo de archivo no permitido. Usa JPG, PNG o PDF.")
 
-    content = await file.read()
+    content = file.file.read()
     if ext != ".pdf":
         content = validate_and_convert(content)
         ext = ".webp"

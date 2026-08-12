@@ -1,0 +1,10 @@
+# Los scripts y ficheros de configuración del servidor DEBEN usar finales de
+# línea LF. Si git los convierte a CRLF (comportamiento por defecto en Windows),
+# Linux falla al ejecutarlos con: bad interpreter: /bin/bash^M
+*.sh            text eol=lf
+*.service       text eol=lf
+*.conf          text eol=lf
+.env.example    text eol=lf
+
+# Python: LF también, por consistencia con el servidor
+*.py            text eol=lf

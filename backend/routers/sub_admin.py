@@ -227,8 +227,10 @@ def get_sub_admin_order(
     return {"success": True, "data": _order_with_bank(order, db), "message": ""}
 
 
+# def (no async): lectura de archivo + Pillow + escritura a disco son bloqueantes
+# y en async def congelarían el event loop para todos los demás usuarios.
 @router.post("/orders/{order_id}/complete", response_model=dict)
-async def complete_order(
+def complete_order(
     order_id: int,
     completion_proof: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -247,7 +249,7 @@ async def complete_order(
     ext = os.path.splitext(completion_proof.filename or "")[1].lower()
     if ext not in (".jpg", ".jpeg", ".png", ".webp", ".pdf"):
         raise HTTPException(status_code=400, detail="Formato no permitido (jpg/png/webp/pdf)")
-    content = await completion_proof.read()
+    content = completion_proof.file.read()
     if ext != ".pdf":
         content = validate_and_convert(content)
         ext = ".webp"

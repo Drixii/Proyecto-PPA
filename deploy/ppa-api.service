@@ -1,0 +1,44 @@
+[Unit]
+Description=PPA Casa de Cambios API (FastAPI/uvicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ppa
+Group=ppa
+WorkingDirectory=/opt/ppa/backend
+EnvironmentFile=/opt/ppa/backend/.env
+
+# IMPORTANTE: --workers 1 es obligatorio, no es una eleccion de rendimiento.
+# El chat usa un ConnectionManager en memoria (routers/chat.py). Con 2+ workers
+# cada proceso tiene su propio dict de conexiones y dos usuarios en workers
+# distintos NO se ven los mensajes. Para escalar horizontalmente hay que mover
+# el broadcast a Redis pub/sub primero.
+ExecStart=/opt/ppa/backend/venv/bin/uvicorn main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --proxy-headers \
+    --forwarded-allow-ips='127.0.0.1'
+
+Restart=always
+RestartSec=5
+# Si falla mas de 5 veces en 60s, para y deja rastro en journalctl en vez de
+# entrar en bucle infinito de reinicios.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ppa-api
+
+# Endurecimiento basico
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/ppa/backend/uploads
+
+[Install]
+WantedBy=multi-user.target

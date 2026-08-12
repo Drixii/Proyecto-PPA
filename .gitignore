@@ -22,3 +22,6 @@ frontend/.env.production
 
 .vercel
 .env*
+
+# Plantilla sin secretos: debe versionarse (setup-server.sh clona el repo)
+!deploy/.env.example
