@@ -238,7 +238,13 @@ export default function NewTransfer() {
   // Arriba del todo a propósito: `sendCurrencies` y `receiveCountries` se usan
   // más abajo en este mismo componente, y declararlos después dejaba la página
   // en blanco (ReferenceError por leer un const antes de inicializarlo).
-  const { sendCurrencies, receiveCountries } = useCountries()
+  const { sendCurrencies, receiveCountries, countries } = useCountries()
+
+  // Bandera de un país por su nombre. Primero lo que dice la base (así un país
+  // añadido desde Ajustes tiene bandera), y si no está —una orden vieja de un
+  // país que ya se quitó— se recurre al mapa fijo de este archivo.
+  const iso2De = (nombre) =>
+    countries.find(c => c.country === nombre)?.iso2 || COUNTRY_CODE[nombre] || ''
 
   const rawAmount = parseRaw(displayAmount)
   const selectedFrom = sendCurrencies.find(c => c.code === calc.fromCurrency)
@@ -428,89 +434,108 @@ export default function NewTransfer() {
 
         <div className="rounded-2xl p-6" style={GLASS}>
 
-          {/* ── Paso 0: Destino ── */}
+          {/* ── Paso 0: Destino ──
+              Un botón para empezar de cero y, debajo, la lista de siempre.
+              Antes había que elegir primero "nuevo" o "anterior" en dos
+              tarjetas, luego el contacto, y luego Continuar: tres decisiones
+              para lo que casi siempre es "a la misma persona de la vez
+              pasada". Ahora tocar el contacto ya avanza. */}
           {step === 0 && (
             <div className="space-y-5">
               <h2 className="font-semibold" style={{color:'#eaf2ff'}}>¿A quién quieres enviar?</h2>
 
-              {/* Choice cards */}
-              <div className={`grid gap-3 ${previousContacts.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {[
-                  { value: 'nuevo', label: 'Nuevo destinatario', icon: '👤', desc: 'Ingresa datos manualmente' },
-                  ...(previousContacts.length > 0 ? [{ value: 'anterior', label: 'Destinatario anterior', icon: '👥', desc: 'Usa un contacto previo' }] : []),
-                ].map(({ value, label, icon, desc }) => (
-                  <button key={value} type="button"
-                    onClick={() => {
-                      setDestinatarioType(value)
-                      setEditingContact(false)
-                      if (value === 'nuevo') {
-                        setReceiver(r => ({ ...r, receiver_name: '', receiver_phone: '', receiver_account: '', receiver_bank_id: '', receiver_id_num: '' }))
-                      }
-                    }}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl transition-all text-center"
-                    style={destinatarioType === value
-                      ? {background:'rgba(56,189,248,.1)', border:'2px solid #38bdf8'}
-                      : {background:'rgba(255,255,255,.04)', border:'2px solid rgba(255,255,255,.08)'}
-                    }>
-                    <span className="text-2xl">{icon}</span>
-                    <p className="font-semibold text-sm" style={{color:'#eaf2ff'}}>{label}</p>
-                    <p className="text-xs" style={{color:'#8aa0cc'}}>{desc}</p>
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDestinatarioType('nuevo')
+                  setEditingContact(false)
+                  setReceiver(r => ({ ...r, receiver_name: '', receiver_phone: '', receiver_account: '', receiver_bank_id: '', receiver_id_num: '' }))
+                  setStep(1)
+                }}
+                className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl transition-all"
+                style={{background:'rgba(56,189,248,.1)', border:'1px dashed rgba(56,189,248,.45)'}}
+              >
+                <span className="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
+                  style={{background:'rgba(56,189,248,.15)', color:'#38bdf8'}}>+</span>
+                <span className="text-left">
+                  <span className="block font-semibold text-sm" style={{color:'#eaf2ff'}}>Nuevo destinatario</span>
+                  <span className="block text-xs mt-0.5" style={{color:'#8aa0cc'}}>Enviar a alguien por primera vez</span>
+                </span>
+                <span className="ml-auto text-lg" style={{color:'#38bdf8'}}>→</span>
+              </button>
 
-              {/* Anterior: contacts list */}
-              {destinatarioType === 'anterior' && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#aebfe2'}}>Contactos anteriores</p>
-                  <div className="rounded-xl overflow-hidden" style={{border:'1px solid rgba(255,255,255,.08)'}}>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#aebfe2'}}>
+                  Enviar de nuevo a
+                </p>
+
+                {previousContacts.length === 0 ? (
+                  <div className="rounded-2xl px-5 py-8 text-center" style={{...GLASS}}>
+                    <p className="text-sm" style={{color:'#8aa0cc'}}>No tienes contactos anteriores</p>
+                    <p className="text-xs mt-1.5" style={{color:'#64748b'}}>
+                      Aparecerán aquí en cuanto hagas tu primer envío
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl overflow-hidden" style={{border:'1px solid rgba(255,255,255,.08)'}}>
                     {previousContacts.map((order, i) => {
-                      const isSelected = receiver.receiver_name === order.receiver_name
+                      const abierto = editingContact
+                        && receiver.receiver_name === order.receiver_name
                         && (receiver.receiver_account || '') === (order.receiver_account || '')
                         && receiver.receiver_country === order.receiver_country
+
                       return (
                         <div key={i}>
-                          <button onClick={() => { selectContact(order); setEditingContact(false) }}
-                            className="w-full flex items-center gap-3 px-4 py-3 transition-colors text-left"
-                            style={{background: isSelected ? 'rgba(56,189,248,.1)' : 'transparent', borderBottom: isSelected && editingContact ? 'none' : '1px solid rgba(255,255,255,.06)'}}>
-                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                              style={{background: isSelected ? '#38bdf8' : 'linear-gradient(135deg,#38bdf8,#818cf8)', color: isSelected ? '#060d22' : '#fff'}}>
-                              {isSelected ? '✓' : order.receiver_name?.[0]?.toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{order.receiver_name}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                {flagUrl(order.receiver_country) && (
-                                  <img src={flagUrl(order.receiver_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover" />
-                                )}
-                                <p className="text-xs truncate" style={{color:'#8aa0cc'}}>
-                                  {order.receiver_country}{order.receiver_account && ` · ${order.receiver_account}`}
-                                </p>
+                          <div className="flex items-center transition-colors"
+                            style={{borderBottom: abierto ? 'none' : '1px solid rgba(255,255,255,.06)'}}>
+                            <button
+                              onClick={() => { setDestinatarioType('anterior'); selectContact(order); setEditingContact(false); setStep(1) }}
+                              className="flex-1 flex items-center gap-3 px-4 py-3.5 text-left min-w-0"
+                            >
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                                style={{background:'linear-gradient(135deg,#38bdf8,#818cf8)', color:'#fff'}}>
+                                {order.receiver_name?.[0]?.toUpperCase()}
                               </div>
-                            </div>
-                            {isSelected && !editingContact && (
-                              <button
-                                type="button"
-                                onClick={e => { e.stopPropagation(); setEditingContact(true) }}
-                                className="text-xs font-semibold px-2.5 py-1 rounded-lg shrink-0 transition-colors"
-                                style={{background:'rgba(56,189,248,.12)', color:'#38bdf8', border:'1px solid rgba(56,189,248,.2)'}}>
-                                Editar
-                              </button>
-                            )}
-                          </button>
-                          {isSelected && editingContact && (
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate" style={{color:'#eaf2ff'}}>{order.receiver_name}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <img src={`https://flagcdn.com/20x15/${iso2De(order.receiver_country)}.png`} alt=""
+                                    className="w-4 h-[11px] rounded-sm object-cover shrink-0"
+                                    onError={e => { e.target.style.visibility = 'hidden' }} />
+                                  <p className="text-xs truncate" style={{color:'#8aa0cc'}}>
+                                    {order.receiver_country}{order.receiver_account && ` · ${order.receiver_account}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-base shrink-0" style={{color:'#475569'}}>→</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Editar datos del contacto"
+                              onClick={() => {
+                                setDestinatarioType('anterior')
+                                selectContact(order)
+                                setEditingContact(!abierto)
+                              }}
+                              className="px-3.5 py-3.5 text-sm shrink-0 transition-colors"
+                              style={{color: abierto ? '#38bdf8' : '#475569', borderLeft:'1px solid rgba(255,255,255,.06)'}}
+                            >
+                              ✎
+                            </button>
+                          </div>
+
+                          {abierto && (
                             <div className="px-4 py-4 space-y-3" style={{background:'rgba(4,10,30,.6)', borderBottom:'1px solid rgba(255,255,255,.06)'}}>
-                              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{color:'#aebfe2'}}>Editar contacto</p>
                               {[
-                                { label: 'Nombre', field: 'receiver_name', type: 'text' },
-                                { label: 'Teléfono', field: 'receiver_phone', type: 'text' },
-                                { label: 'N° de cuenta', field: 'receiver_account', type: 'text' },
-                                { label: 'N° de documento', field: 'receiver_id_num', type: 'text' },
-                              ].map(({ label, field, type }) => (
+                                { label: 'Nombre', field: 'receiver_name' },
+                                { label: 'Teléfono', field: 'receiver_phone' },
+                                { label: 'N° de cuenta', field: 'receiver_account' },
+                                { label: 'N° de documento', field: 'receiver_id_num' },
+                              ].map(({ label, field }) => (
                                 <div key={field}>
                                   <label className="text-xs block mb-1" style={{color:'#8aa0cc'}}>{label}</label>
                                   <input
-                                    type={type}
                                     value={receiver[field] || ''}
                                     onChange={e => setReceiver(r => ({ ...r, [field]: e.target.value }))}
                                     className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none"
@@ -520,10 +545,10 @@ export default function NewTransfer() {
                               ))}
                               <button
                                 type="button"
-                                onClick={() => setEditingContact(false)}
-                                className="w-full text-sm font-semibold py-2 rounded-xl transition-colors"
-                                style={{background:'rgba(56,189,248,.12)', color:'#38bdf8', border:'1px solid rgba(56,189,248,.2)'}}>
-                                Guardar cambios
+                                onClick={() => { setEditingContact(false); setStep(1) }}
+                                className="w-full text-sm font-bold py-2.5 rounded-xl transition-all bg-gradient-to-r from-blue-400 to-blue-700 text-white"
+                              >
+                                Usar este contacto →
                               </button>
                             </div>
                           )}
@@ -531,19 +556,8 @@ export default function NewTransfer() {
                       )
                     })}
                   </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => setStep(1)}
-                disabled={
-                  !destinatarioType ||
-                  (destinatarioType === 'anterior' && !receiver.receiver_name)
-                }
-                className="w-full bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 disabled:opacity-40 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm shadow-blue-200"
-              >
-                Continuar →
-              </button>
+                )}
+              </div>
             </div>
           )}
 
