@@ -7,7 +7,9 @@ webhook firmado que manda Stripe.
 """
 import os
 from datetime import datetime, timezone
+from typing import Optional
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
@@ -78,6 +80,95 @@ def create_intent(
         },
         "message": "",
     }
+
+
+# ── Claves de la plataforma ───────────────────────────────────────────────────
+
+
+class StripeKeysIn(BaseModel):
+    secret_key: Optional[str] = None
+    publishable_key: Optional[str] = None
+    webhook_secret: Optional[str] = None
+    connect_webhook_secret: Optional[str] = None
+
+
+@router.get("/stripe/keys", response_model=dict)
+def get_stripe_keys(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Estado de las claves. Nunca devuelve los secretos completos.
+
+    La clave pública sí va entera: es la que el navegador usa de todos modos.
+    Las secretas salen enmascaradas (sk_live_••••4242), lo justo para saber
+    cuál está puesta sin poder copiarla desde aquí.
+    """
+    from services import secret_store as ss
+
+    secreta = ss.get_secret(db, stripe_service.CLAVE_SECRETA)
+    webhook = ss.get_secret(db, stripe_service.CLAVE_WEBHOOK)
+    connect = ss.get_secret(db, stripe_service.CLAVE_WEBHOOK_CONNECT)
+
+    return {
+        "success": True,
+        "data": {
+            "secret_key": ss.mask(secreta),
+            "publishable_key": stripe_service.publishable_key(),
+            "webhook_secret": ss.mask(webhook),
+            "connect_webhook_secret": ss.mask(connect),
+            "modo_prueba": bool(secreta and secreta.startswith("sk_test")),
+            # Si la clave viene del .env no se puede editar desde aquí: se
+            # sobrescribiría la de la base y seguiría mandando la del entorno.
+            "desde_env": bool(not secreta and os.environ.get("STRIPE_SECRET_KEY")),
+        },
+        "message": "",
+    }
+
+
+@router.put("/stripe/keys", response_model=dict)
+def save_stripe_keys(
+    data: StripeKeysIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda las claves cifradas.
+
+    Un campo vacío o ausente NO borra la clave existente: el formulario nunca
+    recibe los secretos, así que enviarlos vacíos es lo normal cuando el admin
+    solo quiere cambiar uno. Para borrar se manda la palabra BORRAR.
+    """
+    from services import secret_store as ss
+
+    campos = [
+        (data.secret_key, stripe_service.CLAVE_SECRETA, ("sk_test_", "sk_live_"), "clave secreta"),
+        (data.publishable_key, stripe_service.CLAVE_PUBLICA, ("pk_test_", "pk_live_"), "clave publicable"),
+        (data.webhook_secret, stripe_service.CLAVE_WEBHOOK, ("whsec_",), "secreto del webhook"),
+        (data.connect_webhook_secret, stripe_service.CLAVE_WEBHOOK_CONNECT, ("whsec_",), "secreto del webhook de Connect"),
+    ]
+
+    guardadas = []
+    for valor, clave, prefijos, etiqueta in campos:
+        if valor is None:
+            continue
+        valor = valor.strip()
+        if not valor:
+            continue
+        if valor == "BORRAR":
+            ss.set_secret(db, clave, "")
+            guardadas.append(f"{etiqueta} borrada")
+            continue
+        if not valor.startswith(prefijos):
+            raise HTTPException(
+                status_code=400,
+                detail=f"La {etiqueta} debería empezar por {' o '.join(prefijos)}",
+            )
+        ss.set_secret(db, clave, valor)
+        guardadas.append(etiqueta)
+
+    if not guardadas:
+        return {"success": True, "data": {}, "message": "No había nada que guardar"}
+
+    return {"success": True, "data": {}, "message": "Guardado: " + ", ".join(guardadas)}
 
 
 # ── Stripe Connect: cada super-admin conecta su cuenta ────────────────────────

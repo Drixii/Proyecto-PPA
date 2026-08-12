@@ -17,6 +17,34 @@ from dataclasses import dataclass
 
 import stripe
 
+from database import SessionLocal
+
+# Claves guardadas desde Ajustes → Integraciones de pago (cifradas, ver
+# services/secret_store.py). Las variables de entorno siguen funcionando como
+# respaldo para no romper una instalación ya configurada por .env.
+CLAVE_SECRETA = "stripe_secret_key"
+CLAVE_PUBLICA = "stripe_publishable_key"
+CLAVE_WEBHOOK = "stripe_webhook_secret"
+CLAVE_WEBHOOK_CONNECT = "stripe_connect_webhook_secret"
+
+
+def _config(nombre: str, env: str) -> str:
+    """Valor guardado en la base; si no hay, el del .env."""
+    from services.secret_store import get_secret
+    db = SessionLocal()
+    try:
+        valor = get_secret(db, nombre)
+    except Exception as e:
+        print(f"[stripe] no se pudo leer '{nombre}' de la base: {e}")
+        valor = None
+    finally:
+        db.close()
+    return (valor or os.environ.get(env, "")).strip()
+
+
+def secret_key() -> str:
+    return _config(CLAVE_SECRETA, "STRIPE_SECRET_KEY")
+
 # Monedas que Stripe cuenta en unidades enteras, sin céntimos. Para el resto
 # hay que multiplicar por 100. Equivocarse aquí cobra 100 veces de más o de
 # menos: 200.000 CLP son 200000, no 20000000.
@@ -49,10 +77,10 @@ def get_stripe_context(db=None, super_admin_id: int | None = None) -> StripeCont
     Si no la tiene, se cobra en la cuenta de la plataforma, que es el modo con
     el que arrancó esto.
     """
-    key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+    key = secret_key()
     if not key:
         raise StripeNotConfigured(
-            "Falta STRIPE_SECRET_KEY en el .env — el pago con tarjeta está desactivado"
+            "Stripe no está configurado — añade las claves en Ajustes → Integraciones de pago"
         )
 
     connected = None
@@ -73,9 +101,11 @@ def get_stripe_context(db=None, super_admin_id: int | None = None) -> StripeCont
 # ── Connect: alta de cuentas de los super-admins ──────────────────────────────
 
 def _api():
-    key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+    key = secret_key()
     if not key:
-        raise StripeNotConfigured("Falta STRIPE_SECRET_KEY en el .env")
+        raise StripeNotConfigured(
+            "Stripe no está configurado — añade las claves en Ajustes → Integraciones de pago"
+        )
     stripe.api_key = key
 
 
@@ -123,11 +153,11 @@ def login_link(account_id: str) -> str:
 
 
 def is_configured() -> bool:
-    return bool(os.environ.get("STRIPE_SECRET_KEY", "").strip())
+    return bool(secret_key())
 
 
 def publishable_key() -> str:
-    return os.environ.get("STRIPE_PUBLISHABLE_KEY", "").strip()
+    return _config(CLAVE_PUBLICA, "STRIPE_PUBLISHABLE_KEY")
 
 
 def to_stripe_amount(amount: float, currency: str) -> int:
@@ -203,12 +233,14 @@ def verify_webhook(payload: bytes, signature: str):
     funciona igual; el segundo es opcional.
     """
     secretos = [
-        os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip(),
-        os.environ.get("STRIPE_CONNECT_WEBHOOK_SECRET", "").strip(),
+        _config(CLAVE_WEBHOOK, "STRIPE_WEBHOOK_SECRET"),
+        _config(CLAVE_WEBHOOK_CONNECT, "STRIPE_CONNECT_WEBHOOK_SECRET"),
     ]
     secretos = [s for s in secretos if s]
     if not secretos:
-        raise StripeNotConfigured("Falta STRIPE_WEBHOOK_SECRET en el .env")
+        raise StripeNotConfigured(
+            "Falta el secreto del webhook — añádelo en Ajustes → Integraciones de pago"
+        )
 
     ultimo_error = None
     for secret in secretos:

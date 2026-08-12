@@ -487,6 +487,110 @@ function SectionCard({ icon, title, desc, onClick }) {
   )
 }
 
+function StripeKeysForm() {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({ secret_key: '', publishable_key: '', webhook_secret: '', connect_webhook_secret: '' })
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+  const [abierto, setAbierto] = useState(false)
+
+  const { data: claves } = useQuery({
+    queryKey: ['stripe-keys'],
+    queryFn: () => api.get('/payments/stripe/keys').then(r => r.data.data),
+  })
+
+  const guardar = useMutation({
+    mutationFn: (body) => api.put('/payments/stripe/keys', body),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      setForm({ secret_key: '', publishable_key: '', webhook_secret: '', connect_webhook_secret: '' })
+      qc.invalidateQueries({ queryKey: ['stripe-keys'] })
+      qc.invalidateQueries({ queryKey: ['stripe-account'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
+  })
+
+  const campos = [
+    { k: 'secret_key', label: 'Clave secreta', ph: 'sk_test_...', actual: claves?.secret_key },
+    { k: 'publishable_key', label: 'Clave publicable', ph: 'pk_test_...', actual: claves?.publishable_key },
+    { k: 'webhook_secret', label: 'Secreto del webhook', ph: 'whsec_...', actual: claves?.webhook_secret },
+    { k: 'connect_webhook_secret', label: 'Secreto del webhook de Connect', ph: 'whsec_... (opcional)', actual: claves?.connect_webhook_secret },
+  ]
+
+  const hayAlgo = Object.values(form).some(v => v.trim())
+
+  return (
+    <div style={{ ...GLASS, padding: '20px 24px' }}>
+      <button
+        onClick={() => setAbierto(a => !a)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <div style={{ textAlign: 'left' }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Claves de Stripe</h3>
+          <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
+            {claves?.secret_key
+              ? <>Configuradas · <span style={{ color: claves.modo_prueba ? '#fcd34d' : '#4ade80' }}>{claves.modo_prueba ? 'modo prueba' : 'modo real'}</span></>
+              : 'Sin configurar - el pago con tarjeta esta oculto para los clientes'}
+          </p>
+        </div>
+        <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
+      </button>
+
+      {abierto && (
+        <div style={{ marginTop: 18 }}>
+          {claves?.desde_env && (
+            <p style={{ margin: '0 0 14px', fontSize: 12.5, color: '#fcd34d', background: 'rgba(251,191,36,.08)', padding: '9px 12px', borderRadius: 8, lineHeight: 1.6 }}>
+              Ahora mismo las claves vienen del archivo .env del servidor. Si guardas aqui, mandaran las nuevas.
+            </p>
+          )}
+
+          {campos.map(({ k, label, ph, actual }) => (
+            <div key={k} style={{ marginBottom: 14 }}>
+              <label style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
+                {label}
+                {actual && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{actual}</span>}
+              </label>
+              <input
+                type="password"
+                autoComplete="off"
+                value={form[k]}
+                placeholder={actual ? 'Dejar vacio para no cambiarla' : ph}
+                onChange={e => { setForm(f => ({ ...f, [k]: e.target.value })); setError('') }}
+                style={{ ...INP, width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          ))}
+
+          <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+            Se guardan cifradas y no vuelven a salir de aqui: una vez guardadas solo se ven
+            enmascaradas. Para borrar una, escribe <code style={{ color: '#8aa0cc' }}>BORRAR</code> en su campo.
+            Empieza con las claves de prueba (<code style={{ color: '#8aa0cc' }}>sk_test_</code>) y la
+            tarjeta 4242 4242 4242 4242 antes de pasar a las reales.
+          </p>
+
+          {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
+          {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
+
+          <button
+            onClick={() => guardar.mutate(form)}
+            disabled={!hayAlgo || guardar.isPending}
+            style={{
+              fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10, border: 'none',
+              color: '#fff', cursor: hayAlgo ? 'pointer' : 'not-allowed',
+              background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', opacity: hayAlgo ? 1 : .4,
+            }}
+          >
+            {guardar.isPending ? 'Guardando...' : 'Guardar claves'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PaymentIntegrations() {
   const qc = useQueryClient()
   const [error, setError] = useState('')
@@ -540,9 +644,8 @@ function PaymentIntegrations() {
       {!plataformaLista && (
         <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.2)', marginBottom: 16 }}>
           <p style={{ margin: 0, fontSize: 12.5, color: '#fcd34d', lineHeight: 1.6 }}>
-            Falta configurar Stripe en el servidor (<code>STRIPE_SECRET_KEY</code> en el .env).
-            Hasta entonces no se puede conectar ninguna cuenta y el pago con tarjeta está oculto
-            para los clientes.
+            Primero hay que guardar las claves de Stripe, ahí arriba. Hasta entonces no se
+            puede conectar ninguna cuenta y el pago con tarjeta está oculto para los clientes.
           </p>
         </div>
       )}
@@ -673,7 +776,7 @@ export default function AdminSettings() {
         )}
 
         {section === 'paises' && <CountriesManager />}
-        {section === 'pagos' && <PaymentIntegrations />}
+        {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /></>}
       </div>
     </FinexyLayout>
   )
