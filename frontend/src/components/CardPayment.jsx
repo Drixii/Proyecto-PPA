@@ -21,6 +21,20 @@ function stripeFor(key, account) {
   return stripeCache[ck]
 }
 
+// Estilo de los campos de Stripe. Van dentro de un iframe suyo, así que no
+// heredan el CSS de la página y hay que pasárselo así.
+const TIPO_FORM = {
+  style: {
+    base: {
+      color: '#eaf2ff',
+      fontFamily: 'inherit',
+      fontSize: '15px',
+      '::placeholder': { color: '#64748b' },
+    },
+    invalid: { color: '#f87171', iconColor: '#f87171' },
+  },
+}
+
 const MARCAS = { visa: 'VISA', mastercard: 'Mastercard', amex: 'AMEX', discover: 'Discover', diners: 'Diners', jcb: 'JCB', unionpay: 'UnionPay' }
 
 const CARA = {
@@ -32,32 +46,96 @@ const CARA = {
 }
 const ETIQUETA = { margin: 0, fontSize: 8.5, letterSpacing: '.16em', color: 'rgba(255,255,255,.5)' }
 
-// Tipografía de los campos que van SOBRE la tarjeta: se leen como texto
-// grabado en el plástico, no como un input.
-const TIPO_PLASTICO = (tam) => ({
-  style: {
-    base: {
-      color: '#ffffff',
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      fontSize: `${tam}px`,
-      letterSpacing: tam > 16 ? '.09em' : '.06em',
-      '::placeholder': { color: 'rgba(255,255,255,.3)' },
-    },
-    invalid: { color: '#fca5a5' },
-  },
-})
-const TIPO_CVV = {
-  style: {
-    base: {
-      color: '#0f172a',
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      fontSize: '15px',
-      letterSpacing: '.3em',
-      textAlign: 'right',
-      '::placeholder': { color: 'rgba(15,23,42,.3)' },
-    },
-    invalid: { color: '#b91c1c' },
-  },
+function Campo({ label, children, error }) {
+  return (
+    <div>
+      <label className="block text-xs mb-1.5" style={{ color: '#8aa0cc' }}>{label}</label>
+      <div className="rounded-xl px-3 py-3" style={{
+        background: 'rgba(4,10,30,.85)',
+        border: `1px solid ${error ? 'rgba(248,113,113,.5)' : 'rgba(255,255,255,.1)'}`,
+      }}>
+        {children}
+      </div>
+      {error && <p className="text-[11px] mt-1" style={{ color: '#f87171' }}>{error}</p>}
+    </div>
+  )
+}
+
+/** La tarjeta refleja lo que se puede reflejar.
+ *
+ *  Los dígitos, la fecha y el CVV se teclean dentro de iframes de Stripe y no
+ *  son legibles desde aquí — es justo lo que evita que esos datos pasen por
+ *  nuestro servidor. De Stripe sí llega la marca y si cada campo está
+ *  completo; el nombre es un campo nuestro. Con eso la tarjeta muestra la
+ *  marca en cuanto se reconoce, copia el nombre según se escribe, marca cada
+ *  bloque como relleno y gira al tocar el CVV.
+ */
+function TarjetaVisual({ nombre, marca, numeroListo, caducidadLista, girada }) {
+  const relleno = (listo) => ({
+    color: listo ? '#fff' : 'rgba(255,255,255,.34)',
+    transition: 'color .3s',
+  })
+
+  return (
+    <div style={{ perspective: 1200 }}>
+      <div style={{
+        position: 'relative', width: '100%', aspectRatio: '1.586',
+        transformStyle: 'preserve-3d', transition: 'transform .6s cubic-bezier(.4,.2,.2,1)',
+        transform: girada ? 'rotateY(180deg)' : 'rotateY(0deg)',
+      }}>
+        {/* Frente */}
+        <div style={{ ...CARA, padding: 20, display: 'flex', flexDirection: 'column' }}>
+          <div className="flex items-start justify-between">
+            <div style={{ width: 42, height: 32, borderRadius: 6, background: 'linear-gradient(135deg,#fde68a,#d97706)', opacity: .92 }} />
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', letterSpacing: '.04em', opacity: marca ? 1 : 0, transition: 'opacity .25s' }}>
+              {MARCAS[marca] || '—'}
+            </span>
+          </div>
+
+          <div style={{ marginTop: 'auto' }}>
+            <p style={{
+              margin: 0, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 17,
+              letterSpacing: '.11em', ...relleno(numeroListo),
+            }}>
+              •••• •••• •••• {numeroListo ? '••••' : '____'}
+            </p>
+            <div className="flex items-end justify-between" style={{ marginTop: 14, gap: 12 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={ETIQUETA}>TITULAR</p>
+                <p style={{
+                  margin: '2px 0 0', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  ...relleno(!!nombre),
+                }}>
+                  {nombre || 'NOMBRE APELLIDO'}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={ETIQUETA}>VENCE</p>
+                <p style={{ margin: '2px 0 0', fontSize: 12.5, fontFamily: 'ui-monospace, Menlo, monospace', ...relleno(caducidadLista) }}>
+                  {caducidadLista ? '••/••' : '__/__'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Reverso */}
+        <div style={{ ...CARA, transform: 'rotateY(180deg)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: 42, background: '#0b1020', marginTop: 18 }} />
+          <div style={{ padding: '16px 20px' }}>
+            <p style={{ ...ETIQUETA, marginBottom: 5 }}>CVV</p>
+            <div style={{ background: 'rgba(255,255,255,.92)', borderRadius: 5, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 12 }}>
+              <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 14, color: '#0f172a', letterSpacing: '.28em' }}>•••</span>
+            </div>
+            <p style={{ margin: '12px 0 0', fontSize: 9.5, color: 'rgba(255,255,255,.4)', lineHeight: 1.5 }}>
+              Tus datos viajan cifrados directamente a Stripe.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
@@ -68,20 +146,15 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
 
   const [nombre, setNombre] = useState('')
   const [marca, setMarca] = useState('')
+  const [numeroListo, setNumeroListo] = useState(false)
+  const [caducidadLista, setCaducidadLista] = useState(false)
   const [girada, setGirada] = useState(false)
   const [errores, setErrores] = useState({})
 
-  const verCvv = () => {
-    setGirada(true)
-    // El campo está en la cara de atrás: hay que esperar al giro o el
-    // navegador enfoca algo que todavía no se ve.
-    setTimeout(() => elements?.getElement(CardCvcElement)?.focus(), 320)
-  }
-
-  const alCambiar = (campo) => (e) => {
+  const alCambiar = (campo, setListo) => (e) => {
     setErrores(x => ({ ...x, [campo]: e.error?.message || '' }))
+    if (setListo) setListo(e.complete)
     if (campo === 'numero') setMarca(e.brand && e.brand !== 'unknown' ? e.brand : '')
-    if (campo === 'caducidad' && e.complete) verCvv()
   }
 
   const pagar = async (e) => {
@@ -116,49 +189,43 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
     setEnviando(false)
   }
 
-  const fallo = Object.values(errores).find(Boolean)
-
   return (
     <form onSubmit={pagar}>
-      <div className="grid gap-7" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,320px)' }}>
-        {/* Columna izquierda: lo que sí es nuestro */}
+      <div className="grid gap-6" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,290px)' }}>
         <div className="space-y-4 order-2 md:order-1">
-          <div>
-            <label className="block text-xs mb-1.5" style={{ color: '#8aa0cc' }}>Nombre del titular</label>
-            <div className="rounded-xl px-3 py-3" style={{ background: 'rgba(4,10,30,.85)', border: '1px solid rgba(255,255,255,.1)' }}>
-              <input
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-                placeholder="Como aparece en la tarjeta"
-                className="w-full bg-transparent outline-none text-[15px]"
-                style={{ color: '#eaf2ff' }}
+          <Campo label="Número de tarjeta" error={errores.numero}>
+            <CardNumberElement
+              options={{ ...TIPO_FORM, showIcon: false, placeholder: '1234 1234 1234 1234' }}
+              onChange={alCambiar('numero', setNumeroListo)}
+            />
+          </Campo>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Campo label="Vencimiento" error={errores.caducidad}>
+              <CardExpiryElement options={{ ...TIPO_FORM, placeholder: 'MM/AA' }} onChange={alCambiar('caducidad', setCaducidadLista)} />
+            </Campo>
+            <Campo label="CVV" error={errores.cvv}>
+              <CardCvcElement
+                options={{ ...TIPO_FORM, placeholder: '123' }}
+                onChange={alCambiar('cvv')}
+                onFocus={() => setGirada(true)}
+                onBlur={() => setGirada(false)}
               />
-            </div>
+            </Campo>
           </div>
 
-          <div className="rounded-xl p-4" style={{ background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)' }}>
-            <p className="text-xs" style={{ color: '#8aa0cc' }}>Total a pagar</p>
-            <p className="text-2xl font-bold mt-0.5" style={{ color: '#eaf2ff' }}>{amountLabel}</p>
-          </div>
+          <Campo label="Nombre del titular">
+            <input
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              placeholder="Como aparece en la tarjeta"
+              className="w-full bg-transparent outline-none text-[15px]"
+              style={{ color: '#eaf2ff' }}
+            />
+          </Campo>
 
-          <ol className="space-y-2 text-xs" style={{ color: '#8aa0cc' }}>
-            {[
-              'Escribe el número sobre la tarjeta',
-              'Al completar la fecha, la tarjeta gira sola',
-              'Escribe el CVV en la banda del reverso',
-            ].map((t, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold mt-px"
-                  style={{ background: 'rgba(56,189,248,.15)', color: '#38bdf8' }}>{i + 1}</span>
-                {t}
-              </li>
-            ))}
-          </ol>
-
-          {(fallo || error) && (
-            <p className="text-xs px-3 py-2 rounded-lg" style={{ color: '#f87171', background: 'rgba(239,68,68,.08)' }}>
-              {error || fallo}
-            </p>
+          {error && (
+            <p className="text-xs px-3 py-2 rounded-lg" style={{ color: '#f87171', background: 'rgba(239,68,68,.08)' }}>{error}</p>
           )}
 
           <div className="flex gap-3 pt-1">
@@ -176,89 +243,21 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
               disabled={!stripe || enviando}
               className="flex-1 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 disabled:opacity-40 text-white text-sm font-bold py-3 rounded-xl transition-all"
             >
-              {enviando ? 'Procesando...' : 'Pagar'}
+              {enviando ? 'Procesando...' : `Pagar ${amountLabel}`}
             </button>
           </div>
         </div>
 
-        {/* Columna derecha: la tarjeta, que ES el formulario de la tarjeta */}
         <div className="order-1 md:order-2">
-          <div style={{ perspective: 1400 }}>
-            <div style={{
-              position: 'relative', width: '100%', aspectRatio: '1.586',
-              transformStyle: 'preserve-3d', transition: 'transform .6s cubic-bezier(.4,.2,.2,1)',
-              transform: girada ? 'rotateY(180deg)' : 'rotateY(0deg)',
-            }}>
-              {/* Frente */}
-              <div style={{ ...CARA, padding: 20, display: 'flex', flexDirection: 'column' }}>
-                <div className="flex items-start justify-between">
-                  <div style={{ width: 42, height: 32, borderRadius: 6, background: 'linear-gradient(135deg,#fde68a,#d97706)', opacity: .92 }} />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', letterSpacing: '.04em', opacity: marca ? 1 : 0, transition: 'opacity .25s' }}>
-                    {MARCAS[marca] || '—'}
-                  </span>
-                </div>
-
-                <div style={{ marginTop: 'auto' }}>
-                  <p style={{ ...ETIQUETA, marginBottom: 2 }}>NÚMERO</p>
-                  <CardNumberElement
-                    options={{ ...TIPO_PLASTICO(18), showIcon: false, placeholder: '•••• •••• •••• ••••' }}
-                    onChange={alCambiar('numero')}
-                  />
-
-                  <div className="flex items-end justify-between" style={{ marginTop: 14, gap: 12 }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={ETIQUETA}>TITULAR</p>
-                      <p style={{
-                        margin: '2px 0 0', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase',
-                        letterSpacing: '.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        color: nombre ? '#fff' : 'rgba(255,255,255,.3)', transition: 'color .3s',
-                      }}>
-                        {nombre || 'NOMBRE APELLIDO'}
-                      </p>
-                    </div>
-                    <div style={{ width: 78 }}>
-                      <p style={ETIQUETA}>VENCE</p>
-                      <CardExpiryElement options={{ ...TIPO_PLASTICO(13), placeholder: 'MM/AA' }} onChange={alCambiar('caducidad')} />
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button" onClick={verCvv}
-                  style={{
-                    position: 'absolute', bottom: 14, right: 18, fontSize: 10, letterSpacing: '.05em',
-                    color: 'rgba(255,255,255,.45)', background: 'none', border: 'none', cursor: 'pointer',
-                    textDecoration: 'underline', textUnderlineOffset: 3, padding: 0,
-                  }}
-                >
-                  CVV ↻
-                </button>
-              </div>
-
-              {/* Reverso */}
-              <div style={{ ...CARA, transform: 'rotateY(180deg)' }}>
-                <div style={{ height: 44, background: '#0b1020', marginTop: 20 }} />
-                <div style={{ padding: '16px 20px' }}>
-                  <p style={{ ...ETIQUETA, marginBottom: 5 }}>CVV</p>
-                  <div style={{ background: 'rgba(255,255,255,.92)', borderRadius: 5, padding: '6px 12px' }}>
-                    <CardCvcElement options={{ ...TIPO_CVV, placeholder: '•••' }} onChange={alCambiar('cvv')} />
-                  </div>
-                  <button
-                    type="button" onClick={() => setGirada(false)}
-                    style={{
-                      marginTop: 10, fontSize: 10, color: 'rgba(255,255,255,.45)', background: 'none',
-                      border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0,
-                    }}
-                  >
-                    ↺ Volver al frente
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
+          <TarjetaVisual
+            nombre={nombre}
+            marca={marca}
+            numeroListo={numeroListo}
+            caducidadLista={caducidadLista}
+            girada={girada}
+          />
           <p className="text-[11px] mt-3 text-center" style={{ color: '#64748b' }}>
-            Pago procesado por Stripe · tus datos no pasan por nuestros servidores
+            Pago procesado por Stripe
           </p>
         </div>
       </div>
