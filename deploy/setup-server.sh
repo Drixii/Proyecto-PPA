@@ -20,6 +20,11 @@ APP_USER=ppa
 APP_DIR=/opt/ppa
 REPO_URL="https://github.com/Drixii/Proyecto-PPA.git"
 
+# Dominio principal de la app. El resto siguen respondiendo por compatibilidad:
+# api. es un resto del plan viejo (frontend en Vercel) y la raiz quedo libre.
+SITE_NAME="${SITE_NAME:-cambios.ksatokio.com}"
+SITE_NAMES="${SITE_NAMES:-cambios.ksatokio.com ksatokio.com www.ksatokio.com api.ksatokio.com}"
+
 say() { echo -e "\n=== $1 ===\n"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "Ejecutar como root"; exit 1; }
@@ -105,7 +110,7 @@ if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" <<ENV
 DATABASE_URL=postgresql://ppa:$DB_PASS@localhost:5432/ppa
 SECRET_KEY=$(openssl rand -hex 32)
-FRONTEND_URL=https://proyecto-ppa.vercel.app
+FRONTEND_URL=https://$SITE_NAME
 DUFFEL_API_KEY=
 SPACES_BUCKET=
 SPACES_ENDPOINT=https://nyc3.digitaloceanspaces.com
@@ -133,11 +138,13 @@ if [ ! -f /etc/ssl/certs/ppa-origin.crt ]; then
     openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
         -keyout /etc/ssl/private/ppa-origin.key \
         -out /etc/ssl/certs/ppa-origin.crt \
-        -subj "/CN=${SITE_NAME:-api.ksatokio.com}"
+        -subj "/CN=$SITE_NAME"
 fi
 
 install -m 644 "$APP_DIR/deploy/nginx-ppa.conf" /etc/nginx/sites-available/ppa-api
-sed -i "s/NOMBRE_DEL_SITIO/${SITE_NAME:-api.ksatokio.com}/" /etc/nginx/sites-available/ppa-api
+# $SITE_NAMES lleva varios hosts separados por espacio; el CN del certificado
+# solo admite uno, por eso son dos variables distintas.
+sed -i "s/NOMBRE_DEL_SITIO/$SITE_NAMES/" /etc/nginx/sites-available/ppa-api
 ufw allow 443/tcp > /dev/null 2>&1 || true
 ln -sf /etc/nginx/sites-available/ppa-api /etc/nginx/sites-enabled/ppa-api
 rm -f /etc/nginx/sites-enabled/default
@@ -181,23 +188,21 @@ cat <<FIN
   LISTO. Pasos manuales que faltan:
 ========================================================
 
-1. Apunta tu dominio: registro A  api.TUDOMINIO.com -> $(curl -s -m 5 ifconfig.me || echo IP_DEL_DROPLET)
+1. En el editor de zona DNS de HostGator, registro A:
+   $SITE_NAME -> $(curl -s -m 5 ifconfig.me || echo IP_DEL_DROPLET)
+   (tarda hasta ~1 h en sincronizar hacia Cloudflare)
 
-2. Pon tu dominio real en nginx:
-   sed -i 's/api.TUDOMINIO.com/api.TUDOMINIO.com/' /etc/nginx/sites-available/ppa-api
-   nginx -t && systemctl reload nginx
+2. HTTPS ya funciona con el certificado autofirmado de arriba: el dominio va
+   tras el proxy de Cloudflare en modo "Full", que cifra al origen sin exigir
+   una CA. NO ejecutar certbot: el registro es proxied y la validacion HTTP-01
+   no llega hasta aqui.
 
-3. Certificado HTTPS (solo cuando el DNS ya resuelva):
-   certbot --nginx -d api.TUDOMINIO.com
-
-4. Rellena las claves que faltan:
+3. Rellena las claves que faltan:
    nano /opt/ppa/backend/.env
    systemctl restart ppa-api
 
-5. Crea el admin inicial:
+4. Crea el admin inicial:
    cd /opt/ppa/backend && sudo -u ppa venv/bin/python seed_admin.py
-
-6. En Vercel, cambia VITE_API_URL a https://api.TUDOMINIO.com y redespliega.
 
 Comprobar estado:  systemctl status ppa-api
 Ver logs:          journalctl -u ppa-api -f
