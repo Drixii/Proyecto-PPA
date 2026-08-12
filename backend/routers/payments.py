@@ -24,6 +24,12 @@ from services.order_service import find_sub_admin_for_country
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
+# Los errores de Stripe se devuelven como 400, no como 502/503. El sitio está
+# detrás de Cloudflare, que reemplaza cualquier 5xx del origen por su propia
+# pantalla ("The origin web server returned an invalid or incomplete
+# response"): el admin veía un error de infraestructura en vez del motivo
+# real, que era una casilla sin rellenar en su panel de Stripe.
+
 
 @router.get("/config", response_model=dict)
 def payment_config():
@@ -61,9 +67,9 @@ def create_intent(
     try:
         result = stripe_service.create_payment_intent(order, db)
     except stripe_service.StripeNotConfigured as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Stripe rechazó la operación: {e}")
+        raise HTTPException(status_code=400, detail=f"Stripe rechazó la operación: {e}")
 
     order.payment_intent_id = result["payment_intent_id"]
     db.commit()
@@ -227,7 +233,7 @@ def start_onboarding(
 ):
     """Devuelve la URL del formulario de alta de Stripe."""
     if not stripe_service.is_configured():
-        raise HTTPException(status_code=503, detail="Falta configurar Stripe en el servidor")
+        raise HTTPException(status_code=400, detail="Falta configurar las claves de Stripe")
 
     acc = db.query(StripeAccount).filter(StripeAccount.super_admin_id == admin.id).first()
     try:
@@ -245,9 +251,9 @@ def start_onboarding(
             refresh_url=f"{base}/admin/settings",
         )
     except stripe_service.StripeNotConfigured as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Stripe rechazó la operación: {e}")
+        raise HTTPException(status_code=400, detail=f"Stripe rechazó la operación: {e}")
 
     return {"success": True, "data": {"url": url}, "message": ""}
 
@@ -264,7 +270,7 @@ def stripe_dashboard_link(
     try:
         return {"success": True, "data": {"url": stripe_service.login_link(acc.account_id)}, "message": ""}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Stripe rechazó la operación: {e}")
+        raise HTTPException(status_code=400, detail=f"Stripe rechazó la operación: {e}")
 
 
 def _mark_paid(payment_intent_id: str, order_id: int | None):
@@ -324,7 +330,7 @@ async def stripe_webhook(request: Request):
     try:
         event = stripe_service.verify_webhook(payload, signature)
     except stripe_service.StripeNotConfigured as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception:
         # Firma inválida: o es un intento de marcar órdenes como pagadas a
         # mano, o el secreto del .env no coincide con el del panel de Stripe.
