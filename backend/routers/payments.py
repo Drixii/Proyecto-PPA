@@ -5,6 +5,7 @@ puede editar la respuesta de JavaScript, cerrar la pestaña a mitad o abrir la
 URL de éxito a mano. La única señal que mueve una orden a en_proceso es el
 webhook firmado que manda Stripe.
 """
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,7 +15,8 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
 from models.order import Order
 from models.user import User
-from auth.dependencies import get_current_user
+from models.stripe_account import StripeAccount
+from auth.dependencies import get_current_user, require_super_admin
 from services import stripe_service
 from services.order_service import find_sub_admin_for_country
 
@@ -69,9 +71,104 @@ def create_intent(
         "data": {
             "client_secret": result["client_secret"],
             "publishable_key": stripe_service.publishable_key(),
+            # Si la orden se cobra en la cuenta de un admin, Stripe.js tiene
+            # que inicializarse apuntando a esa cuenta o el client_secret no
+            # se puede confirmar.
+            "connected_account_id": result.get("connected_account_id"),
         },
         "message": "",
     }
+
+
+# ── Stripe Connect: cada super-admin conecta su cuenta ────────────────────────
+
+def _account_state(acc) -> dict:
+    if not acc:
+        return {"connected": False, "charges_enabled": False, "details_submitted": False, "account_id": None}
+    return {
+        "connected": True,
+        "charges_enabled": acc.charges_enabled,
+        "details_submitted": acc.details_submitted,
+        "account_id": acc.account_id,
+    }
+
+
+@router.get("/stripe/account", response_model=dict)
+def my_stripe_account(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Estado de la cuenta conectada del admin que pregunta.
+
+    Refresca contra Stripe: el admin puede haber terminado su verificación
+    hace un minuto en otra pestaña, y hasta entonces `charges_enabled` sigue
+    en false aquí y sus clientes cobrarían en la cuenta de la plataforma.
+    """
+    acc = db.query(StripeAccount).filter(StripeAccount.super_admin_id == admin.id).first()
+    if acc and stripe_service.is_configured():
+        try:
+            estado = stripe_service.fetch_account_status(acc.account_id)
+            acc.charges_enabled = estado["charges_enabled"]
+            acc.details_submitted = estado["details_submitted"]
+            db.commit()
+        except Exception as e:
+            print(f"[stripe] no se pudo refrescar {acc.account_id}: {e}")
+
+    return {
+        "success": True,
+        "data": {
+            **_account_state(acc),
+            "platform_configured": stripe_service.is_configured(),
+        },
+        "message": "",
+    }
+
+
+@router.post("/stripe/account/onboard", response_model=dict)
+def start_onboarding(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Devuelve la URL del formulario de alta de Stripe."""
+    if not stripe_service.is_configured():
+        raise HTTPException(status_code=503, detail="Falta configurar Stripe en el servidor")
+
+    acc = db.query(StripeAccount).filter(StripeAccount.super_admin_id == admin.id).first()
+    try:
+        if not acc:
+            account_id = stripe_service.create_connected_account(admin.email)
+            acc = StripeAccount(super_admin_id=admin.id, account_id=account_id)
+            db.add(acc)
+            db.commit()
+            db.refresh(acc)
+
+        base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+        url = stripe_service.onboarding_link(
+            acc.account_id,
+            return_url=f"{base}/admin/settings",
+            refresh_url=f"{base}/admin/settings",
+        )
+    except stripe_service.StripeNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Stripe rechazó la operación: {e}")
+
+    return {"success": True, "data": {"url": url}, "message": ""}
+
+
+@router.get("/stripe/account/dashboard", response_model=dict)
+def stripe_dashboard_link(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Enlace al panel de Stripe del propio admin, para ver sus cobros."""
+    acc = db.query(StripeAccount).filter(StripeAccount.super_admin_id == admin.id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="No tienes cuenta conectada")
+    try:
+        return {"success": True, "data": {"url": stripe_service.login_link(acc.account_id)}, "message": ""}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Stripe rechazó la operación: {e}")
 
 
 def _mark_paid(payment_intent_id: str, order_id: int | None):

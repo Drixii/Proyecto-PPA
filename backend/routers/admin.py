@@ -1085,30 +1085,40 @@ def set_commission_rule(
     if data.commission_pct < 0 or data.commission_pct > 100:
         raise HTTPException(400, "Comisión debe estar entre 0 y 100")
 
-    def _upsert(sa_id):
+    def _upsert(to_currency: str):
         rule = db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id == sa_id,
+            CommissionRule.super_admin_id == admin.id,
             CommissionRule.from_currency == data.from_currency,
-            CommissionRule.to_currency == data.to_currency,
+            CommissionRule.to_currency == to_currency,
         ).first()
         if rule:
             rule.commission_pct = data.commission_pct
             rule.updated_at = datetime.utcnow()
         else:
             db.add(CommissionRule(
-                super_admin_id=sa_id,
+                super_admin_id=admin.id,
                 from_currency=data.from_currency,
-                to_currency=data.to_currency,
+                to_currency=to_currency,
                 commission_pct=data.commission_pct,
             ))
 
     if data.apply_to_all:
-        _upsert(None)
-        all_admins = db.query(User).filter(User.role == "admin", User.is_active == True, User.deleted_at == None).all()
-        for a in all_admins:
-            _upsert(a.id)
+        # "Aplicar a todos" = el mismo % para TODOS LOS DESTINOS de esta
+        # moneda de origen, solo para quien lo pulsa.
+        #
+        # Antes significaba otra cosa: escribía una regla global y una por
+        # cada super-admin del sistema, así que un admin cambiaba en silencio
+        # los precios de los demás. Con un solo admin no se notaba; con dos es
+        # justo lo contrario del aislamiento que tiene el resto del panel.
+        destinos = [
+            c.currency for c in db.query(Country).filter(
+                Country.active == True, Country.can_receive == True
+            ).all()
+        ]
+        for to_cur in {d for d in destinos if d != data.from_currency}:
+            _upsert(to_cur)
     else:
-        _upsert(admin.id)
+        _upsert(data.to_currency)
 
     db.commit()
     return {"success": True, "data": {}, "message": "Comisión guardada"}

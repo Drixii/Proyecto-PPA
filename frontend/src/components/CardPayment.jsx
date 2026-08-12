@@ -9,9 +9,15 @@ const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(25
 // loadStripe se cachea por clave: montar el formulario dos veces no debe
 // descargar el SDK dos veces.
 const stripeCache = {}
-function stripeFor(key) {
-  if (!stripeCache[key]) stripeCache[key] = loadStripe(key)
-  return stripeCache[key]
+function stripeFor(key, account) {
+  // La clave de caché incluye la cuenta: el mismo publishable key apunta a
+  // cuentas conectadas distintas según de quién sea la orden, y reutilizar la
+  // instancia equivocada hace que el client_secret no se pueda confirmar.
+  const ck = `${key}::${account || 'plataforma'}`
+  if (!stripeCache[ck]) {
+    stripeCache[ck] = account ? loadStripe(key, { stripeAccount: account }) : loadStripe(key)
+  }
+  return stripeCache[ck]
 }
 
 function PayForm({ amountLabel, onSuccess, onClose }) {
@@ -84,6 +90,7 @@ function PayForm({ amountLabel, onSuccess, onClose }) {
 export default function CardPayment({ orderId, amountLabel, onSuccess, onClose }) {
   const [clientSecret, setClientSecret] = useState('')
   const [pubKey, setPubKey] = useState('')
+  const [account, setAccount] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -93,6 +100,7 @@ export default function CardPayment({ orderId, amountLabel, onSuccess, onClose }
         if (cancelled) return
         setClientSecret(r.data.data.client_secret)
         setPubKey(r.data.data.publishable_key)
+        setAccount(r.data.data.connected_account_id || null)
       })
       .catch(err => {
         if (!cancelled) setError(err.response?.data?.detail || 'No se pudo iniciar el pago')
@@ -100,7 +108,7 @@ export default function CardPayment({ orderId, amountLabel, onSuccess, onClose }
     return () => { cancelled = true }
   }, [orderId])
 
-  const stripePromise = useMemo(() => (pubKey ? stripeFor(pubKey) : null), [pubKey])
+  const stripePromise = useMemo(() => (pubKey ? stripeFor(pubKey, account) : null), [pubKey, account])
 
   return (
     <Portal>

@@ -293,7 +293,10 @@ function CommissionMatrix({ data, onSaved }) {
           </div>
         <div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Comisiones por ruta</h3>
-          <p style={{ margin: 0, fontSize: 12, color: '#8aa0cc' }}>Selecciona moneda origen y configura cada destino</p>
+          <p style={{ margin: 0, fontSize: 12, color: '#8aa0cc' }}>
+            Selecciona moneda origen y configura cada destino. El interruptor «a todos los destinos»
+            no guarda por sí solo: marca el %, actívalo y pulsa Guardar en esa fila.
+          </p>
         </div>
       </div>
 
@@ -350,7 +353,7 @@ function CommissionMatrix({ data, onSaved }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'rgba(4,10,30,.6)' }}>
-              {['Destino', 'Comisión actual', 'Nueva %', 'Aplicar a todos', 'Acciones'].map(h => (
+              {['Destino', 'Comisión actual', 'Nueva %', 'A todos los destinos', 'Acciones'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 600, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -396,7 +399,11 @@ function CommissionMatrix({ data, onSaved }) {
                           background: applyAll[key] ? 'rgba(129,140,248,.5)' : 'rgba(255,255,255,.12)', transition: 'background .2s' }}>
                         <span style={{ position: 'absolute', top: 2, left: applyAll[key] ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
                       </button>
-                      {applyAll[key] && <span style={{ fontSize: 10, color: '#a78bfa' }}>Todos</span>}
+                      {applyAll[key] && (
+                        <span style={{ fontSize: 10, color: '#a78bfa' }} title={`Al guardar, este % se aplica a todos los destinos desde ${fromCur}`}>
+                          Todos
+                        </span>
+                      )}
                     </div>
                   </td>
                   {/* Actions */}
@@ -481,54 +488,126 @@ function SectionCard({ icon, title, desc, onClick }) {
 }
 
 function PaymentIntegrations() {
-  const { data: cfg, isLoading } = useQuery({
-    queryKey: ['payments-config'],
-    queryFn: () => api.get('/payments/config').then(r => r.data.data),
+  const qc = useQueryClient()
+  const [error, setError] = useState('')
+  const [yendo, setYendo] = useState(false)
+
+  const { data: cuenta, isLoading } = useQuery({
+    queryKey: ['stripe-account'],
+    queryFn: () => api.get('/payments/stripe/account').then(r => r.data.data),
+    // Se refresca al volver del formulario de Stripe: el admin regresa a esta
+    // misma pantalla y el estado tiene que estar al día.
+    refetchOnWindowFocus: true,
   })
 
-  const activo = !!cfg?.enabled
+  const irA = async (path) => {
+    setYendo(true); setError('')
+    try {
+      const r = path === 'onboard'
+        ? await api.post('/payments/stripe/account/onboard')
+        : await api.get('/payments/stripe/account/dashboard')
+      window.location.href = r.data.data.url
+    } catch (e) {
+      setError(e.response?.data?.detail || 'No se pudo conectar con Stripe')
+      setYendo(false)
+    }
+  }
+
+  if (isLoading) return <div style={{ ...GLASS, height: 180 }} />
+
+  const plataformaLista = !!cuenta?.platform_configured
+  const conectada = !!cuenta?.connected
+  const cobrando = !!cuenta?.charges_enabled
+
+  const estado = !conectada ? { txt: 'Sin conectar', color: '#fcd34d', bg: 'rgba(251,191,36,.12)' }
+    : cobrando ? { txt: 'Cobrando', color: '#4ade80', bg: 'rgba(74,222,128,.12)' }
+    : { txt: 'Verificación pendiente', color: '#fb923c', bg: 'rgba(251,146,60,.12)' }
 
   return (
-    <div style={{ ...GLASS, padding: '20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+    <div style={{ ...GLASS, padding: '22px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Stripe</h3>
-        {!isLoading && (
-          <span style={{
-            fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-            background: activo ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
-            color: activo ? '#4ade80' : '#fcd34d',
-          }}>
-            {activo ? 'Activo' : 'Sin configurar'}
-          </span>
-        )}
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: estado.bg, color: estado.color }}>
+          {estado.txt}
+        </span>
       </div>
 
-      {activo ? (
-        <p style={{ margin: 0, fontSize: 13, color: '#aebfe2', lineHeight: 1.6 }}>
-          El pago con tarjeta está disponible para los clientes. Una orden solo pasa a
-          <strong> En Proceso</strong> cuando Stripe confirma el cobro por webhook — nunca desde el navegador.
-        </p>
-      ) : (
-        <div style={{ fontSize: 13, color: '#aebfe2', lineHeight: 1.7 }}>
-          <p style={{ margin: '0 0 10px' }}>
-            La opción de pagar con tarjeta está <strong>oculta</strong> para los clientes hasta que se
-            configuren las claves, para que nadie elija un método que no puede completar.
+      <p style={{ margin: '0 0 18px', fontSize: 13, color: '#8aa0cc', lineHeight: 1.6 }}>
+        Conecta tu cuenta y el dinero de <strong>tus</strong> clientes entra directamente en ella.
+        No compartes claves con nadie: te das de alta en el formulario de Stripe.
+      </p>
+
+      {!plataformaLista && (
+        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.2)', marginBottom: 16 }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#fcd34d', lineHeight: 1.6 }}>
+            Falta configurar Stripe en el servidor (<code>STRIPE_SECRET_KEY</code> en el .env).
+            Hasta entonces no se puede conectar ninguna cuenta y el pago con tarjeta está oculto
+            para los clientes.
           </p>
-          <p style={{ margin: '0 0 8px', color: '#8aa0cc' }}>
-            Las claves se añaden en el servidor, en <code style={{ color: '#38bdf8' }}>/opt/ppa/backend/.env</code>:
-          </p>
-          <pre style={{
-            margin: 0, padding: '10px 12px', borderRadius: 10, fontSize: 12,
-            background: 'rgba(4,10,30,.7)', color: '#8aa0cc', overflowX: 'auto',
-          }}>{`STRIPE_SECRET_KEY=sk_...
-STRIPE_PUBLISHABLE_KEY=pk_...
-STRIPE_WEBHOOK_SECRET=whsec_...`}</pre>
         </div>
       )}
 
+      {conectada && !cobrando && (
+        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(251,146,60,.08)', border: '1px solid rgba(251,146,60,.2)', marginBottom: 16 }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#fb923c', lineHeight: 1.6 }}>
+            Stripe todavía no te deja cobrar: falta completar la verificación.
+            Mientras tanto, los pagos de tus clientes entran en la cuenta de la plataforma.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <p style={{ margin: '0 0 14px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>
+          {error}
+        </p>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => irA('onboard')}
+          disabled={!plataformaLista || yendo}
+          style={{
+            fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 10,
+            border: 'none', color: '#fff', cursor: plataformaLista ? 'pointer' : 'not-allowed',
+            background: 'linear-gradient(135deg,#635bff,#4b45c6)', opacity: plataformaLista ? 1 : .4,
+          }}
+        >
+          {yendo ? 'Abriendo Stripe...' : conectada ? (cobrando ? 'Actualizar datos' : 'Continuar verificación') : 'Conectar con Stripe'}
+        </button>
+
+        {conectada && (
+          <button
+            onClick={() => irA('dashboard')}
+            disabled={yendo}
+            style={{
+              fontSize: 13, fontWeight: 600, padding: '10px 18px', borderRadius: 10, cursor: 'pointer',
+              background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', color: '#aebfe2',
+            }}
+          >
+            Ver mis cobros en Stripe
+          </button>
+        )}
+
+        <button
+          onClick={() => qc.invalidateQueries({ queryKey: ['stripe-account'] })}
+          style={{
+            fontSize: 13, fontWeight: 600, padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+            background: 'transparent', border: '1px solid rgba(255,255,255,.1)', color: '#8aa0cc',
+          }}
+        >
+          Actualizar estado
+        </button>
+      </div>
+
+      {conectada && (
+        <p style={{ margin: '14px 0 0', fontSize: 11.5, color: '#475569', fontFamily: 'monospace' }}>
+          {cuenta.account_id}
+        </p>
+      )}
+
       <p style={{ margin: '16px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
-        Hoy todos los cobros van a una sola cuenta. Más adelante, cada super-admin podrá conectar
-        la suya y recibir directamente el dinero de sus clientes.
+        Una orden solo pasa a <strong>En Proceso</strong> cuando Stripe confirma el cobro por webhook.
+        Nunca desde el navegador.
       </p>
     </div>
   )
