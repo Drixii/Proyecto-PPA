@@ -33,6 +33,7 @@ def _run_migrations():
         "ALTER TABLE users ADD COLUMN super_admin_id INTEGER",
         "ALTER TABLE users ADD COLUMN invite_code_used VARCHAR",
         "ALTER TABLE orders ADD COLUMN super_admin_id INTEGER",
+        "ALTER TABLE orders ADD COLUMN rejection_reason VARCHAR",
         """CREATE TABLE IF NOT EXISTS commission_rules (
             id SERIAL PRIMARY KEY,
             super_admin_id INTEGER,

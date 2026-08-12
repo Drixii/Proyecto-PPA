@@ -39,6 +39,13 @@ email = os.environ.get("ADMIN_EMAIL") or input("Email del admin: ").strip()
 if not email or "@" not in email:
     sys.exit("Email no válido.")
 
+# Se pregunta el nombre en vez de dejarlo en ADMIN_NAME con "Admin" por
+# defecto: es lo que ven los sub-admins en su panel ("Cliente de X"), y al no
+# pedirlo se creó un admin llamado literalmente "Nombre Apellido".
+full_name = os.environ.get("ADMIN_NAME") or input("Nombre del admin (lo verán los sub-admins): ").strip()
+if not full_name:
+    sys.exit("El nombre no puede quedar vacío.")
+
 db = SessionLocal()
 if db.query(User).filter(User.email == email).first():
     db.close()
@@ -61,7 +68,7 @@ if password.lower() in BLOCKED:
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 db.add(User(
     email=email,
-    full_name=os.environ.get("ADMIN_NAME", "Admin"),
+    full_name=full_name,
     password=pwd.hash(password),
     role="admin",
     is_active=True,

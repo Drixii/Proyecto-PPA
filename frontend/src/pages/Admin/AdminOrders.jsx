@@ -19,6 +19,7 @@ const STATUS_DOT = {
   en_aprobacion: 'bg-orange-400',
   en_proceso: 'bg-blue-500',
   completado: 'bg-green-500',
+  rechazado: 'bg-red-500',
 }
 
 const STATUSES_DEFAULT = [
@@ -26,13 +27,9 @@ const STATUSES_DEFAULT = [
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400' },
   { key: 'en_proceso', label: 'En Proceso', dot: 'bg-blue-500' },
   { key: 'completado', label: 'Completado', dot: 'bg-green-500' },
+  { key: 'rechazado', label: 'Rechazado', dot: 'bg-red-500' },
 ]
-const STATUSES_ALL = [
-  { key: '', label: 'Todos' },
-  { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400' },
-  { key: 'en_proceso', label: 'En Proceso', dot: 'bg-blue-500' },
-  { key: 'completado', label: 'Completado', dot: 'bg-green-500' },
-]
+const STATUSES_ALL = STATUSES_DEFAULT
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 

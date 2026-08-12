@@ -134,15 +134,22 @@ def upload_proof(
         f.write(content)
 
     order.payment_proof = filename
-    # Status stays en_aprobacion — admin will approve and move to en_proceso
+    # Si venía rechazada, este comprobante nuevo la devuelve a la cola del
+    # admin: por eso rechazar no cierra la orden, deja reintentar.
+    was_rejected = order.status == "rechazado"
+    if was_rejected:
+        order.status = "en_aprobacion"
+        order.rejection_reason = None
+    # Si no, se queda en en_aprobacion — el admin aprueba y pasa a en_proceso
     db.commit()
     db.refresh(order)
 
     try:
-        from services.notification_service import notify_admins
-        notify_admins(
-            db, order.id, "proof_uploaded",
-            title=f"Comprobante subido: {order.order_number}",
+        from services.notification_service import notify_owning_admin
+        notify_owning_admin(
+            db, order, "proof_uploaded",
+            title=("Comprobante reenviado" if was_rejected else "Comprobante subido")
+                  + f": {order.order_number}",
             body=f"{order.sender_name} · {order.receiver_country}",
         )
     except Exception as e:

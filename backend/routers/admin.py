@@ -65,6 +65,23 @@ def _sub_admin_countries(db: Session, user_id: int) -> list:
     return [r.country for r in rows]
 
 
+def _own_order_or_404(db: Session, order_id: int, admin: User) -> Order:
+    """Orden del admin que pregunta, o 404.
+
+    La lista ya filtra por super_admin_id, así que un admin no ve las órdenes
+    del otro — pero eso es solo la pantalla. Estos endpoints buscaban la orden
+    por id a secas, de modo que con el id a mano un super-admin podía aprobar
+    o mover la orden de otro. 404 y no 403: si no es suya, para él no existe.
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.super_admin_id == admin.id,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    return order
+
+
 # ── Orders ────────────────────────────────────────────────
 
 @router.get("/orders", response_model=dict)
@@ -236,9 +253,7 @@ def get_order_admin(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    order = _own_order_or_404(db, order_id, _admin)
     data = _order_with_bank(order, db)
     txn = db.query(PointTransaction).filter(
         PointTransaction.order_id == order.id,
@@ -279,9 +294,7 @@ def update_status(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    order = _own_order_or_404(db, order_id, _admin)
     try:
         order = advance_order_status(db, order, data.status)
     except ValueError as e:
@@ -302,9 +315,7 @@ def approve_order(
 ):
     if data.confirmation != "COMPROBADO":
         raise HTTPException(status_code=400, detail="Debes escribir COMPROBADO exactamente para confirmar")
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    order = _own_order_or_404(db, order_id, _admin)
     if order.status != "en_aprobacion":
         raise HTTPException(status_code=400, detail="La orden no está pendiente de aprobación")
     if not order.payment_proof:
@@ -335,6 +346,53 @@ def approve_order(
         "success": True,
         "data": data_out,
         "message": "Comprobante aprobado — orden derivada al encargado del país"
+    }
+
+
+class RejectBody(BaseModel):
+    reason: str
+
+
+@router.post("/orders/{order_id}/reject", response_model=dict)
+def reject_order(
+    order_id: int,
+    data: RejectBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Rechaza el comprobante. No cierra la orden: el cliente puede subir otro.
+
+    El caso normal es un comprobante ilegible o con un monto que no cuadra, no
+    un fraude. Al subir uno nuevo (routers/orders.py) la orden vuelve sola a
+    en_aprobacion y reaparece en el panel.
+    """
+    reason = (data.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Escribe el motivo del rechazo")
+
+    order = _own_order_or_404(db, order_id, _admin)
+    if order.status != "en_aprobacion":
+        raise HTTPException(status_code=400, detail="La orden no está pendiente de aprobación")
+
+    order.status = "rechazado"
+    order.rejection_reason = reason
+    db.commit()
+    db.refresh(order)
+
+    try:
+        from services.notification_service import notify
+        notify(
+            db, order.client_id, order.id, "status_change",
+            title=f"Comprobante rechazado: {order.order_number}",
+            body=f"{reason} · Sube un comprobante nuevo para reintentar",
+        )
+    except Exception as e:
+        print(f"[notify reject] {e}")
+
+    return {
+        "success": True,
+        "data": _order_with_bank(order, db),
+        "message": "Comprobante rechazado — el cliente puede subir otro",
     }
 
 

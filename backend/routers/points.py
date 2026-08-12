@@ -172,12 +172,29 @@ def update_points_config(body: PointsConfigUpdate, db: Session = Depends(get_db)
     return {"data": {"ok": True}}
 
 
+def _own_client_or_404(db: Session, user_id: int, admin: User) -> User:
+    """Cliente del admin que pregunta, o 404.
+
+    Este router no miraba super_admin_id en ningún sitio: un super-admin veía
+    los puntos de los clientes del otro y podía otorgarles puntos. El resto de
+    paneles (órdenes, usuarios) ya filtraban; este se había quedado fuera.
+    """
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.role == "client",
+        User.super_admin_id == admin.id,
+    ).first()
+    if not user:
+        raise HTTPException(404, "Usuario no encontrado")
+    return user
+
+
 @router.get("/admin/points")
-def get_all_points(db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
+def get_all_points(db: Session = Depends(get_db), admin: User = Depends(require_super_admin)):
     clp_rate = float(_setting(db, "points_clp_rate"))
     rows = (db.query(PointAccount, User)
             .join(User, User.id == PointAccount.user_id)
-            .filter(User.role == "client")
+            .filter(User.role == "client", User.super_admin_id == admin.id)
             .order_by(PointAccount.total_points.desc()).all())
 
     account_ids = [acc.id for acc, _ in rows]
@@ -214,11 +231,40 @@ def get_all_points(db: Session = Depends(get_db), _: User = Depends(require_supe
     }}
 
 
+# OJO con el orden: estas dos rutas van ANTES que /admin/points/{user_id}.
+# FastAPI resuelve por orden de registro, así que con {user_id} declarada
+# primero la palabra "redemptions" se intentaba leer como número y la pestaña
+# de Canjes respondía 422 en vez de listar nada.
+@router.get("/admin/points/redemptions")
+def get_all_redemptions(db: Session = Depends(get_db), admin: User = Depends(require_super_admin)):
+    items = (db.query(PointRedemption, User)
+             .join(User, User.id == PointRedemption.user_id)
+             .filter(User.role == "client", User.super_admin_id == admin.id)
+             .order_by(PointRedemption.created_at.desc()).all())
+    return {"data": [
+        {**_redemption_to_dict(r), "user_name": u.full_name, "user_email": u.email}
+        for r, u in items
+    ]}
+
+
+@router.post("/admin/points/redemptions/{redemption_id}/use")
+def mark_redemption_used(redemption_id: int, db: Session = Depends(get_db), admin: User = Depends(require_super_admin)):
+    r = (db.query(PointRedemption)
+         .join(User, User.id == PointRedemption.user_id)
+         .filter(
+             PointRedemption.id == redemption_id,
+             User.super_admin_id == admin.id,
+         ).first())
+    if not r:
+        raise HTTPException(404, "Canje no encontrado")
+    r.status = "used"
+    db.commit()
+    return {"data": {"ok": True}}
+
+
 @router.get("/admin/points/{user_id}")
-def get_user_points(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(404, "Usuario no encontrado")
+def get_user_points(user_id: int, db: Session = Depends(get_db), admin: User = Depends(require_super_admin)):
+    user = _own_client_or_404(db, user_id, admin)
     acc = _get_or_create_account(db, user_id)
     clp_rate = float(_setting(db, "points_clp_rate"))
     txns = (db.query(PointTransaction)
@@ -232,10 +278,8 @@ def get_user_points(user_id: int, db: Session = Depends(get_db), _: User = Depen
 
 
 @router.post("/admin/points/{user_id}/award")
-def award_points_manual(user_id: int, body: ManualAwardRequest, db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(404, "Usuario no encontrado")
+def award_points_manual(user_id: int, body: ManualAwardRequest, db: Session = Depends(get_db), admin: User = Depends(require_super_admin)):
+    _own_client_or_404(db, user_id, admin)
     acc = _get_or_create_account(db, user_id)
     acc.total_points += body.points
     db.add(PointTransaction(
@@ -319,22 +363,3 @@ def delete_reward(reward_id: int, db: Session = Depends(get_db), _: User = Depen
     return {"data": {"ok": True}}
 
 
-@router.get("/admin/points/redemptions")
-def get_all_redemptions(db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
-    items = (db.query(PointRedemption, User)
-             .join(User, User.id == PointRedemption.user_id)
-             .order_by(PointRedemption.created_at.desc()).all())
-    return {"data": [
-        {**_redemption_to_dict(r), "user_name": u.full_name, "user_email": u.email}
-        for r, u in items
-    ]}
-
-
-@router.post("/admin/points/redemptions/{redemption_id}/use")
-def mark_redemption_used(redemption_id: int, db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
-    r = db.query(PointRedemption).filter(PointRedemption.id == redemption_id).first()
-    if not r:
-        raise HTTPException(404, "Canje no encontrado")
-    r.status = "used"
-    db.commit()
-    return {"data": {"ok": True}}

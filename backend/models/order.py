@@ -35,8 +35,10 @@ class Order(Base):
     amount_received = Column(Float, nullable=False)
     fee = Column(Float, default=0)
 
-    # Estado: en_aprobacion | en_proceso | completado
+    # Estado: en_aprobacion | en_proceso | completado | rechazado
+    # rechazado no es final: al subir un comprobante nuevo vuelve a en_aprobacion
     status = Column(String, default="en_aprobacion", index=True)
+    rejection_reason = Column(String, nullable=True)
 
     # Sub-admin asignado (se asigna al aprobar o al crear con tarjeta)
     sub_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)

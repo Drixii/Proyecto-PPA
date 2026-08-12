@@ -2,12 +2,14 @@ const COLORS = {
   en_aprobacion: 'bg-orange-100 text-orange-800',
   en_proceso: 'bg-blue-100 text-blue-800',
   completado: 'bg-green-100 text-green-800',
+  rechazado: 'bg-red-100 text-red-800',
 }
 
 const LABELS = {
   en_aprobacion: 'En Aprobación',
   en_proceso: 'En Proceso',
   completado: 'Completado',
+  rechazado: 'Rechazado',
 }
 
 export default function StatusBadge({ status }) {

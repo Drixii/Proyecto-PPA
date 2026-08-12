@@ -50,6 +50,7 @@ class OrderOut(BaseModel):
     amount_received: float
     fee: float
     status: str
+    rejection_reason: Optional[str] = None
     sub_admin_id: Optional[int]
     super_admin_id: Optional[int] = None
     payment_method: Optional[str]

@@ -51,6 +51,9 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
   const [confirmText, setConfirmText] = useState('')
   const [confirmError, setConfirmError] = useState('')
   const [showApprovePopup, setShowApprovePopup] = useState(false)
+  const [showRejectPopup, setShowRejectPopup] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectError, setRejectError] = useState('')
   const qc = useQueryClient()
 
   const { data: order = initialOrder, isFetching } = useQuery({
@@ -77,6 +80,22 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
     },
   })
 
+  const rejectMutation = useMutation({
+    mutationFn: () => api.post(`/admin/orders/${order.id}/reject`, { reason: rejectReason.trim() }),
+    onSuccess: () => {
+      setShowRejectPopup(false)
+      setRejectReason('')
+      setRejectError('')
+      qc.invalidateQueries({ queryKey: ['admin-order', order.id] })
+      qc.invalidateQueries({ queryKey: ['pipeline-orders'] })
+      qc.invalidateQueries({ queryKey: ['admin-stats'] })
+      qc.invalidateQueries({ queryKey: ['admin-orders-filtered'] })
+    },
+    onError: (err) => {
+      setRejectError(err.response?.data?.detail || 'Error al rechazar')
+    },
+  })
+
   if (!order) return null
 
   const apiBase = import.meta.env.VITE_API_URL || ''
@@ -92,17 +111,35 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
       <div className="px-6 py-3 border-b flex items-center justify-between shrink-0" style={{background:'rgba(6,13,40,.7)', borderColor:'rgba(255,255,255,.08)'}}>
         <StatusBadge status={order.status} />
         {isApprovalPending && proofUrl && (
-          <button
-            onClick={() => setShowApprovePopup(true)}
-            className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition-all"
-          >
-            APROBAR
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowRejectPopup(true)}
+              className="text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors"
+              style={{ color:'#f87171', background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.25)' }}
+            >
+              RECHAZAR
+            </button>
+            <button
+              onClick={() => setShowApprovePopup(true)}
+              className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition-all"
+            >
+              APROBAR
+            </button>
+          </div>
         )}
         {isApprovalPending && !proofUrl && (
           <span className="text-xs text-orange-500 font-medium">Esperando comprobante</span>
         )}
+        {order.status === 'rechazado' && (
+          <span className="text-xs font-medium" style={{color:'#f87171'}}>Esperando comprobante nuevo</span>
+        )}
       </div>
+
+      {order.status === 'rechazado' && order.rejection_reason && (
+        <div className="px-6 py-3 text-sm shrink-0" style={{background:'rgba(239,68,68,.08)', borderBottom:'1px solid rgba(239,68,68,.2)', color:'#fca5a5'}}>
+          <strong>Rechazado:</strong> {order.rejection_reason}
+        </div>
+      )}
 
       {/* Progress */}
       <div className="px-6 py-4 border-b shrink-0" style={{background:'rgba(6,13,40,.7)', borderColor:'rgba(255,255,255,.08)'}}>
@@ -218,12 +255,21 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
                   )}
                 </div>
                 {isApprovalPending && (
-                  <button
-                    onClick={() => setShowApprovePopup(true)}
-                    className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white font-bold py-3 rounded-xl transition-all"
-                  >
-                    APROBAR comprobante →
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowRejectPopup(true)}
+                      className="font-bold py-3 px-5 rounded-xl transition-colors"
+                      style={{ color:'#f87171', background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.25)' }}
+                    >
+                      Rechazar
+                    </button>
+                    <button
+                      onClick={() => setShowApprovePopup(true)}
+                      className="flex-1 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white font-bold py-3 rounded-xl transition-all"
+                    >
+                      APROBAR comprobante →
+                    </button>
+                  </div>
                 )}
               </>
             ) : (
@@ -371,6 +417,57 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
           </div>
         </Portal>
       )}
+
+      {showRejectPopup && (
+        <Portal>
+          <div className="fixed inset-0 z-[700] flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.7)'}}>
+            <div className="w-full max-w-md rounded-2xl p-6" style={{...GLASS, background:'rgba(8,16,44,.97)'}}>
+              <h3 className="font-bold mb-1" style={{color:'#eaf2ff'}}>Rechazar comprobante</h3>
+              <p className="text-xs mb-4" style={{color:'#8aa0cc'}}>{order.order_number} · {order.sender_name}</p>
+
+              <label className="block text-xs font-semibold mb-1.5" style={{color:'#aebfe2'}}>
+                Motivo (lo verá el cliente)
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={e => { setRejectReason(e.target.value); setRejectError('') }}
+                rows={3}
+                autoFocus
+                placeholder="Ej: el comprobante está borroso / el monto no coincide"
+                className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none resize-none"
+                style={{background:'rgba(4,10,30,.85)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
+              />
+
+              <p className="text-xs mt-3 mb-4" style={{color:'#aebfe2'}}>
+                La orden queda <strong>Rechazada</strong>. El cliente podrá subir otro comprobante y
+                volverá a tu panel — no se cancela el envío.
+              </p>
+
+              {rejectError && (
+                <p className="text-xs px-3 py-2 rounded-lg mb-3" style={{color:'#f87171', background:'rgba(239,68,68,.08)'}}>{rejectError}</p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowRejectPopup(false); setRejectError('') }}
+                  className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => rejectMutation.mutate()}
+                  disabled={rejectMutation.isPending || !rejectReason.trim()}
+                  className="flex-1 text-sm font-bold py-2.5 rounded-xl transition-all disabled:opacity-40"
+                  style={{background:'linear-gradient(90deg,#ef4444,#b91c1c)', color:'#fff'}}
+                >
+                  {rejectMutation.isPending ? 'Rechazando...' : 'Sí, rechazar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
     </div>
   )
 }
@@ -407,6 +504,27 @@ function TabButton2({ active, onClick, children }) {
 export function ClientOrderPanel({ order }) {
   const [tab, setTab] = useState(order?._defaultTab || 'estado')
   const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [reuploadError, setReuploadError] = useState('')
+
+  // Rechazar no cancela el envío: el cliente sube otro comprobante y la orden
+  // vuelve sola a "en aprobación" (backend/routers/orders.py).
+  const reuploadMutation = useMutation({
+    mutationFn: (file) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return api.post(`/orders/${order.id}/upload-proof`, fd)
+    },
+    onSuccess: () => {
+      setReuploadError('')
+      qc.invalidateQueries({ queryKey: ['my-orders'] })
+      qc.invalidateQueries({ queryKey: ['my-orders-history'] })
+      qc.invalidateQueries({ queryKey: ['client-order', order.id] })
+    },
+    onError: (err) => {
+      setReuploadError(err.response?.data?.detail || 'No se pudo subir el comprobante')
+    },
+  })
 
   const { data: allOrders } = useQuery({
     queryKey: ['my-orders-history'],
@@ -461,6 +579,32 @@ export function ClientOrderPanel({ order }) {
           Enviar nuevamente
         </button>
       </div>
+
+      {/* Comprobante rechazado: motivo + reenvío */}
+      {order.status === 'rechazado' && (
+        <div className="px-6 py-4 shrink-0" style={{background:'rgba(239,68,68,.08)', borderBottom:'1px solid rgba(239,68,68,.2)'}}>
+          <p className="text-sm font-semibold mb-1" style={{color:'#fca5a5'}}>Comprobante rechazado</p>
+          {order.rejection_reason && (
+            <p className="text-sm mb-3" style={{color:'#fca5a5'}}>{order.rejection_reason}</p>
+          )}
+          <label
+            className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer transition-colors"
+            style={{background:'rgba(56,189,248,.12)', border:'1px solid rgba(56,189,248,.3)', color:'#38bdf8'}}
+          >
+            {reuploadMutation.isPending ? 'Subiendo...' : 'Subir comprobante nuevo'}
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.pdf,.webp"
+              className="hidden"
+              disabled={reuploadMutation.isPending}
+              onChange={e => { const f = e.target.files?.[0]; if (f) reuploadMutation.mutate(f); e.target.value = '' }}
+            />
+          </label>
+          {reuploadError && (
+            <p className="text-xs mt-2" style={{color:'#f87171'}}>{reuploadError}</p>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b shrink-0 overflow-x-auto" style={{background:'rgba(6,13,40,.7)', borderColor:'rgba(255,255,255,.08)'}}>

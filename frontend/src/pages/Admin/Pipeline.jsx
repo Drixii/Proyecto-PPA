@@ -16,10 +16,14 @@ const COLUMNS_DEFAULT = [
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400', bg: 'border-t-orange-400' },
   { key: 'completado',    label: 'Completado',    dot: 'bg-green-500',  bg: 'border-t-green-500'  },
 ]
+// "Rechazado" solo aquí: en la vista por defecto la API no las devuelve, y
+// además esperan al cliente, no al admin. Quien las quiera ver las tiene en
+// Órdenes con su propio filtro.
 const COLUMNS_ALL = [
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400', bg: 'border-t-orange-400' },
   { key: 'en_proceso',    label: 'En Proceso',    dot: 'bg-blue-500',   bg: 'border-t-blue-500'   },
   { key: 'completado',    label: 'Completado',    dot: 'bg-green-500',  bg: 'border-t-green-500'  },
+  { key: 'rechazado',     label: 'Rechazado',     dot: 'bg-red-500',    bg: 'border-t-red-500'    },
 ]
 
 export default function Pipeline() {
