@@ -49,6 +49,10 @@ class Order(Base):
     payment_method = Column(String, nullable=True)
     payment_bank = Column(String, nullable=True)
     payment_proof = Column(String, nullable=True)
+    # Tarjeta (Stripe). paid_at es la única prueba de que el dinero entró: lo
+    # escribe el webhook firmado, nunca el navegador.
+    payment_intent_id = Column(String, nullable=True, index=True)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
 
     # Comprobante de pago enviado por sub-admin al completar
     completion_proof = Column(String, nullable=True)

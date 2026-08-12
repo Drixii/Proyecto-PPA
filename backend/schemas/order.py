@@ -56,6 +56,7 @@ class OrderOut(BaseModel):
     payment_method: Optional[str]
     payment_bank: Optional[str]
     payment_proof: Optional[str]
+    paid_at: Optional[datetime] = None
     completion_proof: Optional[str] = None
     created_at: datetime
     updated_at: datetime

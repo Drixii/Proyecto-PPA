@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import FinexyLayout from '../../components/FinexyLayout'
+import CardPayment from '../../components/CardPayment'
 import api from '../../services/api'
 import { useStore } from '../../store/useStore'
 
@@ -190,6 +191,15 @@ export default function NewTransfer() {
   const [proofPreview, setProofPreview] = useState(null)
   const [editingContact, setEditingContact] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  // Orden creada y esperando el cobro con tarjeta.
+  const [cardOrder, setCardOrder] = useState(null)
+
+  const { data: payCfg } = useQuery({
+    queryKey: ['payments-config'],
+    queryFn: () => api.get('/payments/config').then(r => r.data.data),
+    staleTime: 300000,
+  })
+  const cardEnabled = !!payCfg?.enabled
 
   const [calc, setCalc] = useState({
     amount: prefill.amount || '',
@@ -348,6 +358,16 @@ export default function NewTransfer() {
       const res = await api.post('/orders', payload)
       const orderId = res.data.data.id
       let orderData = res.data.data
+
+      // Tarjeta: la orden ya existe pero NO está pagada. Se abre el
+      // formulario de Stripe y solo cuando el cobro pasa, su webhook la mueve
+      // a "en proceso". Hasta entonces el encargado no la ve.
+      if ((payment.payment_method || '').toLowerCase() === 'tarjeta') {
+        setShowConfirm(false)
+        setCardOrder({ id: orderId, data: orderData })
+        setLoading(false)
+        return
+      }
 
       if (proofFile) {
         const formData = new FormData()
@@ -777,11 +797,15 @@ export default function NewTransfer() {
                 <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Método de pago</h2>
               </div>
 
-              {/* Method selector */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Method selector — la tarjeta solo aparece si Stripe está
+                  configurado; si no, el cliente la elegiría y se quedaría
+                  atascado sin poder pagar. */}
+              <div className={`grid gap-3 ${cardEnabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {[
                   { value: 'transferencia', label: 'Transferencia', icon: '🏦', desc: 'Sube tu comprobante' },
-                  { value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' },
+                  ...(cardEnabled
+                    ? [{ value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' }]
+                    : []),
                 ].map(({ value, label, icon, desc }) => (
                   <button key={value} type="button"
                     onClick={() => { setPayment(p => ({ ...p, payment_method: value, payment_bank: '' })); setProofFile(null); setProofPreview(null) }}
@@ -1068,6 +1092,23 @@ export default function NewTransfer() {
           )}
         </div>
       </div>
+
+      {cardOrder && (
+        <CardPayment
+          orderId={cardOrder.id}
+          amountLabel={`${formatDisplay(rawAmount || parseFloat(calc.amount), calc.fromCurrency)} ${calc.fromCurrency}`}
+          onClose={() => {
+            // La orden queda creada y sin pagar; el cliente puede pagarla
+            // luego desde su panel, no se pierde lo que ya rellenó.
+            setCardOrder(null)
+            navigate('/dashboard', { state: { newOrder: cardOrder.data } })
+          }}
+          onSuccess={() => {
+            setCardOrder(null)
+            navigate('/dashboard', { state: { newOrder: { ...cardOrder.data, status: 'en_proceso' } } })
+          }}
+        />
+      )}
     </FinexyLayout>
   )
 }

@@ -5,6 +5,7 @@ import api from '../services/api'
 import ChatBox from './ChatBox'
 import StatusBadge from './StatusBadge'
 import Portal from './Portal'
+import CardPayment from './CardPayment'
 import { flagUrl } from '../utils/flags'
 import { useStore } from '../store/useStore'
 import { fmtDate, userTz } from '../utils/timezone'
@@ -506,6 +507,7 @@ export function ClientOrderPanel({ order }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [reuploadError, setReuploadError] = useState('')
+  const [payingCard, setPayingCard] = useState(false)
 
   // Rechazar no cancela el envío: el cliente sube otro comprobante y la orden
   // vuelve sola a "en aprobación" (backend/routers/orders.py).
@@ -579,6 +581,38 @@ export function ClientOrderPanel({ order }) {
           Enviar nuevamente
         </button>
       </div>
+
+      {/* Tarjeta sin pagar: se creó la orden pero el cobro no llegó a pasar
+          (cerró el formulario, falló la tarjeta...). Se puede pagar aquí sin
+          volver a rellenar el envío. */}
+      {order.payment_method === 'tarjeta' && !order.paid_at && order.status === 'en_aprobacion' && (
+        <div className="px-6 py-4 shrink-0" style={{background:'rgba(251,191,36,.08)', borderBottom:'1px solid rgba(251,191,36,.2)'}}>
+          <p className="text-sm font-semibold mb-1" style={{color:'#fcd34d'}}>Pago pendiente</p>
+          <p className="text-xs mb-3" style={{color:'#fcd34d'}}>
+            Esta orden no se ha cobrado todavía. El envío no se procesa hasta que el pago se complete.
+          </p>
+          <button
+            onClick={() => setPayingCard(true)}
+            className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+            style={{background:'rgba(56,189,248,.12)', border:'1px solid rgba(56,189,248,.3)', color:'#38bdf8'}}
+          >
+            Pagar con tarjeta
+          </button>
+        </div>
+      )}
+
+      {payingCard && (
+        <CardPayment
+          orderId={order.id}
+          amountLabel={`${order.amount_sent?.toLocaleString('es-CL')} ${order.currency_from}`}
+          onClose={() => setPayingCard(false)}
+          onSuccess={() => {
+            setPayingCard(false)
+            qc.invalidateQueries({ queryKey: ['my-orders'] })
+            qc.invalidateQueries({ queryKey: ['my-orders-history'] })
+          }}
+        />
+      )}
 
       {/* Comprobante rechazado: motivo + reenvío */}
       {order.status === 'rechazado' && (

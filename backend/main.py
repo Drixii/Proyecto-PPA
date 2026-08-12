@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from database import engine
 import models  # noqa: F401 — registra todos los modelos en Base
 from database import Base
-from routers import auth, rates, orders, admin, chat, notifications, sub_admin, points, flights
+from routers import auth, rates, orders, admin, chat, notifications, sub_admin, points, flights, payments
 import logging
 import os
 
@@ -34,6 +34,8 @@ def _run_migrations():
         "ALTER TABLE users ADD COLUMN invite_code_used VARCHAR",
         "ALTER TABLE orders ADD COLUMN super_admin_id INTEGER",
         "ALTER TABLE orders ADD COLUMN rejection_reason VARCHAR",
+        "ALTER TABLE orders ADD COLUMN payment_intent_id VARCHAR",
+        "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP WITH TIME ZONE",
         # Deja una sola fila por par de monedas y luego impide que vuelvan a
         # duplicarse. El orden importa: el índice único no se puede crear
         # mientras existan duplicados. Se prefiere la fila manual (la puso un
@@ -138,6 +140,7 @@ app.include_router(chat.router)
 app.include_router(notifications.router)
 app.include_router(points.router)
 app.include_router(flights.router)
+app.include_router(payments.router)
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

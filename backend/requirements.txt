@@ -12,3 +12,4 @@ pydantic[email]==2.9.2
 pydantic-settings==2.5.2
 pillow==11.2.1
 pg8000==1.31.2
+stripe==11.1.0

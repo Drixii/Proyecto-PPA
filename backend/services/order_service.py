@@ -111,10 +111,15 @@ def create_order(db: Session, data, client: User) -> Order:
     fee = round(data.amount_sent * commission_pct / 100, 2)
     amount_received = round((data.amount_sent - fee) * rate, 2)
 
-    # Tarjeta → en_proceso con sub_admin asignado. Transferencia → en_aprobacion (sin asignar aún).
-    is_card = (getattr(data, "payment_method", None) or "").lower() == "tarjeta"
-    initial_status = "en_proceso" if is_card else "en_aprobacion"
-    sub_admin_id = find_sub_admin_for_country(db, data.receiver_country, client_super_admin_id) if is_card else None
+    # Toda orden nace SIN pagar. Antes, con payment_method='tarjeta' nacía en
+    # en_proceso y con encargado asignado — pero no existía cobro alguno: el
+    # "portal de pago" era una pantalla decorativa. Cualquiera con cuenta
+    # generaba una orden que el encargado veía lista para pagar al
+    # destinatario sin haber puesto un peso.
+    # Ahora la tarjeta pasa por Stripe y solo el webhook firmado la mueve a
+    # en_proceso (routers/payments.py).
+    initial_status = "en_aprobacion"
+    sub_admin_id = None
 
     order = Order(
         order_number=generate_order_number(db),
