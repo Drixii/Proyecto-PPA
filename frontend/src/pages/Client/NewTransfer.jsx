@@ -190,12 +190,6 @@ export default function NewTransfer() {
     queryFn: () => api.get('/payments/config').then(r => r.data.data),
     staleTime: 300000,
   })
-  // Solo se ofrece tarjeta si Stripe está configurado Y el cliente envía en
-  // una moneda que la cuenta admite (dólares o euros). Desde Chile o Colombia
-  // el método no aparece, en vez de aparecer y fallar al intentar cobrar.
-  const cardEnabled = !!payCfg?.enabled
-    && (payCfg?.currencies || []).includes(calc.fromCurrency)
-
   const [calc, setCalc] = useState({
     amount: prefill.amount || '',
     fromCurrency: prefill.fromCurrency || 'CLP',
@@ -232,6 +226,14 @@ export default function NewTransfer() {
       setProofPreview(null)
     }
   }
+
+  // Después de `calc` a propósito: depende de la moneda elegida, y ponerlo
+  // antes deja la página en blanco (se lee `calc` sin haberse inicializado).
+  // Solo se ofrece tarjeta si Stripe está configurado Y el cliente envía en
+  // una moneda que la cuenta admite: desde Chile el método no aparece, en vez
+  // de aparecer y fallar al intentar cobrar.
+  const cardEnabled = !!payCfg?.enabled
+    && (payCfg?.currencies || []).includes(calc.fromCurrency)
 
   const [displayAmount, setDisplayAmount] = useState(
     calc.amount ? formatDisplay(parseRaw(String(calc.amount)), calc.fromCurrency) : ''
