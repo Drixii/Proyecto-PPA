@@ -9,6 +9,13 @@
 
 set -euo pipefail
 
+# Sin esto, apt se queda esperando respuesta humana: Ubuntu 24.04 abre el
+# dialogo de needrestart preguntando que servicios reiniciar, y el script
+# se cuelga indefinidamente.
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
 APP_USER=ppa
 APP_DIR=/opt/ppa
 REPO_URL="https://github.com/Drixii/Proyecto-PPA.git"
@@ -45,11 +52,16 @@ sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='ppa'" | grep
 echo "Clave de Postgres generada (se escribe en el .env): $DB_PASS"
 
 say "5/9 Clonando repositorio"
+# No se usa `git clone` porque adduser ya creó $APP_DIR como home del usuario:
+# clone falla si el directorio destino existe. init + fetch sí funciona sobre
+# un directorio existente.
+mkdir -p "$APP_DIR"
 if [ ! -d "$APP_DIR/.git" ]; then
-    git clone "$REPO_URL" "$APP_DIR"
-else
-    git -C "$APP_DIR" pull --ff-only
+    git init -q "$APP_DIR"
+    git -C "$APP_DIR" remote add origin "$REPO_URL"
 fi
+git -C "$APP_DIR" fetch -q origin main
+git -C "$APP_DIR" checkout -f -B main origin/main
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 say "6/9 Creando entorno virtual e instalando dependencias"
@@ -91,7 +103,9 @@ ln -sf /etc/nginx/sites-available/ppa-api /etc/nginx/sites-enabled/ppa-api
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
-install -m 755 "$APP_DIR/deploy/backup-db.sh" /opt/ppa/deploy/backup-db.sh
+# El script ya está en $APP_DIR/deploy tras el clone; solo hay que hacerlo
+# ejecutable. (`install` origen==destino aborta con "are the same file".)
+chmod 755 "$APP_DIR/deploy/backup-db.sh"
 cat > /etc/cron.d/ppa-backup <<'CRON'
 # Backup diario de Postgres + uploads a las 03:15 (hora del servidor)
 15 3 * * * root /opt/ppa/deploy/backup-db.sh >> /var/log/ppa-backup.log 2>&1
