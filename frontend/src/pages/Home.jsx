@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
+import { useQuery } from '@tanstack/react-query'
+import api from '../services/api'
+import { useCountries } from '../hooks/useCountries'
 import { useStore } from '../store/useStore'
 import logoSrc from '../assets/logo.png'
 
@@ -17,10 +20,12 @@ const STEPS = [
   { n: '3', title: 'Confirma el pago', desc: 'Transfiere y adjunta tu comprobante.' },
   { n: '✓', title: '¡Listo!', desc: 'Procesamos y notificamos cada paso.', green: true },
 ]
-const TICKER = [['USD','CLP'],['USD','VES'],['USD','COP'],['EUR','MXN'],['USD','PEN'],['USD','BRL'],['GBP','ARS'],['USD','PHP']]
-const RATES  = { USD:1, EUR:0.92, GBP:0.79, CLP:950, COP:4100, PEN:3.75, BRL:5.4, MXN:18, VES:40, ARS:1000, PHP:57 }
+// La cinta de tasas iba con números escritos a mano: decía 1 USD = 40 VES
+// cuando el real ronda los 880, y 4.100 COP cuando son 3.136. Es la primera
+// cifra que ve alguien que entra, y encima la página promete "tasas en tiempo
+// real" tres bloques más abajo. Ahora salen de la misma fuente que usa el
+// calculador; si no cargan, no se muestra nada en vez de inventar.
 const fmt = (n, c) => new Intl.NumberFormat('es-CL', { maximumFractionDigits: ['CLP','COP','VES','ARS','PYG'].includes(c)?0:2, minimumFractionDigits: 0 }).format(n)
-const tickerItems = TICKER.map(([a,b]) => `1 ${a} = ${fmt(RATES[b]/RATES[a], b)} ${b}`)
 
 // Reveal inicial — globe.js aplica opacity:'1' + transform:'none' al entrar en viewport
 const R0 = { opacity: 0, transform: 'translateY(34px)', transition: 'opacity .8s cubic-bezier(.22,.61,.36,1),transform .8s cubic-bezier(.22,.61,.36,1)' }
@@ -28,6 +33,33 @@ const RD = (d) => ({ ...R0, transitionDelay: `${d}s,${d}s` })
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 export default function Home() {
+  const { receiveCountries } = useCountries()
+  const { data: ratesRaw } = useQuery({
+    queryKey: ['rates-all'],
+    queryFn: () => api.get('/rates').then(r => r.data.data),
+    staleTime: 60000,
+  })
+
+  // 1 USD = X para cada moneda que la plataforma ofrece como destino. Antes la
+  // lista de pares también estaba fija e incluía el peso filipino, un país en
+  // el que no se opera.
+  const tickerItems = (() => {
+    const desdeUsd = {}
+    for (const r of ratesRaw || []) {
+      if (r.from_currency === 'USD') desdeUsd[r.to_currency] = r.rate
+    }
+    const vistas = new Set()
+    const items = []
+    for (const c of receiveCountries) {
+      if (c.currency === 'USD' || vistas.has(c.currency)) continue
+      const tasa = desdeUsd[c.currency]
+      if (!tasa) continue
+      vistas.add(c.currency)
+      items.push(`1 USD = ${fmt(tasa, c.currency)} ${c.currency}`)
+    }
+    return items
+  })()
+
   const navigate = useNavigate()
   const { user } = useStore()
   const deferredPrompt = useRef(null)
@@ -308,8 +340,9 @@ export default function Home() {
           {/* Título "Operamos en estos países" — aparece al hacer morph */}
           <div id="grid-title" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, textAlign: 'center', paddingTop: '12vh', opacity: 0, pointerEvents: 'none' }}>
             <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Cobertura global</p>
-            <h2 style={{ margin: '0 0 10px', fontSize: 'clamp(30px,4vw,52px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>Operamos en estos países</h2>
-            <p style={{ margin: 0, fontSize: 16, color: '#9fb0d4' }}>Conectados a los principales destinos de América Latina y el mundo.</p>
+            <h2 style={{ margin: 0, fontSize: 'clamp(26px,3.4vw,44px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff', lineHeight: 1.15 }}>
+              Conectados a los principales destinos de América Latina y el mundo
+            </h2>
           </div>
 
           {/* Scroll hint — desaparece al bajar */}
