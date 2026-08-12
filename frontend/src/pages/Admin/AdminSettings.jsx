@@ -471,18 +471,30 @@ function SectionCard({ icon, title, desc, onClick }) {
     <button
       onClick={onClick}
       style={{
-        ...GLASS, padding: '20px', textAlign: 'left', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', gap: 16, width: '100%',
+        ...GLASS, padding: '22px 20px 20px', textAlign: 'left', cursor: 'pointer',
+        display: 'flex', flexDirection: 'column', gap: 12, width: '100%',
+        minHeight: 152, transition: 'background .15s, transform .15s',
       }}
-      onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,.06)'}
-      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = 'rgba(56,189,248,.07)'
+        e.currentTarget.style.transform = 'translateY(-2px)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+        e.currentTarget.style.transform = 'none'
+      }}
     >
-      <span style={{ fontSize: 26, lineHeight: 1 }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <span style={{
+        width: 44, height: 44, borderRadius: 14, fontSize: 22, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(56,189,248,.1)', border: '1px solid rgba(56,189,248,.15)',
+      }}>
+        {icon}
+      </span>
+      <div style={{ flex: 1 }}>
         <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>{title}</p>
-        <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>{desc}</p>
+        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8aa0cc', lineHeight: 1.5 }}>{desc}</p>
       </div>
-      <span style={{ fontSize: 18, color: '#475569' }}>›</span>
     </button>
   )
 }
@@ -757,7 +769,10 @@ export default function AdminSettings() {
         </div>
 
         {!actual && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          // auto-fill con minmax en vez de un número fijo de columnas: en el
+          // móvil queda una sola y en pantalla ancha llena la fila, sin media
+          // queries y sin dejar huecos al añadir secciones nuevas.
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
             {SECTIONS.map(s => (
               <SectionCard key={s.key} {...s} onClick={() => setSection(s.key)} />
             ))}
