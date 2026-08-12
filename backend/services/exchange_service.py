@@ -59,15 +59,23 @@ async def _fetch_ves_binance_p2p() -> float | None:
 
 
 async def _fetch_ves_yadio() -> float | None:
-    """Yadio.io — también basado en P2P, buen fallback."""
+    """Yadio.io — también basado en P2P, buen fallback.
+
+    OJO: este endpoint devuelve la tasa INVERTIDA respecto a lo que sugiere la
+    URL. Con /rate/USD/VES responde {"rate": 0.001150677948}, que son dólares
+    por bolívar; nosotros necesitamos bolívares por dólar. Comprobado contra
+    DolarAPI el 2026-08-12: 1/0.00115068 = 869.06 frente a 869.01. Antes se
+    guardaba tal cual, así que si Binance fallaba la app cotizaba
+    1 USD = 0.00115 VES y un envío mostraba céntimos de bolívar.
+    """
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get("https://api.yadio.io/rate/USD/VES")
         if r.status_code == 200:
             data = r.json()
             rate = data.get("rate")
-            if rate:
-                return float(rate)
+            if rate and float(rate) > 0:
+                return 1.0 / float(rate)
     except Exception:
         pass
     return None
@@ -88,22 +96,34 @@ async def _fetch_ves_dolarapi() -> float | None:
     return None
 
 
+# Cuánto puede valer un dólar en bolívares para que nos lo creamos. Existe
+# porque una fuente devolvió la tasa invertida (0.00115 en vez de 869) y eso
+# se guardó como buena: el margen no está para acertar, está para que un
+# número absurdo no llegue nunca a una cotización.
+VES_MIN, VES_MAX = 1.0, 10_000_000.0
+
+
+def _ves_plausible(rate: float | None) -> bool:
+    return bool(rate) and VES_MIN <= rate <= VES_MAX
+
+
 async def fetch_ves_rate() -> tuple[float | None, str]:
     """
     Intenta Binance P2P → Yadio → DolarAPI.
     Devuelve (rate_usd_to_ves, source_name).
     """
-    rate = await _fetch_ves_binance_p2p()
-    if rate and rate > 0:
-        return rate, "binance_p2p"
-
-    rate = await _fetch_ves_yadio()
-    if rate and rate > 0:
-        return rate, "yadio"
-
-    rate = await _fetch_ves_dolarapi()
-    if rate and rate > 0:
-        return rate, "dolarapi"
+    for fetcher, name in (
+        (_fetch_ves_binance_p2p, "binance_p2p"),
+        (_fetch_ves_yadio, "yadio"),
+        (_fetch_ves_dolarapi, "dolarapi"),
+    ):
+        rate = await fetcher()
+        if rate is None:
+            continue
+        if not _ves_plausible(rate):
+            print(f"[exchange] {name} devolvió {rate}, fuera del rango creíble — se descarta")
+            continue
+        return rate, name
 
     return None, "none"
 
@@ -203,6 +223,14 @@ def _upsert_rate(db: Session, from_cur: str, to_cur: str, rate: float, auto: boo
             rate=rate,
             is_manual="false" if auto else "true"
         ))
+        # El flush es imprescindible, no una optimización. La sesión se crea
+        # con autoflush=False (database.py), así que sin él la consulta de
+        # arriba no ve las filas recién añadidas en este mismo ciclo: los
+        # pares USD→X se escriben dos veces (una en el bucle principal y otra
+        # al derivar los cruces) y acababan duplicados en la tabla. Con 17
+        # pares duplicados, get_rate() leía con .first() y Postgres podía
+        # devolver la copia congelada, cotizando con una tasa vieja.
+        db.flush()
 
 
 def get_rate(db: Session, from_cur: str, to_cur: str) -> float | None:

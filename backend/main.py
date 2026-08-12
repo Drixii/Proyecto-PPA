@@ -34,6 +34,22 @@ def _run_migrations():
         "ALTER TABLE users ADD COLUMN invite_code_used VARCHAR",
         "ALTER TABLE orders ADD COLUMN super_admin_id INTEGER",
         "ALTER TABLE orders ADD COLUMN rejection_reason VARCHAR",
+        # Deja una sola fila por par de monedas y luego impide que vuelvan a
+        # duplicarse. El orden importa: el índice único no se puede crear
+        # mientras existan duplicados. Se prefiere la fila manual (la puso un
+        # admin a mano) y, entre automáticas, la más reciente.
+        """DELETE FROM exchange_rates WHERE id NOT IN (
+            SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (
+                    PARTITION BY from_currency, to_currency
+                    ORDER BY CASE WHEN lower(coalesce(is_manual,'')) = 'true' THEN 0 ELSE 1 END,
+                             updated_at DESC, id DESC
+                ) AS rn
+                FROM exchange_rates
+            ) t WHERE t.rn = 1
+        )""",
+        """CREATE UNIQUE INDEX IF NOT EXISTS ux_exchange_rates_pair
+           ON exchange_rates (from_currency, to_currency)""",
         """CREATE TABLE IF NOT EXISTS commission_rules (
             id SERIAL PRIMARY KEY,
             super_admin_id INTEGER,
