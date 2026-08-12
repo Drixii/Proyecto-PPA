@@ -294,8 +294,7 @@ function CommissionMatrix({ data, onSaved }) {
         <div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Comisiones por ruta</h3>
           <p style={{ margin: 0, fontSize: 12, color: '#8aa0cc' }}>
-            Selecciona moneda origen y configura cada destino. El interruptor «a todos los destinos»
-            no guarda por sí solo: marca el %, actívalo y pulsa Guardar en esa fila.
+            Elige desde qué país envía el cliente y pon la comisión de cada destino
           </p>
         </div>
       </div>
@@ -343,8 +342,10 @@ function CommissionMatrix({ data, onSaved }) {
             {baseMsg && <span style={{ fontSize: 12, color: baseMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{baseMsg}</span>}
           </div>
         </div>
-        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#8aa0cc' }}>
-          Esta % aplica a todos los destinos desde <strong>{countryName(fromCur)}</strong> que no tengan una regla específica configurada abajo.
+        <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#8aa0cc', lineHeight: 1.6 }}>
+          Es la comisión por defecto para envíos desde <strong>{countryName(fromCur)}</strong>.
+          Se cobra cuando el destino no tiene su propio % en la tabla de abajo — así no hace falta
+          rellenar país por país: pones una base y solo tocas las excepciones.
         </p>
       </div>
 
@@ -353,7 +354,7 @@ function CommissionMatrix({ data, onSaved }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'rgba(4,10,30,.6)' }}>
-              {['Destino', 'Comisión actual', 'Nueva %', 'A todos los destinos', 'Acciones'].map(h => (
+              {['Destino', 'Comisión actual', 'Nueva %', 'Acciones'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 600, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -382,29 +383,30 @@ function CommissionMatrix({ data, onSaved }) {
                     <span style={{ fontWeight: 700, color: srcStyle.color }}>{row?.effective_pct?.toFixed(2) ?? globalDefault.toFixed(2)}%</span>
                     <span style={{ marginLeft: 6, fontSize: 10, color: srcStyle.color, background: 'rgba(255,255,255,.06)', padding: '2px 6px', borderRadius: 4 }}>{srcStyle.label}</span>
                   </td>
-                  {/* Input */}
+                  {/* Input + casilla "aplicar a todos", que solo aparece
+                      cuando hay algo escrito: antes era una columna siempre
+                      visible y se pulsaba esperando que hiciera algo por sí
+                      sola, cuando en realidad solo modifica el Guardar. */}
                   <td style={{ padding: '10px 12px' }}>
-                    <div style={{ position: 'relative', width: 100 }}>
+                    <div style={{ position: 'relative', width: 118 }}>
                       <input type="number" value={edited ? editMap[key] : ''} placeholder={row?.effective_pct?.toFixed(2) ?? '1.50'}
                         onChange={e => handleEdit(tc, e.target.value)} min="0" max="100" step="0.01"
-                        style={{ ...INP, width: 100, paddingRight: 26, fontSize: 13 }} />
+                        style={{ ...INP, width: 118, paddingRight: 26, fontSize: 13 }} />
                       <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: '#8aa0cc', fontSize: 11 }}>%</span>
                     </div>
-                  </td>
-                  {/* Apply all */}
-                  <td style={{ padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button type="button" onClick={() => setApplyAll(a => ({ ...a, [key]: !a[key] }))}
-                        style={{ width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0,
-                          background: applyAll[key] ? 'rgba(129,140,248,.5)' : 'rgba(255,255,255,.12)', transition: 'background .2s' }}>
-                        <span style={{ position: 'absolute', top: 2, left: applyAll[key] ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
-                      </button>
-                      {applyAll[key] && (
-                        <span style={{ fontSize: 10, color: '#a78bfa' }} title={`Al guardar, este % se aplica a todos los destinos desde ${fromCur}`}>
-                          Todos
+                    {edited && editMap[key] !== '' && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7, cursor: 'pointer', userSelect: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!applyAll[key]}
+                          onChange={() => setApplyAll(a => ({ ...a, [key]: !a[key] }))}
+                          style={{ width: 14, height: 14, accentColor: '#3b82f6', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: 11, color: applyAll[key] ? '#a78bfa' : '#8aa0cc', lineHeight: 1.3 }}>
+                          Aplicar a todos los destinos
                         </span>
-                      )}
-                    </div>
+                      </label>
+                    )}
                   </td>
                   {/* Actions */}
                   <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
@@ -450,13 +452,7 @@ const SECTIONS = [
     key: 'tasas',
     icon: '📈',
     title: 'Tasas y comisiones',
-    desc: 'Comisión por ruta y simulador de tasas en tiempo real',
-  },
-  {
-    key: 'paises',
-    icon: '🌎',
-    title: 'Países',
-    desc: 'Qué países se ofrecen para enviar y recibir',
+    desc: 'Comisión por ruta, países disponibles y simulador de tasas',
   },
   {
     key: 'pagos',
@@ -785,12 +781,18 @@ export default function AdminSettings() {
           ) : (
             <>
               <RateTester commData={commData} />
-              <CommissionMatrix data={commData} onSaved={refresh} />
+              {/* Comisiones y países juntos: los países de la derecha son los
+                  que aparecen como destino en la tabla de la izquierda, así
+                  que activar uno y ponerle comisión se hace sin cambiar de
+                  pantalla. minmax(0,...) evita que la tabla ancha desborde la
+                  columna. */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(300px, 1fr)', gap: 18, alignItems: 'start' }}>
+                <CommissionMatrix data={commData} onSaved={refresh} />
+                <CountriesManager />
+              </div>
             </>
           )
         )}
-
-        {section === 'paises' && <CountriesManager />}
         {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /></>}
       </div>
     </FinexyLayout>

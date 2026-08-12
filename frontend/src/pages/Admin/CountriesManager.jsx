@@ -93,37 +93,40 @@ export default function CountriesManager() {
 
   const Row = ({ c }) => (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px',
-      borderBottom: '1px solid rgba(255,255,255,.04)', opacity: c.active ? 1 : .45,
+      padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,.04)',
+      opacity: c.active ? 1 : .45,
     }}>
-      <Flag iso2={c.iso2} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#eaf2ff' }}>{c.name}</p>
-        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>{c.currency}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Flag iso2={c.iso2} size={20} />
+        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: '#eaf2ff', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {c.name}
+        </p>
+        <span style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{c.currency}</span>
+        <button
+          onClick={() => patchMut.mutate({ id: c.id, active: !c.active })}
+          title={c.active ? 'Quitar de los calculadores' : 'Volver a ofrecerlo'}
+          style={{
+            fontSize: 15, lineHeight: 1, padding: '2px 6px', borderRadius: 7, cursor: 'pointer',
+            background: 'transparent', border: '1px solid rgba(255,255,255,.1)',
+            color: c.active ? '#f87171' : '#4ade80',
+          }}
+        >
+          {c.active ? '\u00d7' : '\u21ba'}
+        </button>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 92 }}>
-        <Toggle on={c.can_send} title="Se puede enviar desde este país"
-          onClick={() => patchMut.mutate({ id: c.id, can_send: !c.can_send })} />
-        <span style={{ fontSize: 11, color: '#8aa0cc' }}>Envía</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8, paddingLeft: 30 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Toggle on={c.can_send} title="Se puede enviar desde este pais"
+            onClick={() => patchMut.mutate({ id: c.id, can_send: !c.can_send })} />
+          <span style={{ fontSize: 11, color: c.can_send ? '#aebfe2' : '#64748b' }}>Envia</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Toggle on={c.can_receive} title="Se puede recibir en este pais"
+            onClick={() => patchMut.mutate({ id: c.id, can_receive: !c.can_receive })} />
+          <span style={{ fontSize: 11, color: c.can_receive ? '#aebfe2' : '#64748b' }}>Recibe</span>
+        </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 92 }}>
-        <Toggle on={c.can_receive} title="Se puede recibir en este país"
-          onClick={() => patchMut.mutate({ id: c.id, can_receive: !c.can_receive })} />
-        <span style={{ fontSize: 11, color: '#8aa0cc' }}>Recibe</span>
-      </div>
-
-      <button
-        onClick={() => patchMut.mutate({ id: c.id, active: !c.active })}
-        style={{
-          fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 8, cursor: 'pointer',
-          background: c.active ? 'rgba(239,68,68,.1)' : 'rgba(74,222,128,.1)',
-          border: '1px solid ' + (c.active ? 'rgba(239,68,68,.25)' : 'rgba(74,222,128,.25)'),
-          color: c.active ? '#f87171' : '#4ade80',
-        }}
-      >
-        {c.active ? 'Quitar' : 'Restaurar'}
-      </button>
     </div>
   )
 
@@ -132,8 +135,8 @@ export default function CountriesManager() {
       <div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Países disponibles</h3>
-          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
-            Cambia al instante el calculador del inicio y el de nueva transferencia
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.5 }}>
+            Los que reciben son los destinos de la tabla de comisiones
           </p>
         </div>
         <button
@@ -145,13 +148,13 @@ export default function CountriesManager() {
             color: '#fff', whiteSpace: 'nowrap',
           }}
         >
-          {adding ? 'Cancelar' : '+ Añadir país'}
+          {adding ? 'Cancelar' : '+ Añadir'}
         </button>
       </div>
 
       {adding && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,.06)', background: 'rgba(56,189,248,.04)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, marginBottom: 12 }}>
             <div>
               <label style={{ fontSize: 11, color: '#8aa0cc', display: 'block', marginBottom: 4 }}>País</label>
               <input style={{ ...INP, width: '100%' }} value={form.name} placeholder="Honduras"
@@ -172,7 +175,7 @@ export default function CountriesManager() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 22, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Toggle on={form.can_send} onClick={() => setForm(f => ({ ...f, can_send: !f.can_send }))} />
               <span style={{ fontSize: 12.5, color: '#aebfe2' }}>Se puede enviar desde aquí</span>
