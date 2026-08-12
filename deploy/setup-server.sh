@@ -35,6 +35,13 @@ apt-get install -y \
     nginx certbot python3-certbot-nginx \
     git curl ufw fail2ban s3cmd unattended-upgrades
 
+# Node hace falta en el servidor para compilar el frontend: la web se sirve
+# desde este mismo droplet, no desde Vercel.
+if ! command -v node > /dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
+fi
+
 say "3/9 Creando usuario de aplicacion"
 id -u "$APP_USER" &>/dev/null || adduser --system --group --home "$APP_DIR" "$APP_USER"
 
@@ -77,6 +84,15 @@ sudo -u "$APP_USER" python3 -m venv "$APP_DIR/backend/venv"
 sudo -u "$APP_USER" "$APP_DIR/backend/venv/bin/pip" install --upgrade pip
 sudo -u "$APP_USER" "$APP_DIR/backend/venv/bin/pip" install -r "$APP_DIR/backend/requirements.txt"
 sudo -u "$APP_USER" mkdir -p "$APP_DIR/backend/uploads"/{proofs,completions,avatars,rewards}
+
+say "6b/9 Compilando el frontend"
+# Sin VITE_API_URL a propósito: al servirse web y API bajo el mismo dominio,
+# el cliente llama a rutas relativas (/api, /ws) y nginx las enruta. Definir
+# esa variable rompería el WebSocket del chat al apuntarlo a otro host.
+cd "$APP_DIR/frontend"
+sudo -u "$APP_USER" npm ci --no-audit --no-fund
+sudo -u "$APP_USER" npm run build
+cd /
 
 say "7/9 Generando .env"
 ENV_FILE="$APP_DIR/backend/.env"

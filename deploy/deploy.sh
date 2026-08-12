@@ -28,8 +28,22 @@ say "Trayendo cambios"
 sudo -u "$APP_USER" git -C "$APP_DIR" fetch origin main
 sudo -u "$APP_USER" git -C "$APP_DIR" reset --hard origin/main
 
-say "Actualizando dependencias"
+say "Actualizando dependencias del backend"
 sudo -u "$APP_USER" "$APP_DIR/backend/venv/bin/pip" install -q -r "$APP_DIR/backend/requirements.txt"
+
+say "Recompilando el frontend"
+# Se compila sobre dist/ solo si el build termina bien: si npm falla, la web
+# anterior sigue publicada en vez de quedar el sitio a medias.
+cd "$APP_DIR/frontend"
+if sudo -u "$APP_USER" npm ci --no-audit --no-fund && sudo -u "$APP_USER" npm run build; then
+    echo "frontend compilado"
+else
+    cd /
+    echo "!!! El build del frontend falló. Se mantiene la versión anterior."
+    echo "    El backend NO se ha tocado. Revisa el error de arriba."
+    exit 1
+fi
+cd /
 
 say "Reinstalando unidad systemd si cambio"
 if ! cmp -s "$APP_DIR/deploy/ppa-api.service" /etc/systemd/system/ppa-api.service; then
