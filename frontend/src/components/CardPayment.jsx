@@ -70,10 +70,13 @@ function Campo({ label, children, error }) {
  *  marca en cuanto se reconoce, copia el nombre según se escribe, marca cada
  *  bloque como relleno y gira al tocar el CVV.
  */
-function TarjetaVisual({ nombre, marca, numeroListo, caducidadLista, girada }) {
-  const relleno = (listo) => ({
-    color: listo ? '#fff' : 'rgba(255,255,255,.34)',
-    transition: 'color .3s',
+function TarjetaVisual({ nombre, marca, numero, caducidad, cvv, girada }) {
+  const relleno = (estado) => ({
+    color: estado === 'completo' ? '#fff'
+      : estado === 'escribiendo' ? 'rgba(255,255,255,.72)'
+      : 'rgba(255,255,255,.3)',
+    transition: 'color .25s, text-shadow .25s',
+    textShadow: estado === 'escribiendo' ? '0 0 14px rgba(56,189,248,.55)' : 'none',
   })
 
   return (
@@ -95,9 +98,9 @@ function TarjetaVisual({ nombre, marca, numeroListo, caducidadLista, girada }) {
           <div style={{ marginTop: 'auto' }}>
             <p style={{
               margin: 0, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 17,
-              letterSpacing: '.11em', ...relleno(numeroListo),
+              letterSpacing: '.11em', ...relleno(numero),
             }}>
-              •••• •••• •••• {numeroListo ? '••••' : '____'}
+              •••• •••• •••• {numero === 'vacio' ? '____' : '••••'}
             </p>
             <div className="flex items-end justify-between" style={{ marginTop: 14, gap: 12 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -105,15 +108,15 @@ function TarjetaVisual({ nombre, marca, numeroListo, caducidadLista, girada }) {
                 <p style={{
                   margin: '2px 0 0', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  ...relleno(!!nombre),
+                  ...relleno(nombre ? 'completo' : 'vacio'),
                 }}>
                   {nombre || 'NOMBRE APELLIDO'}
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <p style={ETIQUETA}>VENCE</p>
-                <p style={{ margin: '2px 0 0', fontSize: 12.5, fontFamily: 'ui-monospace, Menlo, monospace', ...relleno(caducidadLista) }}>
-                  {caducidadLista ? '••/••' : '__/__'}
+                <p style={{ margin: '2px 0 0', fontSize: 12.5, fontFamily: 'ui-monospace, Menlo, monospace', ...relleno(caducidad) }}>
+                  {caducidad === 'vacio' ? '__/__' : '••/••'}
                 </p>
               </div>
             </div>
@@ -126,7 +129,10 @@ function TarjetaVisual({ nombre, marca, numeroListo, caducidadLista, girada }) {
           <div style={{ padding: '16px 20px' }}>
             <p style={{ ...ETIQUETA, marginBottom: 5 }}>CVV</p>
             <div style={{ background: 'rgba(255,255,255,.92)', borderRadius: 5, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 12 }}>
-              <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 14, color: '#0f172a', letterSpacing: '.28em' }}>•••</span>
+              <span style={{
+                fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 14, letterSpacing: '.28em',
+                color: cvv === 'vacio' ? 'rgba(15,23,42,.3)' : '#0f172a', transition: 'color .25s',
+              }}>•••</span>
             </div>
             <p style={{ margin: '12px 0 0', fontSize: 9.5, color: 'rgba(255,255,255,.4)', lineHeight: 1.5 }}>
               Tus datos viajan cifrados directamente a Stripe.
@@ -146,14 +152,19 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
 
   const [nombre, setNombre] = useState('')
   const [marca, setMarca] = useState('')
-  const [numeroListo, setNumeroListo] = useState(false)
-  const [caducidadLista, setCaducidadLista] = useState(false)
+  const [numero, setNumero] = useState('vacio')
+  const [caducidad, setCaducidad] = useState('vacio')
+  const [cvv, setCvv] = useState('vacio')
   const [girada, setGirada] = useState(false)
   const [errores, setErrores] = useState({})
 
-  const alCambiar = (campo, setListo) => (e) => {
+  // Tres estados y no dos: Stripe avisa en cada tecla si el campo está vacío
+  // y si está completo, así que la tarjeta puede reaccionar mientras se
+  // escribe en vez de esperar al final. Lo que no llega es el contenido, así
+  // que se marca el avance, no los dígitos.
+  const alCambiar = (campo, setEstado) => (e) => {
     setErrores(x => ({ ...x, [campo]: e.error?.message || '' }))
-    if (setListo) setListo(e.complete)
+    if (setEstado) setEstado(e.empty ? 'vacio' : e.complete ? 'completo' : 'escribiendo')
     if (campo === 'numero') setMarca(e.brand && e.brand !== 'unknown' ? e.brand : '')
   }
 
@@ -196,18 +207,18 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
           <Campo label="Número de tarjeta" error={errores.numero}>
             <CardNumberElement
               options={{ ...TIPO_FORM, showIcon: false, placeholder: '1234 1234 1234 1234' }}
-              onChange={alCambiar('numero', setNumeroListo)}
+              onChange={alCambiar('numero', setNumero)}
             />
           </Campo>
 
           <div className="grid grid-cols-2 gap-3">
             <Campo label="Vencimiento" error={errores.caducidad}>
-              <CardExpiryElement options={{ ...TIPO_FORM, placeholder: 'MM/AA' }} onChange={alCambiar('caducidad', setCaducidadLista)} />
+              <CardExpiryElement options={{ ...TIPO_FORM, placeholder: 'MM/AA' }} onChange={alCambiar('caducidad', setCaducidad)} />
             </Campo>
             <Campo label="CVV" error={errores.cvv}>
               <CardCvcElement
                 options={{ ...TIPO_FORM, placeholder: '123' }}
-                onChange={alCambiar('cvv')}
+                onChange={alCambiar('cvv', setCvv)}
                 onFocus={() => setGirada(true)}
                 onBlur={() => setGirada(false)}
               />
@@ -252,8 +263,9 @@ function PayForm({ clientSecret, amountLabel, onSuccess, onClose }) {
           <TarjetaVisual
             nombre={nombre}
             marca={marca}
-            numeroListo={numeroListo}
-            caducidadLista={caducidadLista}
+            numero={numero}
+            caducidad={caducidad}
+            cvv={cvv}
             girada={girada}
           />
           <p className="text-[11px] mt-3 text-center" style={{ color: '#64748b' }}>
