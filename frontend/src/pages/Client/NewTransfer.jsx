@@ -5,23 +5,13 @@ import FinexyLayout from '../../components/FinexyLayout'
 import CardPayment from '../../components/CardPayment'
 import api from '../../services/api'
 import { useStore } from '../../store/useStore'
+import { useCountries } from '../../hooks/useCountries'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
 const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
-const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD','VES']
 
-const SEND_CURRENCIES = [
-  { code: 'CLP', iso2: 'cl', name: 'Peso Chileno' },
-  { code: 'COP', iso2: 'co', name: 'Peso Colombiano' },
-  { code: 'USD', iso2: 'us', name: 'Dólar Americano' },
-  { code: 'EUR', iso2: 'eu', name: 'Euro' },
-  { code: 'PEN', iso2: 'pe', name: 'Sol Peruano' },
-  { code: 'BRL', iso2: 'br', name: 'Real Brasileño' },
-  { code: 'MXN', iso2: 'mx', name: 'Peso Mexicano' },
-  { code: 'ARS', iso2: 'ar', name: 'Peso Argentino' },
-  { code: 'CAD', iso2: 'ca', name: 'Dólar Canadiense' },
-]
+// Países y monedas llegan de Ajustes → Países (hooks/useCountries).
 
 const COUNTRY_PHONE_PREFIX = {
   'Colombia': '+57 ', 'Chile': '+56 ', 'Estados Unidos': '+1 ', 'México': '+52 ',
@@ -94,7 +84,7 @@ function ChevronDown() {
   )
 }
 
-function FromDropdown({ value, onChange, onClose }) {
+function FromDropdown({ value, onChange, onClose, options }) {
   const ref = useRef()
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose() }
@@ -104,7 +94,7 @@ function FromDropdown({ value, onChange, onClose }) {
   return (
     <div ref={ref} className="absolute left-0 top-full mt-1 rounded-xl shadow-xl z-[400] min-w-[210px] overflow-hidden"
       style={{background:'rgba(8,16,44,.95)', border:'1px solid rgba(255,255,255,.08)'}}>
-      {SEND_CURRENCIES.map(c => (
+      {(options || []).map(c => (
         <button key={c.code} type="button"
           onClick={() => { onChange(c.code); onClose() }}
           className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left"
@@ -155,10 +145,11 @@ function ToDropdown({ countries, value, onChange, onClose }) {
             onClick={() => { onChange(c); onClose() }}
             className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left"
             style={{background: value === c.country ? 'rgba(56,189,248,.1)' : 'transparent'}}>
-            {flagUrl(c.country)
-              ? <img src={flagUrl(c.country)} alt="" className="w-5 h-[14px] rounded-sm object-cover shrink-0" />
-              : <span className="w-5 h-[14px] rounded-sm shrink-0" style={{background:'rgba(255,255,255,.06)'}} />
-            }
+            {/* iso2 viene de la API: así un país añadido desde Ajustes tiene
+                bandera sin tocar ningún mapa del frontend. */}
+            <img src={`https://flagcdn.com/20x15/${c.iso2}.png`} alt=""
+              className="w-5 h-[14px] rounded-sm object-cover shrink-0"
+              onError={e => { e.target.style.visibility = 'hidden' }} />
             <span className="flex-1 text-sm font-medium" style={{color:'#eaf2ff'}}>{c.country}</span>
             <span className="text-xs font-mono shrink-0" style={{color:'#8aa0cc'}}>{c.currency}</span>
           </button>
@@ -245,7 +236,7 @@ export default function NewTransfer() {
   const [liveLoading, setLiveLoading] = useState(false)
 
   const rawAmount = parseRaw(displayAmount)
-  const selectedFrom = SEND_CURRENCIES.find(c => c.code === calc.fromCurrency)
+  const selectedFrom = sendCurrencies.find(c => c.code === calc.fromCurrency)
 
   useEffect(() => {
     if (!rawAmount) { setLiveResult(null); return }
@@ -275,7 +266,7 @@ export default function NewTransfer() {
   const handleFromCurrencyChange = (code) => {
     let newCountry = null, newCurrency = null
     if (calc.toCurrency === code) {
-      const avail = (countriesRaw || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== code)
+      const avail = receiveCountries.filter(c => c.currency !== code)
       if (avail.length > 0) { newCountry = avail[0].country; newCurrency = avail[0].currency }
     }
     setCalc(prev => ({
@@ -297,11 +288,16 @@ export default function NewTransfer() {
     setLiveResult(null)
   }
 
-  const { data: countriesRaw } = useQuery({
-    queryKey: ['countries'],
-    queryFn: () => api.get('/rates/countries').then(r => r.data.data),
-  })
-  const countriesData = (countriesRaw || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== calc.fromCurrency)
+  const { sendCurrencies, receiveCountries } = useCountries()
+  const countriesData = receiveCountries.filter(c => c.currency !== calc.fromCurrency)
+
+  // Si Ajustes quita el país o la moneda elegida, caer en una válida: si no,
+  // el paso de calcular se queda pidiendo una tasa inexistente.
+  useEffect(() => {
+    if (sendCurrencies.length && !sendCurrencies.some(c => c.code === calc.fromCurrency)) {
+      setCalc(prev => ({ ...prev, fromCurrency: sendCurrencies[0].code }))
+    }
+  }, [sendCurrencies, calc.fromCurrency])
 
   const { data: banksData } = useQuery({
     queryKey: ['banks', receiver.receiver_country],
@@ -577,7 +573,7 @@ export default function NewTransfer() {
                         <ChevronDown />
                       </button>
                       {fromOpen && (
-                        <FromDropdown value={calc.fromCurrency} onChange={handleFromCurrencyChange} onClose={() => setFromOpen(false)} />
+                        <FromDropdown value={calc.fromCurrency} onChange={handleFromCurrencyChange} onClose={() => setFromOpen(false)} options={sendCurrencies} />
                       )}
                     </div>
                     <input

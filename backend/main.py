@@ -101,9 +101,13 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     # Migrate schema and data
     _run_migrations()
-    # Cargar tasas al inicio
+    # Países por defecto (solo si la tabla está vacía) y tasas iniciales
     db = SessionLocal()
     try:
+        from services.country_service import seed_countries_if_empty
+        creados = seed_countries_if_empty(db)
+        if creados:
+            log.info("Países sembrados: %s", creados)
         await fetch_and_store_rates(db)
     finally:
         db.close()

@@ -1,21 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { flagUrl } from '../utils/flags'
+import { useCountries } from '../hooks/useCountries'
 
-const SEND_CURRENCIES = [
-  { code: 'CLP', iso2: 'cl', name: 'Peso Chileno' },
-  { code: 'COP', iso2: 'co', name: 'Peso Colombiano' },
-  { code: 'USD', iso2: 'us', name: 'Dólar Americano' },
-  { code: 'EUR', iso2: 'eu', name: 'Euro' },
-  { code: 'PEN', iso2: 'pe', name: 'Sol Peruano' },
-  { code: 'BRL', iso2: 'br', name: 'Real Brasileño' },
-  { code: 'MXN', iso2: 'mx', name: 'Peso Mexicano' },
-  { code: 'ARS', iso2: 'ar', name: 'Peso Argentino' },
-  { code: 'CAD', iso2: 'ca', name: 'Dólar Canadiense' },
-]
-const ALLOWED_RECV_CURRENCIES = ['CLP','COP','USD','EUR','PEN','BRL','MXN','ARS','CAD','VES']
+// Los países y monedas ya no viven aquí: se editan en Ajustes → Países y
+// llegan por API (hooks/useCountries).
 const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
 
 const cflag = iso2 => `https://flagcdn.com/40x30/${iso2}.png`
@@ -61,7 +51,7 @@ function MobileSheet({ title, onClose, children }) {
 }
 
 // ── Dropdown / Sheet Origen ───────────────────────────────────────────────────
-function FromDropdown({ value, onChange, onClose, mobile }) {
+function FromDropdown({ value, onChange, onClose, mobile, options = [] }) {
   const ref = useRef()
   useEffect(() => {
     if (mobile) return
@@ -70,7 +60,7 @@ function FromDropdown({ value, onChange, onClose, mobile }) {
     return () => document.removeEventListener('mousedown', h)
   }, [onClose, mobile])
 
-  const items = SEND_CURRENCIES.map(c => (
+  const items = options.map(c => (
     <button key={c.code} type="button" onClick={() => { onChange(c.code); onClose() }}
       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: mobile ? '14px 20px' : '11px 14px', background: value === c.code ? 'rgba(56,189,248,.15)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
       <img src={cflag(c.iso2)} alt="" style={{ width: mobile ? 30 : 22, height: mobile ? 20 : 15, borderRadius: 3, objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
@@ -173,13 +163,26 @@ export default function CalculatorDark({ onSend }) {
   const receivedRef = useRef(null)
   const countRaf    = useRef(null)
 
-  const { data: countriesData } = useQuery({
-    queryKey: ['countries'],
-    queryFn: () => api.get('/rates/countries').then(r => r.data.data),
-  })
-  const countries   = (countriesData || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== fromCurrency)
-  const selectedFrom = SEND_CURRENCIES.find(c => c.code === fromCurrency)
+  const { sendCurrencies, receiveCountries } = useCountries()
+  const countries   = receiveCountries.filter(c => c.currency !== fromCurrency)
+  const selectedFrom = sendCurrencies.find(c => c.code === fromCurrency)
   const rawAmount   = parseRaw(displayAmount)
+
+  // Si el admin quita el país o la moneda que estaba elegida, hay que caer en
+  // una válida; si no, el calculador se queda pidiendo una tasa que ya no
+  // existe y muestra un error permanente.
+  useEffect(() => {
+    if (sendCurrencies.length && !sendCurrencies.some(c => c.code === fromCurrency)) {
+      setFromCurrency(sendCurrencies[0].code)
+    }
+  }, [sendCurrencies, fromCurrency])
+
+  useEffect(() => {
+    if (countries.length && !countries.some(c => c.country === toCountry)) {
+      setToCountry(countries[0].country)
+      setToCurrency(countries[0].currency)
+    }
+  }, [countries, toCountry])
 
   useEffect(() => {
     const found = countries.find(c => c.country === toCountry)
@@ -241,7 +244,7 @@ export default function CalculatorDark({ onSend }) {
     setFromCurrency(code); setResult(null); setRateError(false); setFromOpen(false)
     if (displayAmount) { const n = parseRaw(displayAmount); if (n) setDisplayAmount(fmt(n, code)) }
     if (toCurrency === code) {
-      const next = (countriesData || []).filter(c => ALLOWED_RECV_CURRENCIES.includes(c.currency) && c.currency !== code)
+      const next = receiveCountries.filter(c => c.currency !== code)
       if (next.length > 0) { setToCountry(next[0].country); setToCurrency(next[0].currency) }
     }
   }
@@ -298,7 +301,7 @@ export default function CalculatorDark({ onSend }) {
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{fromCurrency}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9fb3dd" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>
-              {fromOpen && <FromDropdown value={fromCurrency} onChange={handleFromChange} onClose={() => setFromOpen(false)} mobile={isMobile} />}
+              {fromOpen && <FromDropdown value={fromCurrency} onChange={handleFromChange} onClose={() => setFromOpen(false)} mobile={isMobile} options={sendCurrencies} />}
             </div>
             <input type="text" inputMode="numeric" value={displayAmount} onChange={handleAmountChange} placeholder="0"
               className="calc-amount"

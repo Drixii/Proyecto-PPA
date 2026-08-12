@@ -13,6 +13,7 @@ from models.point import PointTransaction
 from models.invite_code import InviteCode
 from models.admin_sub_admin import AdminSubAdmin
 from models.commission_rule import CommissionRule
+from models.country import Country
 from schemas.order import OrderOut, OrderStatusUpdate
 from datetime import datetime, timedelta
 from services.order_service import advance_order_status, find_sub_admin_for_country
@@ -1111,6 +1112,122 @@ def set_commission_rule(
 
     db.commit()
     return {"success": True, "data": {}, "message": "Comisión guardada"}
+
+
+# ── Países ────────────────────────────────────────────────
+# Lista única para toda la plataforma, no por super-admin: el calculador del
+# home es público y no tiene forma de saber de qué admin mostrar los países.
+
+
+class CountryCreate(BaseModel):
+    name: str
+    currency: str
+    iso2: str
+    can_send: bool = False
+    can_receive: bool = True
+
+
+class CountryUpdate(BaseModel):
+    name: Optional[str] = None
+    currency: Optional[str] = None
+    iso2: Optional[str] = None
+    can_send: Optional[bool] = None
+    can_receive: Optional[bool] = None
+    active: Optional[bool] = None
+
+
+def _country_dict(c: Country) -> dict:
+    return {
+        "id": c.id, "name": c.name, "currency": c.currency, "iso2": c.iso2,
+        "can_send": c.can_send, "can_receive": c.can_receive, "active": c.active,
+    }
+
+
+@router.get("/countries", response_model=dict)
+def list_countries(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
+    rows = db.query(Country).order_by(Country.name).all()
+    return {"success": True, "data": [_country_dict(c) for c in rows], "message": ""}
+
+
+@router.post("/countries", response_model=dict)
+def create_country(
+    data: CountryCreate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    name = data.name.strip()
+    iso2 = data.iso2.strip().lower()
+    currency = data.currency.strip().upper()
+    if not name or not currency:
+        raise HTTPException(status_code=400, detail="Nombre y moneda son obligatorios")
+    # iso2 obligatorio y de dos letras: es lo que dibuja la bandera. Sin él el
+    # país sale sin bandera en los desplegables.
+    if len(iso2) != 2 or not iso2.isalpha():
+        raise HTTPException(status_code=400, detail="El código de bandera debe ser de 2 letras (ej: cl, co)")
+    if db.query(Country).filter(func.lower(Country.name) == name.lower()).first():
+        raise HTTPException(status_code=400, detail=f"Ya existe un país llamado {name}")
+
+    country = Country(
+        name=name, currency=currency, iso2=iso2,
+        can_send=data.can_send, can_receive=data.can_receive, active=True,
+    )
+    db.add(country)
+    db.commit()
+    db.refresh(country)
+    return {"success": True, "data": _country_dict(country), "message": f"{name} añadido"}
+
+
+@router.patch("/countries/{country_id}", response_model=dict)
+def update_country(
+    country_id: int,
+    data: CountryUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    country = db.query(Country).filter(Country.id == country_id).first()
+    if not country:
+        raise HTTPException(status_code=404, detail="País no encontrado")
+
+    if data.name is not None:
+        country.name = data.name.strip()
+    if data.currency is not None:
+        country.currency = data.currency.strip().upper()
+    if data.iso2 is not None:
+        iso2 = data.iso2.strip().lower()
+        if len(iso2) != 2 or not iso2.isalpha():
+            raise HTTPException(status_code=400, detail="El código de bandera debe ser de 2 letras")
+        country.iso2 = iso2
+    if data.can_send is not None:
+        country.can_send = data.can_send
+    if data.can_receive is not None:
+        country.can_receive = data.can_receive
+    if data.active is not None:
+        country.active = data.active
+
+    db.commit()
+    db.refresh(country)
+    return {"success": True, "data": _country_dict(country), "message": "País actualizado"}
+
+
+@router.delete("/countries/{country_id}", response_model=dict)
+def delete_country(
+    country_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Desactiva el país en vez de borrarlo.
+
+    Las órdenes guardan el país como texto (`receiver_country`), así que
+    borrar la fila dejaría el historial mostrando países que ya no existen y
+    los sub-admins asignados a ese país sin referencia. Desactivar lo saca de
+    los desplegables y conserva todo lo demás.
+    """
+    country = db.query(Country).filter(Country.id == country_id).first()
+    if not country:
+        raise HTTPException(status_code=404, detail="País no encontrado")
+    country.active = False
+    db.commit()
+    return {"success": True, "data": _country_dict(country), "message": f"{country.name} desactivado"}
 
 
 @router.delete("/commissions", response_model=dict)

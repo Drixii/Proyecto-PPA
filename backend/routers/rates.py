@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import get_db
 from models.exchange_rate import ExchangeRate
+from models.country import Country
 from schemas.rate import RateOut, ConvertResult, ManualRateUpdate, CountryInfo
 from services.exchange_service import get_rate, set_manual_rate, fetch_and_store_rates
 from auth.dependencies import require_admin
@@ -10,6 +11,9 @@ from typing import List
 
 router = APIRouter(prefix="/api/rates", tags=["rates"])
 
+# Solo para las banderas emoji de respuestas antiguas. La lista de países vive
+# ahora en la tabla `countries` (editable en Ajustes); esto es un mapa de
+# adorno que se puede borrar cuando ningún cliente use el campo `flag`.
 COUNTRIES_CURRENCIES = {
     "Chile": {"currency": "CLP", "flag": "🇨🇱"},
     "Venezuela": {"currency": "VES", "flag": "🇻🇪"},
@@ -36,12 +40,33 @@ COUNTRIES_CURRENCIES = {
 
 
 @router.get("/countries", response_model=dict)
-def get_countries():
-    countries = [
-        CountryInfo(country=k, currency=v["currency"], flag=v["flag"])
-        for k, v in COUNTRIES_CURRENCIES.items()
+def get_countries(db: Session = Depends(get_db)):
+    """Países disponibles. Público: lo usa el calculador del home.
+
+    Sale de la tabla `countries`, editable desde Ajustes. Devuelve los activos
+    con sus dos permisos para que cada calculador se quede con lo suyo:
+    `can_send` para el desplegable de origen, `can_receive` para el destino.
+    `iso2` viaja aquí para que la bandera no dependa de ningún mapa en el
+    frontend — antes faltaban Canadá, Reino Unido, China y Japón.
+    """
+    rows = (
+        db.query(Country)
+        .filter(Country.active == True)
+        .order_by(Country.name)
+        .all()
+    )
+    data = [
+        {
+            "country": c.name,
+            "currency": c.currency,
+            "iso2": c.iso2,
+            "flag": COUNTRIES_CURRENCIES.get(c.name, {}).get("flag", ""),
+            "can_send": c.can_send,
+            "can_receive": c.can_receive,
+        }
+        for c in rows
     ]
-    return {"success": True, "data": [c.model_dump() for c in countries], "message": ""}
+    return {"success": True, "data": data, "message": ""}
 
 
 @router.get("", response_model=dict)

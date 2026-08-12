@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import FinexyLayout from '../../components/FinexyLayout'
+import CountriesManager from './CountriesManager'
 import api from '../../services/api'
 
 const GLASS = {
@@ -435,33 +436,165 @@ function CommissionMatrix({ data, onSaved }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+// ── Secciones ─────────────────────────────────────────────────────────────────
+
+const SECTIONS = [
+  {
+    key: 'tasas',
+    icon: '📈',
+    title: 'Tasas y comisiones',
+    desc: 'Comisión por ruta y simulador de tasas en tiempo real',
+  },
+  {
+    key: 'paises',
+    icon: '🌎',
+    title: 'Países',
+    desc: 'Qué países se ofrecen para enviar y recibir',
+  },
+  {
+    key: 'pagos',
+    icon: '💳',
+    title: 'Integraciones de pago',
+    desc: 'Cobro con tarjeta',
+  },
+]
+
+function SectionCard({ icon, title, desc, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        ...GLASS, padding: '20px', textAlign: 'left', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 16, width: '100%',
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,.06)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+    >
+      <span style={{ fontSize: 26, lineHeight: 1 }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>{title}</p>
+        <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>{desc}</p>
+      </div>
+      <span style={{ fontSize: 18, color: '#475569' }}>›</span>
+    </button>
+  )
+}
+
+function PaymentIntegrations() {
+  const { data: cfg, isLoading } = useQuery({
+    queryKey: ['payments-config'],
+    queryFn: () => api.get('/payments/config').then(r => r.data.data),
+  })
+
+  const activo = !!cfg?.enabled
+
+  return (
+    <div style={{ ...GLASS, padding: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Stripe</h3>
+        {!isLoading && (
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+            background: activo ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+            color: activo ? '#4ade80' : '#fcd34d',
+          }}>
+            {activo ? 'Activo' : 'Sin configurar'}
+          </span>
+        )}
+      </div>
+
+      {activo ? (
+        <p style={{ margin: 0, fontSize: 13, color: '#aebfe2', lineHeight: 1.6 }}>
+          El pago con tarjeta está disponible para los clientes. Una orden solo pasa a
+          <strong> En Proceso</strong> cuando Stripe confirma el cobro por webhook — nunca desde el navegador.
+        </p>
+      ) : (
+        <div style={{ fontSize: 13, color: '#aebfe2', lineHeight: 1.7 }}>
+          <p style={{ margin: '0 0 10px' }}>
+            La opción de pagar con tarjeta está <strong>oculta</strong> para los clientes hasta que se
+            configuren las claves, para que nadie elija un método que no puede completar.
+          </p>
+          <p style={{ margin: '0 0 8px', color: '#8aa0cc' }}>
+            Las claves se añaden en el servidor, en <code style={{ color: '#38bdf8' }}>/opt/ppa/backend/.env</code>:
+          </p>
+          <pre style={{
+            margin: 0, padding: '10px 12px', borderRadius: 10, fontSize: 12,
+            background: 'rgba(4,10,30,.7)', color: '#8aa0cc', overflowX: 'auto',
+          }}>{`STRIPE_SECRET_KEY=sk_...
+STRIPE_PUBLISHABLE_KEY=pk_...
+STRIPE_WEBHOOK_SECRET=whsec_...`}</pre>
+        </div>
+      )}
+
+      <p style={{ margin: '16px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+        Hoy todos los cobros van a una sola cuenta. Más adelante, cada super-admin podrá conectar
+        la suya y recibir directamente el dinero de sus clientes.
+      </p>
+    </div>
+  )
+}
+
 export default function AdminSettings() {
   const qc = useQueryClient()
+  const [section, setSection] = useState(null)
 
   const { data: commData, isLoading } = useQuery({
     queryKey: ['admin-commissions'],
     queryFn: () => api.get('/admin/commissions').then(r => r.data.data),
+    enabled: section === 'tasas',
   })
 
   const refresh = useCallback(() => qc.invalidateQueries(['admin-commissions']), [qc])
+
+  const actual = SECTIONS.find(s => s.key === section)
 
   return (
     <FinexyLayout>
       <style>{`select option { background: #0a1628; color: #eaf2ff; } input[type=number]::-webkit-inner-spin-button { opacity: 0.3 }`}</style>
       <div style={{ padding: '24px', maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 22 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#eaf2ff' }}>Ajustes</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#8aa0cc' }}>Comisiones por ruta y simulador de tasas en tiempo real</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {actual && (
+            <button
+              onClick={() => setSection(null)}
+              style={{
+                width: 34, height: 34, borderRadius: 11, cursor: 'pointer', fontSize: 16,
+                background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', color: '#8aa0cc',
+              }}
+            >
+              ←
+            </button>
+          )}
+          <div>
+            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#eaf2ff' }}>
+              {actual ? actual.title : 'Ajustes'}
+            </h1>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#8aa0cc' }}>
+              {actual ? actual.desc : 'Elige qué quieres configurar'}
+            </p>
+          </div>
         </div>
 
-        {isLoading ? (
-          <div style={{ height: 200, borderRadius: 22, background: 'rgba(255,255,255,.04)' }} />
-        ) : (
-          <>
-            <RateTester commData={commData} />
-            <CommissionMatrix data={commData} onSaved={refresh} />
-          </>
+        {!actual && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {SECTIONS.map(s => (
+              <SectionCard key={s.key} {...s} onClick={() => setSection(s.key)} />
+            ))}
+          </div>
         )}
+
+        {section === 'tasas' && (
+          isLoading ? (
+            <div style={{ height: 200, borderRadius: 22, background: 'rgba(255,255,255,.04)' }} />
+          ) : (
+            <>
+              <RateTester commData={commData} />
+              <CommissionMatrix data={commData} onSaved={refresh} />
+            </>
+          )
+        )}
+
+        {section === 'paises' && <CountriesManager />}
+        {section === 'pagos' && <PaymentIntegrations />}
       </div>
     </FinexyLayout>
   )

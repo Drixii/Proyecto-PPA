@@ -10,3 +10,4 @@ from .point import PointAccount, PointTransaction, PointReward, PointRedemption
 from .invite_code import InviteCode
 from .admin_sub_admin import AdminSubAdmin
 from .commission_rule import CommissionRule
+from .country import Country
