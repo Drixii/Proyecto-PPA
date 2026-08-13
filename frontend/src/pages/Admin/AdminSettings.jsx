@@ -458,7 +458,7 @@ const SECTIONS = [
     key: 'pagos',
     icon: '💳',
     title: 'Integraciones de pago',
-    desc: 'Cobro con tarjeta',
+    desc: 'Stripe para tarjeta, Koywe para Chile',
   },
 ]
 
@@ -642,6 +642,130 @@ function StripeKeysForm() {
           >
             {guardar.isPending ? 'Guardando...' : 'Guardar claves'}
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KoyweKeysForm() {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({})
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+  const [abierto, setAbierto] = useState(false)
+
+  const { data: koywe } = useQuery({
+    queryKey: ['koywe-keys'],
+    queryFn: () => api.get('/payments/koywe/keys').then(r => r.data.data),
+  })
+
+  const guardar = useMutation({
+    mutationFn: (body) => api.put('/payments/koywe/keys', body),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      setForm({})
+      qc.invalidateQueries({ queryKey: ['koywe-keys'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
+  })
+
+  const campos = [
+    { k: 'koywe_api_key', label: 'API key', ph: 'la que te env\u00ede Koywe' },
+    { k: 'koywe_secret', label: 'Secret', ph: 'firma la autenticaci\u00f3n' },
+    { k: 'koywe_org_id', label: 'ID de organizaci\u00f3n', ph: 'org_...', publico: true },
+    { k: 'koywe_merchant_id', label: 'ID de comercio', ph: 'mer_...', publico: true },
+    { k: 'koywe_webhook_secret', label: 'Secreto del webhook', ph: 'valida los avisos de pago' },
+  ]
+
+  const hayAlgo = Object.values(form).some(v => (v || '').trim())
+  const listo = !!koywe?.listo
+
+  return (
+    <div style={{ ...GLASS, padding: '20px 24px' }}>
+      <button
+        onClick={() => setAbierto(a => !a)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Koywe</h3>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+              background: listo ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+              color: listo ? '#4ade80' : '#fcd34d',
+            }}>
+              {listo ? 'Configurado' : 'Sin credenciales'}
+            </span>
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
+            Cobros en Chile \u2014 Khipu y transferencia bancaria (CLP)
+          </p>
+        </div>
+        <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '\u2304' : '\u203a'}</span>
+      </button>
+
+      {abierto && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', marginBottom: 16 }}>
+            <p style={{ margin: 0, fontSize: 12.5, color: '#aebfe2', lineHeight: 1.6 }}>
+              Koywe no genera estas credenciales desde un panel: las env\u00eda su soporte
+              (<span style={{ color: '#38bdf8' }}>soporte@koywe.com</span>) despu\u00e9s del KYB.
+              Pide primero las de <strong>sandbox</strong> y d\u00e9jalas aqu\u00ed con el modo en
+              \u00abPrueba\u00bb.
+            </p>
+          </div>
+
+          {campos.map(({ k, label, ph, publico }) => (
+            <div key={k} style={{ marginBottom: 14 }}>
+              <label style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
+                {label}
+                {koywe?.[k] && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{koywe[k]}</span>}
+              </label>
+              <input
+                type={publico ? 'text' : 'password'}
+                autoComplete="off"
+                value={form[k] || ''}
+                placeholder={koywe?.[k] ? 'Dejar vac\u00edo para no cambiarlo' : ph}
+                onChange={e => { setForm(f => ({ ...f, [k]: e.target.value })); setError('') }}
+                style={{ ...INP, width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          ))}
+
+          <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+            Se guardan cifradas y no vuelven a salir de aqu\u00ed. Para borrar una, escribe{' '}
+            <code style={{ color: '#8aa0cc' }}>BORRAR</code> en su campo. Cada modo guarda su
+            propio juego: las de sandbox y las de producci\u00f3n conviven.
+            {koywe?.base_url && (
+              <> Ahora mismo apuntar\u00eda a <code style={{ color: '#8aa0cc' }}>{koywe.base_url}</code>.</>
+            )}
+          </p>
+
+          {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
+          {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
+
+          <button
+            onClick={() => guardar.mutate(form)}
+            disabled={!hayAlgo || guardar.isPending}
+            style={{
+              fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10, border: 'none',
+              color: '#fff', cursor: hayAlgo ? 'pointer' : 'not-allowed',
+              background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', opacity: hayAlgo ? 1 : .4,
+            }}
+          >
+            {guardar.isPending ? 'Guardando...' : 'Guardar credenciales'}
+          </button>
+
+          {listo && (
+            <p style={{ margin: '14px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+              Credenciales completas. Falta conectar el flujo de cobro: avisa y lo construyo
+              probando contra el sandbox.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -846,7 +970,7 @@ export default function AdminSettings() {
             </>
           )
         )}
-        {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /></>}
+        {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /></>}
       </div>
     </FinexyLayout>
   )

@@ -19,7 +19,7 @@ from models.order import Order
 from models.user import User
 from models.stripe_account import StripeAccount
 from auth.dependencies import get_current_user, require_super_admin
-from services import stripe_service
+from services import stripe_service, koywe_service
 from services.order_service import find_sub_admin_for_country
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
@@ -40,6 +40,10 @@ def payment_config():
             "enabled": stripe_service.is_configured(),
             "publishable_key": stripe_service.publishable_key(),
             "currencies": list(stripe_service.CARD_CURRENCIES),
+            "koywe": {
+                "enabled": koywe_service.is_configured(),
+                "currencies": list(koywe_service.KOYWE_CURRENCIES),
+            },
         },
         "message": "",
     }
@@ -241,6 +245,87 @@ def save_stripe_keys(
         return {"success": True, "data": {}, "message": "No había nada que guardar"}
 
     return {"success": True, "data": {}, "message": "Guardado: " + ", ".join(guardadas)}
+
+
+# ── Koywe (cobros en Chile) ───────────────────────────────────────────────────
+
+
+class KoyweKeysIn(BaseModel):
+    koywe_api_key: Optional[str] = None
+    koywe_secret: Optional[str] = None
+    koywe_org_id: Optional[str] = None
+    koywe_merchant_id: Optional[str] = None
+    koywe_webhook_secret: Optional[str] = None
+
+
+@router.get("/koywe/keys", response_model=dict)
+def get_koywe_keys(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Estado de las credenciales de Koywe, enmascaradas.
+
+    El id de organización y el de comercio van enteros: no son secretos, solo
+    identifican la cuenta, y verlos completos ayuda a comprobar que son los
+    que mandó Koywe.
+    """
+    from services import secret_store as ss
+
+    modo = stripe_service.get_mode()
+    creds = koywe_service.credenciales(modo)
+    publicos = (koywe_service.CLAVE_ORG, koywe_service.CLAVE_MERCHANT)
+
+    return {
+        "success": True,
+        "data": {
+            "modo": modo,
+            "base_url": koywe_service.base_url(modo),
+            "listo": koywe_service.is_configured(modo),
+            "currencies": list(koywe_service.KOYWE_CURRENCIES),
+            **{c: (creds[c] if c in publicos else ss.mask(creds[c])) for c in koywe_service.CAMPOS},
+        },
+        "message": "",
+    }
+
+
+@router.put("/koywe/keys", response_model=dict)
+def save_koywe_keys(
+    data: KoyweKeysIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda las credenciales cifradas, en el modo activo.
+
+    Un campo vacío no borra lo guardado: el formulario nunca recibe los
+    secretos, así que mandarlos vacíos es lo normal al cambiar solo uno. Para
+    borrar se manda BORRAR, igual que en Stripe.
+    """
+    from services import secret_store as ss
+
+    modo = stripe_service.get_mode()
+    guardados = []
+    for campo in koywe_service.CAMPOS:
+        valor = getattr(data, campo, None)
+        if valor is None:
+            continue
+        valor = valor.strip()
+        if not valor:
+            continue
+        if valor == "BORRAR":
+            ss.set_secret(db, koywe_service.clave_de(campo, modo), "")
+            guardados.append(f"{campo} borrado")
+            continue
+        ss.set_secret(db, koywe_service.clave_de(campo, modo), valor)
+        guardados.append(campo)
+
+    if not guardados:
+        return {"success": True, "data": {}, "message": "No había nada que guardar"}
+
+    return {
+        "success": True,
+        "data": {"listo": koywe_service.is_configured(modo)},
+        "message": f"Guardado ({len(guardados)})",
+    }
 
 
 # ── Stripe Connect: cada super-admin conecta su cuenta ────────────────────────
