@@ -645,8 +645,8 @@ export function ClientOrderPanel({ order }) {
       {/* Tabs */}
       <div className="flex border-b shrink-0 overflow-x-auto" style={{background:'rgba(6,13,40,.7)', borderColor:'rgba(255,255,255,.08)'}}>
         <TabButton2 active={tab === 'estado'} onClick={() => setTab('estado')}>Estado</TabButton2>
-        {proofUrl && <TabButton2 active={tab === 'comprobante'} onClick={() => setTab('comprobante')}>Comprobante</TabButton2>}
-        {completionProofUrl && <TabButton2 active={tab === 'prueba_envio'} onClick={() => setTab('prueba_envio')}>Prueba envío</TabButton2>}
+        {proofUrl && <TabButton2 active={tab === 'comprobante'} onClick={() => setTab('comprobante')}>Mi comprobante</TabButton2>}
+        {completionProofUrl && <TabButton2 active={tab === 'prueba_envio'} onClick={() => setTab('prueba_envio')}>Recibo de pago</TabButton2>}
         <TabButton2 active={tab === 'receptor'} onClick={() => setTab('receptor')}>Receptor</TabButton2>
         <TabButton2 active={tab === 'chat'} onClick={() => setTab('chat')}>Chat</TabButton2>
       </div>
