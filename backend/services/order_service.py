@@ -101,7 +101,33 @@ def find_sub_admin_for_country(db: Session, country: str, super_admin_id: Option
     return row.user_id if row else None
 
 
+def _validar_destino(db: Session, data):
+    """La moneda de destino tiene que ser la del país del receptor.
+
+    Son dos datos que viajan por separado desde el formulario y nadie
+    comprobaba que casaran. Pasó de verdad (CC-2026-0010): un receptor en
+    Chile con la orden emitida en pesos colombianos, porque el país se tomó
+    del contacto guardado y la moneda se quedó con el valor anterior. El
+    encargado ve "entregar 332.494,52 COP" a alguien con cuenta chilena, y no
+    hay forma de cumplir eso.
+    """
+    from models.country import Country
+
+    if data.currency_from == data.currency_to:
+        raise ValueError("El origen y el destino no pueden usar la misma moneda")
+
+    pais = db.query(Country).filter(Country.name == data.receiver_country).first()
+    if not pais:
+        return  # país libre (histórico o recién quitado): no se bloquea el envío
+    if pais.currency != data.currency_to:
+        raise ValueError(
+            f"{data.receiver_country} recibe en {pais.currency}, no en {data.currency_to}"
+        )
+
+
 def create_order(db: Session, data, client: User) -> Order:
+    _validar_destino(db, data)
+
     rate = get_rate(db, data.currency_from, data.currency_to)
     if not rate:
         raise ValueError(f"Tasa no disponible: {data.currency_from} -> {data.currency_to}")

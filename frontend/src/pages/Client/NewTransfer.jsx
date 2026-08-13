@@ -348,8 +348,27 @@ export default function NewTransfer() {
       receiver_id_type: order.receiver_id_type || 'Cédula',
       receiver_id_num: order.receiver_id_num || '',
     })
-    const found = (countriesData || []).find(c => c.country === order.receiver_country)
-    if (found) setCalc(prev => ({ ...prev, toCurrency: found.currency, toCountry: order.receiver_country }))
+    // Se busca en la lista COMPLETA, no en countriesData: esa excluye los
+    // países cuya moneda es la de origen, así que al enviar desde CLP no
+    // contiene Chile. Al elegir un contacto chileno no se encontraba nada, la
+    // moneda de destino se quedaba con la anterior (COP por defecto) y salía
+    // una orden para entregar pesos colombianos en Chile — pasó de verdad
+    // (CC-2026-0010).
+    const pais = countries.find(c => c.country === order.receiver_country)
+    if (!pais) return
+
+    setCalc(prev => {
+      // Si el contacto está en el mismo país de origen no hay envío posible:
+      // se mueve el origen a otra moneda en vez de dejar la orden incoherente.
+      const chocaConOrigen = pais.currency === prev.fromCurrency
+      const otroOrigen = sendCurrencies.find(c => c.code !== pais.currency)
+      return {
+        ...prev,
+        toCurrency: pais.currency,
+        toCountry: pais.country,
+        fromCurrency: chocaConOrigen && otroOrigen ? otroOrigen.code : prev.fromCurrency,
+      }
+    })
   }
 
   const submit = async () => {
