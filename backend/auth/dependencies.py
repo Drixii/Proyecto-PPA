@@ -30,7 +30,14 @@ def get_current_user(
     # porque el navegador seguía con la sesión y los datos viejos en memoria.
     if user.password_changed_at:
         emitido = payload.get("iat")
-        if emitido is None or emitido < user.password_changed_at.timestamp():
+        # Truncado a segundos: 'iat' se guarda en segundos enteros y
+        # password_changed_at lleva microsegundos, así que comparando en crudo
+        # el token emitido justo DESPUÉS del cambio salía "anterior" y el
+        # usuario no podía volver a entrar nunca. Se pierde el segundo exacto
+        # del cambio, que es un margen irrelevante al lado de dejar a alguien
+        # fuera de su cuenta.
+        cambiada = int(user.password_changed_at.timestamp())
+        if emitido is None or emitido < cambiada:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Tu contraseña cambió. Vuelve a iniciar sesión.",
