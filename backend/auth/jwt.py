@@ -6,8 +6,11 @@ from config import settings
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire})
+    ahora = datetime.now(timezone.utc)
+    expire = ahora + timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
+    # iat: hora de emisión. Permite invalidar los tokens anteriores a un cambio
+    # de contraseña sin llevar una lista de sesiones abiertas.
+    to_encode.update({"exp": expire, "iat": ahora})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

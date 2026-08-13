@@ -657,8 +657,11 @@ def change_user_password(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="Usa tu perfil para cambiar tu propia contraseña")
+    from datetime import timezone as _tz
     user.password = pwd_context.hash(data.new_password)
     user.must_change_password = True  # Fuerza al usuario a cambiar en próximo login
+    # Invalida sus sesiones abiertas: entra de nuevo y ve el aviso al instante.
+    user.password_changed_at = datetime.now(_tz.utc)
     db.commit()
     return {"success": True, "data": None, "message": "Contraseña actualizada"}
 

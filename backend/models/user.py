@@ -17,6 +17,10 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     timezone = Column(String, default='America/Santiago', nullable=True)
     must_change_password = Column(Boolean, default=False)
+    # Momento del último cambio de contraseña. Los tokens emitidos antes dejan
+    # de valer: cambiar la clave de alguien tiene que echarlo de las sesiones
+    # abiertas, o cambiarla porque le robaron la cuenta no sirve de nada.
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
     super_admin_id = Column(Integer, nullable=True)
     invite_code_used = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

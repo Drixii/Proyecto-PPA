@@ -22,6 +22,19 @@ def get_current_user(
     user = db.query(User).filter(User.id == int(user_id), User.is_active == True).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
+
+    # Un token emitido antes del último cambio de contraseña ya no vale. Sin
+    # esto, cambiarle la clave a alguien no lo echaba de las sesiones abiertas:
+    # si se la cambias porque le robaron la cuenta, el intruso seguía dentro.
+    # De paso arregla el aviso de "cambia tu contraseña", que tardaba en salir
+    # porque el navegador seguía con la sesión y los datos viejos en memoria.
+    if user.password_changed_at:
+        emitido = payload.get("iat")
+        if emitido is None or emitido < user.password_changed_at.timestamp():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tu contraseña cambió. Vuelve a iniciar sesión.",
+            )
     return user
 
 
