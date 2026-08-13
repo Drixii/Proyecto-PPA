@@ -5,6 +5,8 @@ puede editar la respuesta de JavaScript, cerrar la pestaña a mitad o abrir la
 URL de éxito a mano. La única señal que mueve una orden a en_proceso es el
 webhook firmado que manda Stripe.
 """
+import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -19,10 +21,11 @@ from models.order import Order
 from models.user import User
 from models.stripe_account import StripeAccount
 from auth.dependencies import get_current_user, require_super_admin
-from services import stripe_service, koywe_service
+from services import stripe_service, koywe_service, global66_service
 from services.order_service import find_sub_admin_for_country
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
+log = logging.getLogger("ppa")
 
 # Los errores de Stripe se devuelven como 400, no como 502/503. El sitio está
 # detrás de Cloudflare, que reemplaza cualquier 5xx del origen por su propia
@@ -326,6 +329,236 @@ def save_koywe_keys(
         "data": {"listo": koywe_service.is_configured(modo)},
         "message": f"Guardado ({len(guardados)})",
     }
+
+
+# ── Global66 (transferencias bancarias a nuestras cuentas) ────────────────────
+
+
+class Global66KeysIn(BaseModel):
+    global66_webhook_key: Optional[str] = None
+    global66_client_id: Optional[str] = None
+    global66_client_secret: Optional[str] = None
+
+
+@router.get("/global66/keys", response_model=dict)
+def get_global66_keys(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Estado de las credenciales de Global66, enmascaradas."""
+    from services import secret_store as ss
+
+    modo = stripe_service.get_mode()
+    creds = global66_service.credenciales(modo)
+
+    base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+
+    return {
+        "success": True,
+        "data": {
+            "modo": modo,
+            "base_url": global66_service.base_url(modo),
+            # La URL que hay que pegar en su panel al registrar el endpoint.
+            "webhook_url": f"{base}/api/payments/global66/webhook",
+            "webhook_listo": global66_service.webhook_listo(modo),
+            "api_lista": global66_service.api_lista(modo),
+            **{
+                c: (creds[c] if c in global66_service.CAMPOS_PUBLICOS else ss.mask(creds[c]))
+                for c in global66_service.CAMPOS
+            },
+        },
+        "message": "",
+    }
+
+
+@router.put("/global66/keys", response_model=dict)
+def save_global66_keys(
+    data: Global66KeysIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda las credenciales cifradas, en el modo activo.
+
+    Un campo vacío no borra lo guardado. Para borrar se manda BORRAR, igual
+    que en Stripe y en Koywe.
+    """
+    from services import secret_store as ss
+
+    modo = stripe_service.get_mode()
+    guardados = []
+    for campo in global66_service.CAMPOS:
+        valor = getattr(data, campo, None)
+        if valor is None:
+            continue
+        valor = valor.strip()
+        if not valor:
+            continue
+        if valor == "BORRAR":
+            ss.set_secret(db, global66_service.clave_de(campo, modo), "")
+            guardados.append(f"{campo} borrado")
+            continue
+        ss.set_secret(db, global66_service.clave_de(campo, modo), valor)
+        guardados.append(campo)
+
+    if not guardados:
+        return {"success": True, "data": {}, "message": "No había nada que guardar"}
+
+    return {
+        "success": True,
+        "data": {"webhook_listo": global66_service.webhook_listo(modo)},
+        "message": f"Guardado ({len(guardados)})",
+    }
+
+
+@router.get("/global66/deposits", response_model=dict)
+def list_global66_deposits(
+    limit: int = 30,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Últimos avisos recibidos, con la orden que probablemente les corresponde.
+
+    El movimiento bancario en sí es de la empresa y lo ve cualquier
+    super-admin. La orden sugerida NO: si pertenece a los clientes de otro
+    super-admin, solo se dice que la hay, sin número ni nombres.
+    """
+    from models.bank_deposit import BankDeposit
+
+    filas = (
+        db.query(BankDeposit)
+        .order_by(BankDeposit.received_at.desc())
+        .limit(min(max(limit, 1), 100))
+        .all()
+    )
+
+    salida = []
+    for d in filas:
+        orden = None
+        if d.match_order_id:
+            o = db.query(Order).filter(Order.id == d.match_order_id).first()
+            if o and o.super_admin_id == admin.id:
+                orden = {
+                    "id": o.id,
+                    "order_number": o.order_number,
+                    "sender_name": o.sender_name,
+                    "amount_sent": o.amount_sent,
+                    "currency_from": o.currency_from,
+                    "status": o.status,
+                }
+            elif o:
+                orden = {"id": None, "order_number": "(de otro super-admin)"}
+
+        salida.append({
+            "id": d.id,
+            "transaction_id": d.transaction_id,
+            "tipo": d.tipo,
+            "amount": d.amount,
+            "currency": d.currency,
+            "country_code": d.country_code,
+            "account_branch": d.account_branch,
+            "remitter_name": d.remitter_name,
+            "remitter_bank": d.remitter_bank,
+            "status": d.status,
+            "confirmado": global66_service.es_confirmado(d.status),
+            "match_note": d.match_note,
+            "orden": orden,
+            "received_at": d.received_at.isoformat() if d.received_at else None,
+        })
+
+    return {"success": True, "data": salida, "message": ""}
+
+
+def _guardar_deposito(cuerpo: dict):
+    """Guarda el aviso y calcula la orden sugerida. No aprueba nada.
+
+    Idempotente por `transaction_id`: Global66 manda el mismo depósito otra vez
+    cuando cambia de estado (PENDING → COMPLETED). En ese caso se actualiza la
+    fila existente en vez de crear una segunda, que haría parecer que entró el
+    dinero dos veces.
+    """
+    from models.bank_deposit import BankDeposit
+
+    datos = cuerpo.get("data") or cuerpo
+    tx = str(datos.get("transactionId") or "").strip()
+    if not tx:
+        log.warning("[global66] aviso sin transactionId: %s", json.dumps(cuerpo)[:2000])
+        return
+
+    def _num(valor):
+        try:
+            return float(valor)
+        except (TypeError, ValueError):
+            return None
+
+    db = SessionLocal()
+    try:
+        dep = db.query(BankDeposit).filter(BankDeposit.transaction_id == tx).first()
+        nuevo = dep is None
+        if nuevo:
+            dep = BankDeposit(provider="global66", transaction_id=tx)
+            db.add(dep)
+
+        dep.tipo = datos.get("type")
+        dep.amount = _num(datos.get("originAmount"))
+        dep.currency = (datos.get("originCurrencyCode") or "").upper() or None
+        dep.amount_usd = _num(datos.get("originAmountUSD"))
+        dep.country_code = datos.get("originCountryCode")
+        dep.account_branch = datos.get("accountBranch")
+        dep.remitter_name = datos.get("thirdPartyClientName")
+        dep.remitter_bank = datos.get("remitterBankName")
+        dep.customer_id = str(datos.get("customerId") or "") or None
+        dep.status = datos.get("status")
+        dep.raw = json.dumps(cuerpo)[:20000]
+
+        # El cruce se recalcula mientras nadie lo haya usado todavía: entre el
+        # PENDING y el COMPLETED puede haber aparecido la orden.
+        if not dep.applied:
+            try:
+                dep.match_order_id, dep.match_note = global66_service.sugerir_orden(db, dep)
+            except Exception as e:
+                dep.match_order_id, dep.match_note = None, "No se pudo calcular el cruce"
+                log.warning("[global66] fallo al cruzar %s: %s", tx, e)
+
+        db.commit()
+        log.info(
+            "[global66] %s %s %s %s -> %s",
+            "nuevo" if nuevo else "actualizado",
+            tx, dep.amount, dep.currency, dep.match_note,
+        )
+    except Exception as e:
+        db.rollback()
+        # Global66 no reintenta: si esto falla, el aviso solo existe en este
+        # log. Se escribe entero a propósito para poder rehacerlo a mano.
+        log.error("[global66] NO SE PUDO GUARDAR el aviso: %s | cuerpo=%s", e, json.dumps(cuerpo)[:4000])
+    finally:
+        db.close()
+
+
+@router.post("/global66/webhook")
+async def global66_webhook(request: Request):
+    """Recibe los avisos de dinero recibido.
+
+    Global66 no reintenta si respondemos con error, así que la única respuesta
+    distinta de 200 es 401 por clave mala. Cualquier otro problema se registra
+    y se contesta 200: reintentar no va a pasar, y devolver 500 solo añadiría
+    ruido sin recuperar el aviso.
+    """
+    if not global66_service.verificar_api_key(request.headers.get("x-api-key")):
+        raise HTTPException(status_code=401, detail="Clave inválida")
+
+    try:
+        cuerpo = await request.json()
+    except Exception:
+        crudo = (await request.body())[:2000]
+        log.error("[global66] cuerpo no era JSON: %r", crudo)
+        return {"received": True}
+
+    if not isinstance(cuerpo, dict):
+        log.error("[global66] cuerpo con forma inesperada: %r", str(cuerpo)[:1000])
+        return {"received": True}
+
+    await run_in_threadpool(_guardar_deposito, cuerpo)
+    return {"received": True}
 
 
 # ── Stripe Connect: cada super-admin conecta su cuenta ────────────────────────

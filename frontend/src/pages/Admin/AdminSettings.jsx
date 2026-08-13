@@ -458,7 +458,7 @@ const SECTIONS = [
     key: 'pagos',
     icon: '💳',
     title: 'Integraciones de pago',
-    desc: 'Stripe para tarjeta, Koywe para Chile',
+    desc: 'Stripe para tarjeta, Koywe para Chile, Global66 para transferencias',
   },
 ]
 
@@ -772,6 +772,204 @@ function KoyweKeysForm() {
   )
 }
 
+function Global66KeysForm() {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({})
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+  const [abierto, setAbierto] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+
+  const { data: g66 } = useQuery({
+    queryKey: ['global66-keys'],
+    queryFn: () => api.get('/payments/global66/keys').then(r => r.data.data),
+  })
+
+  // Los avisos solo se piden con la sección abierta y la clave puesta: sin
+  // endpoint registrado la lista está siempre vacía y sería una consulta al
+  // servidor cada vez que alguien entra en Ajustes.
+  const { data: depositos } = useQuery({
+    queryKey: ['global66-deposits'],
+    queryFn: () => api.get('/payments/global66/deposits').then(r => r.data.data),
+    enabled: !!(abierto && g66?.webhook_listo),
+    refetchInterval: 30000,
+  })
+
+  const guardar = useMutation({
+    mutationFn: (body) => api.put('/payments/global66/keys', body),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      setForm({})
+      qc.invalidateQueries({ queryKey: ['global66-keys'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
+  })
+
+  const campos = [
+    { k: 'global66_webhook_key', label: 'Clave del webhook (x-api-key)', ph: 'te la dan al registrar la URL' },
+    { k: 'global66_client_id', label: 'Client ID', ph: 'de las credenciales de API', publico: true },
+    { k: 'global66_client_secret', label: 'Client Secret', ph: 'de las credenciales de API' },
+  ]
+
+  const hayAlgo = Object.values(form).some(v => (v || '').trim())
+  const listo = !!g66?.webhook_listo
+
+  const copiarUrl = () => {
+    navigator.clipboard?.writeText(g66?.webhook_url || '')
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  return (
+    <div style={{ ...GLASS, padding: '20px 24px' }}>
+      <button
+        onClick={() => setAbierto(a => !a)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Global66</h3>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+              background: listo ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+              color: listo ? '#4ade80' : '#fcd34d',
+            }}>
+              {listo ? 'Recibiendo avisos' : 'Sin credenciales'}
+            </span>
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
+            Avisa cuando entra plata en tus cuentas de cada país
+          </p>
+        </div>
+        <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
+      </button>
+
+      {abierto && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', marginBottom: 16 }}>
+            <p style={{ margin: 0, fontSize: 12.5, color: '#aebfe2', lineHeight: 1.6 }}>
+              Esto <strong>no aprueba órdenes solo</strong>. Cuando alguien te transfiere,
+              Global66 avisa y aquí abajo aparece el depósito con la orden que
+              probablemente le corresponde. Aprobar lo sigues haciendo tú.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
+              El aviso de Global66 no trae ningún campo para el número de orden, así que
+              el cruce se hace por monto + moneda + nombre de quien transfirió.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
+              URL que hay que registrar en el panel de Global66
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                readOnly
+                value={g66?.webhook_url || ''}
+                onFocus={e => e.target.select()}
+                style={{ ...INP, flex: 1, fontFamily: 'monospace', fontSize: 12.5, color: '#8aa0cc' }}
+              />
+              <button
+                onClick={copiarUrl}
+                style={{ fontSize: 12, fontWeight: 700, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)', color: copiado ? '#4ade80' : '#aebfe2', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                {copiado ? 'Copiada' : 'Copiar'}
+              </button>
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+              Pídeles también que dejen entrar solo desde <code style={{ color: '#8aa0cc' }}>138.197.47.184</code>.
+              La clave que dan es fija, no una firma: la lista blanca de IP es lo que impide
+              que alguien con esa clave se invente un depósito.
+            </p>
+          </div>
+
+          {campos.map(({ k, label, ph, publico }) => (
+            <div key={k} style={{ marginBottom: 14 }}>
+              <label style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
+                {label}
+                {g66?.[k] && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{g66[k]}</span>}
+              </label>
+              <input
+                type={publico ? 'text' : 'password'}
+                autoComplete="off"
+                value={form[k] || ''}
+                placeholder={g66?.[k] ? 'Dejar vacío para no cambiarlo' : ph}
+                onChange={e => { setForm(f => ({ ...f, [k]: e.target.value })); setError('') }}
+                style={{ ...INP, width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          ))}
+
+          <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+            Con la <strong>clave del webhook</strong> ya empiezan a llegar los avisos. El Client
+            ID y el Secret hacen falta después, para confirmar cada depósito contra su API.
+            Se guardan cifradas. Para borrar una, escribe <code style={{ color: '#8aa0cc' }}>BORRAR</code> en su campo.
+          </p>
+
+          {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
+          {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
+
+          <button
+            onClick={() => guardar.mutate(form)}
+            disabled={!hayAlgo || guardar.isPending}
+            style={{
+              fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10, border: 'none',
+              color: '#fff', cursor: hayAlgo ? 'pointer' : 'not-allowed',
+              background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', opacity: hayAlgo ? 1 : .4,
+            }}
+          >
+            {guardar.isPending ? 'Guardando...' : 'Guardar credenciales'}
+          </button>
+
+          {listo && (
+            <div style={{ marginTop: 22 }}>
+              <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
+                Últimos avisos recibidos
+              </h4>
+              {!depositos?.length ? (
+                <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', lineHeight: 1.6 }}>
+                  Todavía no ha llegado ninguno. Aparecerán aquí en cuanto Global66 mande el
+                  primero — si registraste la URL y no llega nada, es que el endpoint no quedó
+                  bien guardado en su panel.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {depositos.map(d => (
+                    <div key={d.id} style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
+                          {d.amount?.toLocaleString('es-CL')} {d.currency}
+                        </span>
+                        <span style={{
+                          fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                          background: d.confirmado ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+                          color: d.confirmado ? '#4ade80' : '#fcd34d',
+                        }}>
+                          {d.status || 'sin estado'}
+                        </span>
+                      </div>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#8aa0cc' }}>
+                        De {d.remitter_name || 'sin nombre'}
+                        {d.remitter_bank ? ` · ${d.remitter_bank}` : ''}
+                        {d.account_branch ? ` → ${d.account_branch}` : ''}
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: 11.5, color: d.orden?.id ? '#4ade80' : '#64748b', lineHeight: 1.5 }}>
+                        {d.match_note || 'Sin cruce calculado'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PaymentIntegrations() {
   const qc = useQueryClient()
   const [error, setError] = useState('')
@@ -970,7 +1168,7 @@ export default function AdminSettings() {
             </>
           )
         )}
-        {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /></>}
+        {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
       </div>
     </FinexyLayout>
   )
