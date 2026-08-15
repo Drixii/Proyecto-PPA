@@ -9,6 +9,7 @@ import CardPayment from './CardPayment'
 import { flagUrl } from '../utils/flags'
 import { useStore } from '../store/useStore'
 import { fmtDate, userTz } from '../utils/timezone'
+import { esPagoExterno, esKoywe } from '../utils/payments'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -510,6 +511,10 @@ export function ClientOrderPanel({ order }) {
   const qc = useQueryClient()
   const [reuploadError, setReuploadError] = useState('')
   const [payingCard, setPayingCard] = useState(false)
+  // Pidiendo la URL del portal de Koywe. Se sale de la aplicación, así que no
+  // se vuelve a poner en false salvo que falle.
+  const [abrirPago, setAbrirPago] = useState(false)
+  const [abrirPagoError, setAbrirPagoError] = useState('')
 
   // Rechazar no cancela el envío: el cliente sube otro comprobante y la orden
   // vuelve sola a "en aprobación" (backend/routers/orders.py).
@@ -542,7 +547,9 @@ export function ClientOrderPanel({ order }) {
   if (!order) return null
 
   const apiBase = import.meta.env.VITE_API_URL || ''
-  const CLIENT_STATUS_STEPS = order.payment_method === 'tarjeta' ? CARD_STATUS_STEPS : TRANSFER_STATUS_STEPS
+  // Los pagos externos (tarjeta, Khipu, PIX...) no pasan por aprobación: no
+  // hay comprobante que revisar, el proveedor confirma el cobro.
+  const CLIENT_STATUS_STEPS = esPagoExterno(order.payment_method) ? CARD_STATUS_STEPS : TRANSFER_STATUS_STEPS
   const currentStep = CLIENT_STATUS_STEPS.indexOf(order.status)
   const proofUrl = order.payment_proof ? `${apiBase}/uploads/proofs/${order.payment_proof}` : null
   const proofIsImage = proofUrl && /\.(jpg|jpeg|png|webp)$/i.test(proofUrl)
@@ -584,21 +591,41 @@ export function ClientOrderPanel({ order }) {
         </button>
       </div>
 
-      {/* Tarjeta sin pagar: se creó la orden pero el cobro no llegó a pasar
-          (cerró el formulario, falló la tarjeta...). Se puede pagar aquí sin
-          volver a rellenar el envío. */}
-      {order.payment_method === 'tarjeta' && !order.paid_at && order.status === 'pendiente_pago' && (
+      {/* Pago externo sin completar: se creó la orden pero el cobro no llegó a
+          pasar (cerró el formulario, falló la tarjeta, abandonó el portal...).
+          Se puede pagar aquí sin volver a rellenar el envío. */}
+      {esPagoExterno(order.payment_method) && !order.paid_at && order.status === 'pendiente_pago' && (
         <div className="px-6 py-4 shrink-0" style={{background:'rgba(251,191,36,.08)', borderBottom:'1px solid rgba(251,191,36,.2)'}}>
           <p className="text-sm font-semibold mb-1" style={{color:'#fcd34d'}}>Pago pendiente</p>
           <p className="text-xs mb-3" style={{color:'#fcd34d'}}>
             Esta orden no se ha cobrado todavía. El envío no se procesa hasta que el pago se complete.
           </p>
+          {abrirPagoError && (
+            <p className="text-xs mb-2" style={{color:'#fca5a5'}}>{abrirPagoError}</p>
+          )}
           <button
-            onClick={() => setPayingCard(true)}
-            className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+            onClick={() => {
+              // La tarjeta se cobra dentro de la aplicación; los métodos de
+              // Koywe se cobran en su portal, así que hay que pedirle la URL
+              // en el momento — las de un intento anterior ya caducaron.
+              if (esKoywe(order.payment_method)) {
+                setAbrirPago(true)
+                setAbrirPagoError('')
+                api.post(`/payments/orders/${order.id}/koywe/checkout`)
+                  .then(r => { window.location.href = r.data.data.url })
+                  .catch(err => {
+                    setAbrirPago(false)
+                    setAbrirPagoError(err.response?.data?.detail || 'No se pudo abrir el portal de pago')
+                  })
+              } else {
+                setPayingCard(true)
+              }
+            }}
+            disabled={abrirPago}
+            className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
             style={{background:'rgba(56,189,248,.12)', border:'1px solid rgba(56,189,248,.3)', color:'#38bdf8'}}
           >
-            Pagar con tarjeta
+            {abrirPago ? 'Abriendo...' : (esKoywe(order.payment_method) ? 'Pagar ahora' : 'Pagar con tarjeta')}
           </button>
         </div>
       )}

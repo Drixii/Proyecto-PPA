@@ -148,8 +148,16 @@ def create_order(db: Session, data, client: User) -> Order:
     # en_aprobacion porque no hay nada que el admin pueda aprobar: se espera
     # al cliente, no a él, y mezclarlas llenaba su bandeja de casos que no
     # podía resolver.
-    is_card = (getattr(data, "payment_method", None) or "").lower() == "tarjeta"
-    initial_status = "pendiente_pago" if is_card else "en_aprobacion"
+    #
+    # Los métodos de Koywe (Khipu, PIX, PSE...) son iguales en esto: el cliente
+    # paga en un checkout externo y solo el webhook firmado los da por buenos.
+    # Lo que NO entra aquí es "transferencia", que sube comprobante y sí espera
+    # a que un admin lo mire.
+    from services.koywe_service import es_metodo as es_metodo_koywe
+
+    metodo = (getattr(data, "payment_method", None) or "").lower()
+    paga_fuera = metodo == "tarjeta" or es_metodo_koywe(metodo)
+    initial_status = "pendiente_pago" if paga_fuera else "en_aprobacion"
     sub_admin_id = None
 
     order = Order(

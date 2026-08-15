@@ -37,6 +37,7 @@ log = logging.getLogger("ppa")
 @router.get("/config", response_model=dict)
 def payment_config():
     """Lo que el navegador necesita saber para pintar el formulario."""
+    koywe_listo = koywe_service.is_configured()
     return {
         "success": True,
         "data": {
@@ -44,8 +45,15 @@ def payment_config():
             "publishable_key": stripe_service.publishable_key(),
             "currencies": list(stripe_service.CARD_CURRENCIES),
             "koywe": {
-                "enabled": koywe_service.is_configured(),
+                "enabled": koywe_listo,
                 "currencies": list(koywe_service.KOYWE_CURRENCIES),
+                # El catálogo entero de una vez: el selector cambia de moneda
+                # sin volver a preguntar, y sin métodos si Koywe no está
+                # configurado, para que nadie elija uno que no puede cobrar.
+                "methods": (
+                    {moneda: metodos for moneda, (_, metodos) in koywe_service.METODOS.items()}
+                    if koywe_listo else {}
+                ),
             },
         },
         "message": "",
@@ -277,14 +285,20 @@ def get_koywe_keys(
     modo = stripe_service.get_mode()
     creds = koywe_service.credenciales(modo)
     publicos = (koywe_service.CLAVE_ORG, koywe_service.CLAVE_MERCHANT)
+    base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
 
     return {
         "success": True,
         "data": {
             "modo": modo,
             "base_url": koywe_service.base_url(modo),
+            # La URL que hay que registrar en su panel para recibir los avisos.
+            "webhook_url": f"{base}/api/payments/koywe/webhook",
             "listo": koywe_service.is_configured(modo),
             "currencies": list(koywe_service.KOYWE_CURRENCIES),
+            "methods": {
+                moneda: metodos for moneda, (_, metodos) in koywe_service.METODOS.items()
+            },
             **{c: (creds[c] if c in publicos else ss.mask(creds[c])) for c in koywe_service.CAMPOS},
         },
         "message": "",
@@ -329,6 +343,139 @@ def save_koywe_keys(
         "data": {"listo": koywe_service.is_configured(modo)},
         "message": f"Guardado ({len(guardados)})",
     }
+
+
+@router.get("/koywe/test", response_model=dict)
+def probar_koywe(_admin: User = Depends(require_super_admin)):
+    """Comprueba las credenciales contra su API sin cobrar nada.
+
+    Sirve para saber si lo que se acaba de pegar funciona. Sin esto, el primer
+    aviso de que una credencial está mal lo daría un cliente intentando pagar.
+    """
+    try:
+        return {"success": True, "data": koywe_service.probar_conexion(), "message": "Conexión correcta"}
+    except koywe_service.KoyweError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# def y no async def: httpx sale a la red de forma síncrona y bloquearía el
+# event loop, y con él el chat de todos los demás.
+@router.post("/orders/{order_id}/koywe/checkout", response_model=dict)
+def crear_checkout_koywe(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Abre el cobro en Koywe y devuelve la URL donde el cliente paga.
+
+    El método ya se eligió al crear la orden y se guardó en `payment_method`,
+    así que reintentar un pago abandonado no obliga a rellenar el envío otra
+    vez. Esto NO marca nada como pagado: eso lo hace el webhook firmado.
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if not koywe_service.es_metodo(order.payment_method):
+        raise HTTPException(status_code=400, detail="Esta orden no se paga por Koywe")
+    if order.paid_at:
+        raise HTTPException(status_code=400, detail="Esta orden ya está pagada")
+
+    base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+
+    try:
+        cobro = koywe_service.crear_cobro(order, order.payment_method, f"{base}/orders/{order.id}")
+    except koywe_service.KoyweError as e:
+        # 400 y no 5xx: Cloudflare sustituye cualquier 5xx del origen por su
+        # propia pantalla de error y el motivo real no llegaría al cliente.
+        raise HTTPException(status_code=400, detail=f"Koywe rechazó el cobro: {e}")
+
+    order.payment_intent_id = cobro["koywe_order_id"]
+    db.commit()
+
+    return {
+        "success": True,
+        "data": {"url": cobro["url"], "metodo": cobro["metodo"]},
+        "message": "",
+    }
+
+
+def _koywe_pagada(datos: dict, tipo: str):
+    """Traduce el aviso de Koywe a nuestra orden y la marca pagada.
+
+    Solo se llega aquí con la firma ya verificada. El monto se comprueba si el
+    aviso lo trae: no protege contra un tercero — la firma ya lo hace — sino
+    contra un desajuste nuestro, como haber mandado un importe y cobrado otro.
+    """
+    koywe_id = str(datos.get("orderId") or datos.get("id") or "").strip()
+    external = datos.get("externalId")
+    numero = koywe_service.orden_de_externo(external)
+
+    db = SessionLocal()
+    try:
+        orden = None
+        if koywe_id:
+            orden = db.query(Order).filter(Order.payment_intent_id == koywe_id).first()
+        if not orden and numero:
+            orden = db.query(Order).filter(Order.order_number == numero).first()
+
+        if not orden:
+            # Normal: una organización de Koywe manda todos sus eventos a todos
+            # sus endpoints, así que aquí caen también los de otros sistemas.
+            log.info("[koywe] %s de %s (externalId=%s) sin orden nuestra — se ignora",
+                     tipo, koywe_id, external)
+            return
+
+        monto = datos.get("amountIn")
+        moneda = (datos.get("originCurrencySymbol") or "").upper()
+        if monto is not None and abs(float(monto) - float(orden.amount_sent)) > 0.01:
+            log.error("[koywe] %s: el aviso dice %s y la orden %s — NO se marca pagada",
+                      orden.order_number, monto, orden.amount_sent)
+            return
+        if moneda and moneda != (orden.currency_from or "").upper():
+            log.error("[koywe] %s: el aviso viene en %s y la orden en %s — NO se marca pagada",
+                      orden.order_number, moneda, orden.currency_from)
+            return
+
+        orden_id = orden.id
+    finally:
+        db.close()
+
+    _mark_paid(koywe_id, order_id=orden_id, order_number=numero, proveedor="koywe")
+
+
+@router.post("/koywe/webhook")
+async def koywe_webhook(request: Request):
+    """Recibe los eventos de Koywe.
+
+    async def porque hace falta el cuerpo crudo para validar la firma; el
+    trabajo con la base y con su API, que sí bloquea, va al threadpool.
+    """
+    payload = await request.body()
+
+    if not koywe_service.verificar_firma(payload, request.headers.get("Koywe-Signature")):
+        # O el secreto del panel no coincide con el guardado, o alguien está
+        # intentando marcar órdenes como pagadas a mano.
+        raise HTTPException(status_code=400, detail="Firma inválida")
+
+    try:
+        evento = json.loads(payload)
+    except ValueError:
+        log.error("[koywe] cuerpo firmado pero no era JSON: %r", payload[:1000])
+        return {"received": True}
+
+    tipo = (evento.get("type") or "") if isinstance(evento, dict) else ""
+    if tipo in ("order.paid", "order.completed"):
+        datos = evento.get("data") or {}
+        if isinstance(datos, dict):
+            await run_in_threadpool(_koywe_pagada, datos, tipo)
+
+    # 200 a todo lo demás: reintentar un evento que no nos interesa (o que ya
+    # procesamos) solo lo trae otra vez.
+    return {"received": True}
 
 
 # ── Global66 (transferencias bancarias a nuestras cuentas) ────────────────────
@@ -652,12 +799,24 @@ def stripe_dashboard_link(
         raise HTTPException(status_code=400, detail=f"Stripe rechazó la operación: {e}")
 
 
-def _mark_paid(payment_intent_id: str, order_id: int | None):
+def _mark_paid(
+    payment_intent_id: str,
+    order_id: int | None = None,
+    order_number: str | None = None,
+    proveedor: str = "stripe",
+):
     """Marca la orden como pagada y la deriva al encargado del país.
 
-    Se ejecuta desde el webhook. Idempotente: Stripe reintenta los eventos y
-    puede entregar el mismo varias veces; si ya está pagada no se hace nada,
-    porque volver a notificar al encargado le haría creer que hay dos envíos.
+    Se ejecuta desde el webhook de Stripe o el de Koywe: la mecánica es la
+    misma y lo único que cambia es de dónde sale la referencia del cobro.
+
+    Idempotente: los dos proveedores reintentan los eventos y pueden entregar
+    el mismo varias veces; si ya está pagada no se hace nada, porque volver a
+    notificar al encargado le haría creer que hay dos envíos.
+
+    `order_number` es la vía de Koywe: su aviso trae el `externalId` que le
+    pusimos, así que la orden se encuentra aunque se haya perdido el id que
+    guardamos al abrir el checkout.
     """
     db = SessionLocal()
     try:
@@ -666,8 +825,10 @@ def _mark_paid(payment_intent_id: str, order_id: int | None):
             order = db.query(Order).filter(Order.id == order_id).first()
         if not order and payment_intent_id:
             order = db.query(Order).filter(Order.payment_intent_id == payment_intent_id).first()
+        if not order and order_number:
+            order = db.query(Order).filter(Order.order_number == order_number).first()
         if not order:
-            print(f"[stripe] pago {payment_intent_id} sin orden asociada — se ignora")
+            log.warning("[%s] pago %s sin orden asociada — se ignora", proveedor, payment_intent_id)
             return
         if order.paid_at:
             return  # ya procesado
@@ -688,9 +849,9 @@ def _mark_paid(payment_intent_id: str, order_id: int | None):
             if order.sub_admin_id:
                 notify_sub_admin(db, order, order.sub_admin_id)
         except Exception as e:
-            print(f"[stripe] pago registrado pero fallaron las notificaciones: {e}")
+            log.error("[%s] pago registrado pero fallaron las notificaciones: %s", proveedor, e)
 
-        print(f"[stripe] {order.order_number} pagada ({payment_intent_id})")
+        log.info("[%s] %s pagada (%s)", proveedor, order.order_number, payment_intent_id)
     finally:
         db.close()
 

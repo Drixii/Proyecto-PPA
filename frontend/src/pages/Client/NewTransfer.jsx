@@ -235,6 +235,16 @@ export default function NewTransfer() {
   const cardEnabled = !!payCfg?.enabled
     && (payCfg?.currencies || []).includes(calc.fromCurrency)
 
+  // Métodos locales de Koywe para la moneda que se está enviando: Khipu en
+  // CLP, PIX en BRL, PSE en COP... El backend manda el catálogo entero y aquí
+  // solo se elige la fila que toca, así que cambiar de moneda no pide nada.
+  const koyweMethods = (payCfg?.koywe?.enabled && (payCfg?.koywe?.methods || {})[calc.fromCurrency]) || []
+  const koyweCodes = new Set(
+    Object.values(payCfg?.koywe?.methods || {}).flat().map(m => String(m.codigo).toLowerCase())
+  )
+  const esKoywe = (metodo) => koyweCodes.has(String(metodo || '').toLowerCase())
+  const koyweElegido = koyweMethods.find(m => String(m.codigo).toLowerCase() === String(payment.payment_method).toLowerCase())
+
   const [displayAmount, setDisplayAmount] = useState(
     calc.amount ? formatDisplay(parseRaw(String(calc.amount)), calc.fromCurrency) : ''
   )
@@ -398,6 +408,23 @@ export default function NewTransfer() {
         setCardOrder({ id: orderId, data: orderData })
         setLoading(false)
         return
+      }
+
+      // Koywe: igual que la tarjeta, la orden existe y NO está pagada. El
+      // cobro ocurre en el portal de ellos, así que se sale de la aplicación.
+      // Si el cliente no llega a pagar, la orden le espera en su panel.
+      if (esKoywe(payment.payment_method)) {
+        setShowConfirm(false)
+        try {
+          const chk = await api.post(`/payments/orders/${orderId}/koywe/checkout`)
+          window.location.href = chk.data.data.url
+          return
+        } catch (err) {
+          setError(err.response?.data?.detail
+            || 'La orden se creó pero no se pudo abrir el pago. Inténtalo desde tu panel.')
+          setLoading(false)
+          return
+        }
       }
 
       if (proofFile) {
@@ -836,15 +863,21 @@ export default function NewTransfer() {
                 <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Método de pago</h2>
               </div>
 
-              {/* Method selector — la tarjeta solo aparece si Stripe está
-                  configurado; si no, el cliente la elegiría y se quedaría
-                  atascado sin poder pagar. */}
-              <div className={`grid gap-3 ${cardEnabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {/* Method selector — cada método solo aparece si se puede cobrar
+                  de verdad con la moneda elegida; si no, el cliente lo
+                  elegiría y se quedaría atascado sin poder pagar. */}
+              <div className={`grid gap-3 ${(cardEnabled || koyweMethods.length) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {[
                   { value: 'transferencia', label: 'Transferencia', icon: '🏦', desc: 'Sube tu comprobante' },
                   ...(cardEnabled
                     ? [{ value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' }]
                     : []),
+                  ...koyweMethods.map(m => ({
+                    value: String(m.codigo).toLowerCase(),
+                    label: m.nombre,
+                    icon: '⚡',
+                    desc: m.desc,
+                  })),
                 ].map(({ value, label, icon, desc }) => (
                   <button key={value} type="button"
                     onClick={() => { setPayment(p => ({ ...p, payment_method: value, payment_bank: '' })); setProofFile(null); setProofPreview(null) }}
@@ -991,6 +1024,59 @@ export default function NewTransfer() {
                     </p>
                   </div>
                 </div>
+                </div>
+              )}
+
+              {/* Koywe: se paga fuera de la aplicación, en el portal de ellos.
+                  No hay formulario que rellenar aquí, así que esto solo
+                  explica a dónde va y confirma el importe. */}
+              {koyweElegido && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl overflow-hidden" style={GLASS}>
+                    <div className="bg-gradient-to-r from-cyan-600 to-blue-800 px-5 py-4 flex items-center gap-2">
+                      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span className="text-white text-sm font-semibold">Pago con {koyweElegido.nombre}</span>
+                    </div>
+
+                    <div className="px-5 pt-5 pb-3">
+                      <p className="text-xs mb-1" style={{color:'#8aa0cc'}}>Total a pagar</p>
+                      <p className="text-3xl font-bold" style={{color:'#eaf2ff'}}>
+                        {(rawAmount || parseFloat(calc.amount || '0')).toLocaleString('es-CL')}
+                        <span className="text-base ml-1.5" style={{color:'#8aa0cc'}}>{calc.fromCurrency}</span>
+                      </p>
+                      {calc.result && (
+                        <p className="text-xs mt-1" style={{color:'#8aa0cc'}}>
+                          Destinatario recibirá{' '}
+                          <span className="font-semibold" style={{color:'#aebfe2'}}>
+                            {calc.result.amount_received?.toLocaleString()} {calc.toCurrency}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="px-5 pb-5 space-y-3">
+                      <p className="text-xs" style={{color:'#8aa0cc'}}>
+                        Te llevaremos al portal seguro de {koyweElegido.nombre} para completar el pago.
+                        Al terminar volverás aquí y el envío avanza solo, sin subir comprobante.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult || calc.result }))
+                          setShowConfirm(true)
+                        }}
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all text-base flex items-center justify-center gap-2">
+                        {loading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Abriendo el portal...
+                          </>
+                        ) : `Pagar con ${koyweElegido.nombre}`}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

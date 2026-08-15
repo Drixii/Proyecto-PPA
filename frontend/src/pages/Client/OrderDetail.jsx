@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '../../services/api'
 import StatusBadge from '../../components/StatusBadge'
 import ChatBox from '../../components/ChatBox'
+import { esPagoExterno } from '../../utils/payments'
 
 const STATUS_STEPS_TRANSFER = ['en_aprobacion', 'en_proceso', 'completado']
 const STATUS_STEPS_CARD = ['en_proceso', 'completado']
@@ -22,7 +23,9 @@ export default function OrderDetail() {
   if (isLoading) return <div className="flex items-center justify-center h-screen" style={{color:'#8aa0cc'}}>Cargando...</div>
   if (!data) return <div className="flex items-center justify-center h-screen" style={{color:'#8aa0cc'}}>Orden no encontrada</div>
 
-  const STATUS_STEPS = data.payment_method === 'tarjeta' ? STATUS_STEPS_CARD : STATUS_STEPS_TRANSFER
+  // Tarjeta y métodos de Koywe se saltan la aprobación: el proveedor confirma
+  // el cobro, no hay comprobante que revisar.
+  const STATUS_STEPS = esPagoExterno(data.payment_method) ? STATUS_STEPS_CARD : STATUS_STEPS_TRANSFER
   const currentStep = STATUS_STEPS.indexOf(data.status)
 
   return (

@@ -654,10 +654,24 @@ function KoyweKeysForm() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const [abierto, setAbierto] = useState(false)
+  const [copiado, setCopiado] = useState(false)
 
   const { data: koywe } = useQuery({
     queryKey: ['koywe-keys'],
     queryFn: () => api.get('/payments/koywe/keys').then(r => r.data.data),
+  })
+
+  // Comprueba las credenciales contra su API sin cobrar nada. Sin esto, el
+  // primer aviso de que una está mal lo daría un cliente sin poder pagar.
+  const probar = useMutation({
+    mutationFn: () => api.get('/payments/koywe/test').then(r => r.data),
+    onSuccess: (r) => {
+      const d = r.data || {}
+      setMsg(`Conexión correcta con ${d.merchant_nombre || d.merchant_id} (${d.base_url})`)
+      setError('')
+      setTimeout(() => setMsg(''), 8000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo conectar'); setMsg('') },
   })
 
   const guardar = useMutation({
@@ -702,7 +716,7 @@ function KoyweKeysForm() {
             </span>
           </div>
           <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
-            Cobros en Chile \u2014 Khipu y transferencia bancaria (CLP)
+            M\u00e9todos locales por pa\u00eds \u2014 Khipu, PIX, PSE, SPEI, Nequi, QRI
           </p>
         </div>
         <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '\u2304' : '\u203a'}</span>
@@ -712,10 +726,43 @@ function KoyweKeysForm() {
         <div style={{ marginTop: 18 }}>
           <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', marginBottom: 16 }}>
             <p style={{ margin: 0, fontSize: 12.5, color: '#aebfe2', lineHeight: 1.6 }}>
-              Koywe no genera estas credenciales desde un panel: las env\u00eda su soporte
-              (<span style={{ color: '#38bdf8' }}>soporte@koywe.com</span>) despu\u00e9s del KYB.
-              Pide primero las de <strong>sandbox</strong> y d\u00e9jalas aqu\u00ed con el modo en
-              \u00abPrueba\u00bb.
+              El cliente paga en el portal de Koywe con el m\u00e9todo de su pa\u00eds y la orden
+              avanza sola: el aviso viene firmado y trae nuestro n\u00famero de orden, as\u00ed que
+              aqu\u00ed <strong>no hay nada que aprobar a mano</strong>.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
+              La API key y el secreto salen de <strong>Configuraci\u00f3n \u2192 Organizaci\u00f3n \u2192
+              Usuarios \u2192 Crear usuario API</strong> en su panel. El secreto del webhook
+              lo dan al registrar la URL de abajo.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
+              URL que hay que registrar en el panel de Koywe
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                readOnly
+                value={koywe?.webhook_url || ''}
+                onFocus={e => e.target.select()}
+                style={{ ...INP, flex: 1, fontFamily: 'monospace', fontSize: 12.5, color: '#8aa0cc' }}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(koywe?.webhook_url || '')
+                  setCopiado(true)
+                  setTimeout(() => setCopiado(false), 2000)
+                }}
+                style={{ fontSize: 12, fontWeight: 700, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)', color: copiado ? '#4ade80' : '#aebfe2', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                {copiado ? 'Copiada' : 'Copiar'}
+              </button>
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+              Guarda el secreto que te den al registrarla en \u00abSecreto del webhook\u00bb. Sin \u00e9l
+              llega el aviso de pago pero no se puede verificar su firma, y la orden se
+              quedar\u00eda parada con el cliente ya habiendo pagado.
             </p>
           </div>
 
@@ -748,23 +795,51 @@ function KoyweKeysForm() {
           {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
           {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
 
-          <button
-            onClick={() => guardar.mutate(form)}
-            disabled={!hayAlgo || guardar.isPending}
-            style={{
-              fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10, border: 'none',
-              color: '#fff', cursor: hayAlgo ? 'pointer' : 'not-allowed',
-              background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', opacity: hayAlgo ? 1 : .4,
-            }}
-          >
-            {guardar.isPending ? 'Guardando...' : 'Guardar credenciales'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => guardar.mutate(form)}
+              disabled={!hayAlgo || guardar.isPending}
+              style={{
+                fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10, border: 'none',
+                color: '#fff', cursor: hayAlgo ? 'pointer' : 'not-allowed',
+                background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', opacity: hayAlgo ? 1 : .4,
+              }}
+            >
+              {guardar.isPending ? 'Guardando...' : 'Guardar credenciales'}
+            </button>
 
-          {listo && (
-            <p style={{ margin: '14px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
-              Credenciales completas. Falta conectar el flujo de cobro: avisa y lo construyo
-              probando contra el sandbox.
-            </p>
+            <button
+              onClick={() => probar.mutate()}
+              disabled={!listo || probar.isPending}
+              style={{
+                fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10,
+                border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)',
+                color: '#aebfe2', cursor: listo ? 'pointer' : 'not-allowed', opacity: listo ? 1 : .4,
+              }}
+            >
+              {probar.isPending ? 'Probando...' : 'Probar conexión'}
+            </button>
+          </div>
+
+          {listo && koywe?.methods && (
+            <div style={{ marginTop: 16 }}>
+              <p style={{ margin: '0 0 8px', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b' }}>
+                Métodos que verán tus clientes
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {Object.entries(koywe.methods).map(([moneda, ms]) => (
+                  <span key={moneda} style={{ fontSize: 11.5, padding: '5px 10px', borderRadius: 8, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', color: '#aebfe2' }}>
+                    <strong style={{ color: '#eaf2ff' }}>{moneda}</strong> · {ms.map(m => m.nombre).join(', ')}
+                  </span>
+                ))}
+              </div>
+              <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+                El dinero queda en la cuenta de ese país y en esa misma moneda: un pago en
+                CLP suma al saldo chileno, uno en BRL al brasileño. Pasarlo a tu banco se
+                hace desde el panel de Koywe. Argentina y Estados Unidos no aparecen porque
+                Koywe no cobra ahí — solo paga.
+              </p>
+            </div>
           )}
         </div>
       )}

@@ -169,10 +169,23 @@ def sugerir_orden(db: Session, deposito) -> tuple[int | None, str]:
     desde = datetime.now(timezone.utc) - timedelta(days=VENTANA_DIAS)
     margen = abs(deposito.amount) * TOLERANCIA
 
+    from sqlalchemy import or_
+    from services.koywe_service import CODIGOS as CODIGOS_KOYWE
+
+    # Fuera las que se cobran en un portal externo: quien eligió Khipu o
+    # tarjeta no nos transfiere al banco, así que cruzarlas con un depósito
+    # solo añade candidatas falsas que compiten con la de verdad.
+    #
+    # El OR con NULL no sobra: en SQL, `NULL NOT IN (...)` no es cierto sino
+    # desconocido, y sin esto las órdenes antiguas sin método se caerían del
+    # cruce sin que nadie lo notara.
+    externos = tuple(CODIGOS_KOYWE) + ("tarjeta",)
+
     candidatas = db.query(Order).filter(
         Order.deleted_at == None,
         Order.paid_at == None,
         Order.status.in_(("en_aprobacion", "pendiente_pago")),
+        or_(Order.payment_method == None, Order.payment_method.notin_(externos)),
         Order.currency_from == deposito.currency.upper(),
         Order.created_at >= desde,
         Order.amount_sent >= deposito.amount - margen,
