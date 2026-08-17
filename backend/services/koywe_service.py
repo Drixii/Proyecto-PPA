@@ -801,6 +801,68 @@ def probar_conexion(modo: str | None = None) -> dict:
 
 # ── Cobro ────────────────────────────────────────────────────────────────────
 
+# Tipos de documento que acepta su API, por país de pago. La lista completa la
+# devuelve su propia validación: RUT, DNI, CUIL, CPF, CURP, CED_CIU, CED_EXT,
+# NIT, NOP, RC, PP, DIE, EIN, SSN, RFC, RUC, VAT, HKID, CNID, NRIC, FIN, BN,
+# OTHER, CUIT, CNPJ, TXID. Aquí solo van los que tienen sentido en cada país,
+# porque esto se convierte en un desplegable para el cliente.
+DOCUMENTOS = {
+    "CL": [("RUT", "RUT"), ("PP", "Pasaporte")],
+    "CO": [("CED_CIU", "Cédula de ciudadanía"), ("CED_EXT", "Cédula de extranjería"),
+           ("NIT", "NIT"), ("PP", "Pasaporte")],
+    "AR": [("DNI", "DNI"), ("CUIL", "CUIL"), ("CUIT", "CUIT"), ("PP", "Pasaporte")],
+    "BR": [("CPF", "CPF"), ("CNPJ", "CNPJ"), ("PP", "Pasaporte")],
+    "MX": [("CURP", "CURP"), ("RFC", "RFC"), ("PP", "Pasaporte")],
+    "PE": [("DNI", "DNI"), ("RUC", "RUC"), ("PP", "Pasaporte")],
+}
+
+# Cómo se llamaban antes en nuestro formulario. Las órdenes viejas guardaron el
+# nombre en castellano, y mandárselo a Koywe tal cual daba "documentType must
+# be one of the following values".
+EQUIVALENCIAS_DOC = {
+    "RUT": "RUT",
+    "CEDULA": "CED_CIU",
+    "CEDULA DE CIUDADANIA": "CED_CIU",
+    "CÉDULA": "CED_CIU",
+    "CÉDULA DE CIUDADANÍA": "CED_CIU",
+    "CEDULA DE EXTRANJERIA": "CED_EXT",
+    "CÉDULA DE EXTRANJERÍA": "CED_EXT",
+    "DNI": "DNI",
+    "PASAPORTE": "PP",
+    "PASSPORT": "PP",
+    "NIT": "NIT",
+    "CPF": "CPF",
+    "CURP": "CURP",
+    "RFC": "RFC",
+    "RUC": "RUC",
+    "CUIL": "CUIL",
+    "CUIT": "CUIT",
+    "CNPJ": "CNPJ",
+}
+
+CODIGOS_DOC = {c for lista in DOCUMENTOS.values() for c, _ in lista}
+
+
+def documentos_de(moneda: str | None) -> list:
+    """Tipos de documento que se le pueden ofrecer a quien paga en esa moneda."""
+    pais = PAISES.get((moneda or "").upper(), "")
+    return [{"codigo": c, "nombre": n} for c, n in DOCUMENTOS.get(pais, [])]
+
+
+def tipo_documento(valor: str | None) -> str:
+    """Traduce lo guardado en la orden al código que espera Koywe.
+
+    Devuelve "" si no se reconoce, para que el campo se omita en vez de
+    mandar algo que su API rechace entero.
+    """
+    crudo = (valor or "").strip().upper()
+    if not crudo:
+        return ""
+    if crudo in CODIGOS_DOC:
+        return crudo
+    return EQUIVALENCIAS_DOC.get(crudo, "")
+
+
 def _nombre_partido(nombre: str | None) -> tuple[str, str]:
     partes = (nombre or "").strip().split()
     if not partes:
@@ -945,7 +1007,7 @@ def _crear_contacto(order, email: str, pais: str, modo: str) -> str:
         "email": email,
         "phone": telefono,
         "countrySymbol": pais,
-        "documentType": (order.sender_id_type or "").upper() or None,
+        "documentType": tipo_documento(order.sender_id_type) or None,
         "documentNumber": order.sender_id_num or None,
         "businessType": "PERSON",
         "type": "PERSON",
@@ -994,8 +1056,10 @@ def _faltan_datos(order, email: str, requeridos: list, pais: str = "") -> list:
         "last_name": bool(order.sender_name and len(order.sender_name.split()) > 1),
         "documentnumber": bool(order.sender_id_num),
         "document_number": bool(order.sender_id_num),
-        "documenttype": bool(order.sender_id_type),
-        "document_type": bool(order.sender_id_type),
+        # No basta con que haya algo escrito: si no se traduce a un código que
+        # Koywe conozca, el campo se omite y su API lo dará por ausente.
+        "documenttype": bool(tipo_documento(order.sender_id_type)),
+        "document_type": bool(tipo_documento(order.sender_id_type)),
     }
     etiquetas = {
         "email": "correo", "phone": "teléfono",

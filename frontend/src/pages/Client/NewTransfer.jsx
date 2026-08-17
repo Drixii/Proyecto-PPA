@@ -246,6 +246,28 @@ export default function NewTransfer() {
   const esKoywe = (metodo) => koyweCodes.has(String(metodo || '').toLowerCase())
   const koyweElegido = koyweMethods.find(m => String(m.codigo).toLowerCase() === String(payment.payment_method).toLowerCase())
 
+  // Datos de quien paga. El remitente sale del nombre de la cuenta, que no
+  // trae documento ni siempre apellido; los métodos que los exigen (PSE) los
+  // piden aquí antes de crear el cobro.
+  const [pagador, setPagador] = useState({
+    sender_name: '', sender_id_type: '', sender_id_num: '', sender_phone: '',
+  })
+
+  const faltaDelPagador = (() => {
+    const exige = (koyweElegido?.requiere || []).map(c => String(c).toLowerCase())
+    if (!exige.length) return []
+    const nombre = (pagador.sender_name || user?.full_name || '').trim()
+    const falta = []
+    if (exige.some(c => c.includes('document')) && !(pagador.sender_id_num && pagador.sender_id_type)) {
+      falta.push('documento')
+    }
+    if (exige.some(c => c.includes('last')) && nombre.split(/\s+/).filter(Boolean).length < 2) {
+      falta.push('apellido')
+    }
+    if (exige.includes('phone') && !(pagador.sender_phone || user?.phone)) falta.push('telefono')
+    return falta
+  })()
+
   // Cuenta a la que transferir. Cuando Koywe tiene una emitida en esta moneda,
   // el dinero cae directo en el saldo de ese país en vez de en una cuenta
   // nuestra. No hay lista de países aquí a propósito: la manda el backend, así
@@ -411,9 +433,11 @@ export default function NewTransfer() {
     setError('')
     try {
       const payload = {
-        sender_name: user.full_name,
-        sender_phone: user.phone || '',
+        sender_name: (pagador.sender_name || '').trim() || user.full_name,
+        sender_phone: (pagador.sender_phone || '').trim() || user.phone || '',
         sender_country: user.country || 'Chile',
+        sender_id_type: pagador.sender_id_type || undefined,
+        sender_id_num: (pagador.sender_id_num || '').trim() || undefined,
         ...receiver,
         receiver_bank_id: receiver.receiver_bank_id ? parseInt(receiver.receiver_bank_id) : null,
         amount_sent: rawAmount || parseFloat(calc.amount),
@@ -1142,6 +1166,57 @@ export default function NewTransfer() {
                     </div>
 
                     <div className="px-5 pb-5 space-y-3">
+                      {/* Lo que el método exige del pagador y no tenemos. PSE
+                          en Colombia no cobra sin documento y apellido, y esto
+                          nunca se pidió: el remitente sale del nombre de la
+                          cuenta. Sin preguntarlo aquí, el cobro se creaba y
+                          Koywe lo rechazaba después. */}
+                      {faltaDelPagador.length > 0 && (
+                        <div className="space-y-3 pb-1">
+                          <p className="text-xs" style={{color:'#fcd34d'}}>
+                            {koyweElegido.nombre} necesita estos datos de quien paga. El banco
+                            los compara con los de tu cuenta.
+                          </p>
+                          {faltaDelPagador.includes('apellido') && (
+                            <div>
+                              <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Nombre y apellido</label>
+                              <input value={pagador.sender_name} onChange={e => setPagador(p => ({ ...p, sender_name: e.target.value }))}
+                                className="w-full rounded-xl px-3 py-2.5 text-sm"
+                                style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                            </div>
+                          )}
+                          {faltaDelPagador.includes('documento') && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Tipo de documento</label>
+                                <select value={pagador.sender_id_type} onChange={e => setPagador(p => ({ ...p, sender_id_type: e.target.value }))}
+                                  className="w-full rounded-xl px-3 py-2.5 text-sm"
+                                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
+                                  <option value="" style={{background:'#0f172a'}}>Elige...</option>
+                                  {(payCfg?.koywe?.documentos?.[calc.fromCurrency] || []).map(d => (
+                                    <option key={d.codigo} value={d.codigo} style={{background:'#0f172a'}}>{d.nombre}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Número</label>
+                                <input value={pagador.sender_id_num} onChange={e => setPagador(p => ({ ...p, sender_id_num: e.target.value }))}
+                                  className="w-full rounded-xl px-3 py-2.5 text-sm"
+                                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                              </div>
+                            </div>
+                          )}
+                          {faltaDelPagador.includes('telefono') && (
+                            <div>
+                              <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Teléfono</label>
+                              <input value={pagador.sender_phone} onChange={e => setPagador(p => ({ ...p, sender_phone: e.target.value }))}
+                                className="w-full rounded-xl px-3 py-2.5 text-sm"
+                                style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <p className="text-xs" style={{color:'#8aa0cc'}}>
                         Te llevaremos al portal seguro de {koyweElegido.nombre} para completar el pago.
                         Al terminar volverás aquí y el envío avanza solo, sin subir comprobante.
@@ -1151,7 +1226,7 @@ export default function NewTransfer() {
                           setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult || calc.result }))
                           setShowConfirm(true)
                         }}
-                        disabled={loading}
+                        disabled={loading || faltaDelPagador.length > 0}
                         className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all text-base flex items-center justify-center gap-2">
                         {loading ? (
                           <>

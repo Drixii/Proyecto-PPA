@@ -63,6 +63,11 @@ def payment_config():
                 "currencies": sorted(koywe_metodos.keys()),
                 "methods": koywe_metodos,
                 "transfer_accounts": koywe_cuentas,
+                # Tipos de documento válidos por moneda, para el desplegable
+                # que se le pide al pagador cuando el método lo exige.
+                "documentos": {
+                    moneda: koywe_service.documentos_de(moneda) for moneda in koywe_metodos
+                },
             },
         },
         "message": "",
@@ -631,7 +636,10 @@ def metodos_de_orden(
         })
     metodos += [
         {"codigo": m["codigo"].lower(), "nombre": m["nombre"],
-         "desc": m["desc"], "icono": m.get("icono") or "💸"}
+         "desc": m["desc"], "icono": m.get("icono") or "💸",
+         # Qué datos del pagador exige. El navegador los pide antes de
+         # intentar el cobro, en vez de que Koywe lo rechace después.
+         "requiere": m.get("requiere") or []}
         for m in koywe_service.metodos_de(moneda)
     ]
 
@@ -648,9 +656,70 @@ def metodos_de_orden(
             "moneda": moneda,
             "metodos": metodos,
             "cuenta_transferencia": cuenta,
+            # Para poder pedir lo que falte sin salir de la pantalla: PSE no
+            # cobra sin documento, apellido y teléfono de quien paga.
+            "documentos": koywe_service.documentos_de(moneda),
+            "pagador": {
+                "nombre": order.sender_name,
+                "tipo_documento": order.sender_id_type,
+                "documento": order.sender_id_num,
+                "telefono": order.sender_phone,
+            },
         },
         "message": "",
     }
+
+
+class PagadorIn(BaseModel):
+    sender_name: Optional[str] = None
+    sender_id_type: Optional[str] = None
+    sender_id_num: Optional[str] = None
+    sender_phone: Optional[str] = None
+
+
+@router.put("/orders/{order_id}/payer", response_model=dict)
+def actualizar_pagador(
+    order_id: int,
+    data: PagadorIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Completa los datos de quien paga, cuando el método los exige.
+
+    PSE en Colombia no cobra sin documento, apellido y teléfono del pagador, y
+    el formulario de envío nunca los pidió: se toman del nombre de la cuenta.
+    En vez de mandar al cliente a editar su perfil y volver a empezar, se
+    piden en el momento y se guardan en la orden.
+
+    Solo mientras no esté pagada: después, estos datos son parte del registro
+    de un cobro que ya ocurrió.
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if order.paid_at:
+        raise HTTPException(status_code=400, detail="Esta orden ya está pagada")
+
+    if data.sender_name and data.sender_name.strip():
+        order.sender_name = data.sender_name.strip()
+    if data.sender_phone and data.sender_phone.strip():
+        order.sender_phone = data.sender_phone.strip()
+    if data.sender_id_num and data.sender_id_num.strip():
+        order.sender_id_num = data.sender_id_num.strip()
+    if data.sender_id_type and data.sender_id_type.strip():
+        tipo = koywe_service.tipo_documento(data.sender_id_type)
+        if not tipo:
+            raise HTTPException(
+                status_code=400,
+                detail=f"«{data.sender_id_type}» no es un tipo de documento válido")
+        order.sender_id_type = tipo
+
+    db.commit()
+    return {"success": True, "data": {}, "message": "Datos guardados"}
 
 
 def _koywe_pagada(evento: dict):

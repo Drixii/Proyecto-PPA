@@ -517,6 +517,9 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
   const [error, setError] = useState('')
   const [transferencia, setTransferencia] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
+  const [pidiendoDatos, setPidiendoDatos] = useState(null)
+  const [pagador, setPagador] = useState({})
+  const [guardandoDatos, setGuardandoDatos] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['metodos-orden', order.id],
@@ -529,7 +532,37 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
     qc.invalidateQueries({ queryKey: ['client-order', order.id] })
   }
 
-  const elegir = async (codigo) => {
+  // Qué le falta al pagador para este método. PSE exige documento, apellido y
+  // teléfono, y el formulario de envío nunca los pidió: se toman del nombre de
+  // la cuenta. Preguntarlos aquí evita mandar al cliente a editar su perfil y
+  // volver a empezar.
+  const faltantes = (metodo) => {
+    const exige = (metodo?.requiere || []).map(c => String(c).toLowerCase())
+    const p = data?.pagador || {}
+    const nombre = (pagador.sender_name ?? p.nombre ?? '').trim()
+    const falta = []
+    if (exige.some(c => c.includes('document')) ) {
+      if (!(pagador.sender_id_num ?? p.documento)) falta.push('documento')
+      if (!(pagador.sender_id_type ?? p.tipo_documento)) falta.push('tipo')
+    }
+    if (exige.some(c => c.includes('last')) && nombre.split(/\s+/).filter(Boolean).length < 2) {
+      falta.push('apellido')
+    }
+    if (exige.includes('phone') && !(pagador.sender_phone ?? p.telefono)) falta.push('telefono')
+    return falta
+  }
+
+  const elegir = (codigo) => {
+    const metodo = (data?.metodos || []).find(m => m.codigo === codigo)
+    if (faltantes(metodo).length) {
+      setError('')
+      setPidiendoDatos(metodo)
+      return
+    }
+    elegirSinComprobar(codigo)
+  }
+
+  const elegirSinComprobar = async (codigo) => {
     setEnCurso(codigo)
     setError('')
     try {
@@ -604,7 +637,95 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
 
           {isLoading && <p className="text-sm" style={{color:'#8aa0cc'}}>Cargando...</p>}
 
-          {!isLoading && !transferencia && (
+          {pidiendoDatos && (
+            <div className="space-y-3">
+              <p className="text-xs" style={{color:'#8aa0cc'}}>
+                {pidiendoDatos.nombre} necesita estos datos de quien paga. El banco los
+                compara con los de tu cuenta, así que tienen que ser los tuyos.
+              </p>
+
+              <div>
+                <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Nombre y apellido</label>
+                <input
+                  value={pagador.sender_name ?? data?.pagador?.nombre ?? ''}
+                  onChange={e => setPagador(p => ({ ...p, sender_name: e.target.value }))}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm"
+                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Tipo de documento</label>
+                  <select
+                    value={pagador.sender_id_type ?? data?.pagador?.tipo_documento ?? ''}
+                    onChange={e => setPagador(p => ({ ...p, sender_id_type: e.target.value }))}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm"
+                    style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
+                    <option value="" style={{background:'#0f172a'}}>Elige...</option>
+                    {(data?.documentos || []).map(d => (
+                      <option key={d.codigo} value={d.codigo} style={{background:'#0f172a'}}>{d.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Número</label>
+                  <input
+                    value={pagador.sender_id_num ?? data?.pagador?.documento ?? ''}
+                    onChange={e => setPagador(p => ({ ...p, sender_id_num: e.target.value }))}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm"
+                    style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Teléfono</label>
+                <input
+                  value={pagador.sender_phone ?? data?.pagador?.telefono ?? ''}
+                  onChange={e => setPagador(p => ({ ...p, sender_phone: e.target.value }))}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm"
+                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => { setPidiendoDatos(null); setPagador({}) }}
+                  className="flex-1 text-xs font-semibold py-2.5 rounded-lg"
+                  style={{background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc'}}>
+                  Volver
+                </button>
+                <button
+                  onClick={async () => {
+                    setGuardandoDatos(true)
+                    setError('')
+                    try {
+                      await api.put(`/payments/orders/${order.id}/payer`, {
+                        sender_name: pagador.sender_name ?? data?.pagador?.nombre,
+                        sender_id_type: pagador.sender_id_type ?? data?.pagador?.tipo_documento,
+                        sender_id_num: pagador.sender_id_num ?? data?.pagador?.documento,
+                        sender_phone: pagador.sender_phone ?? data?.pagador?.telefono,
+                      })
+                    } catch (err) {
+                      setGuardandoDatos(false)
+                      setError(err.response?.data?.detail || 'No se pudieron guardar los datos')
+                      return
+                    }
+                    const metodo = pidiendoDatos
+                    await qc.invalidateQueries({ queryKey: ['metodos-orden', order.id] })
+                    setGuardandoDatos(false)
+                    setPidiendoDatos(null)
+                    // Ya guardados: se sigue por el camino normal del método.
+                    elegirSinComprobar(metodo.codigo)
+                  }}
+                  disabled={guardandoDatos}
+                  className="flex-1 text-xs font-semibold py-2.5 rounded-lg disabled:opacity-50"
+                  style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', color:'#fff'}}>
+                  {guardandoDatos ? 'Guardando...' : 'Continuar'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isLoading && !transferencia && !pidiendoDatos && (
             <div className="grid grid-cols-2 gap-3">
               {(data?.metodos || []).map(m => (
                 <button key={m.codigo} type="button"
