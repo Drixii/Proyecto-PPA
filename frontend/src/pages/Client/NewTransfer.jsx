@@ -882,10 +882,14 @@ export default function NewTransfer() {
                   ...(cardEnabled
                     ? [{ value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' }]
                     : []),
+                  // El icono lo manda el backend con el método: un banco para
+                  // Khipu o PSE, una tarjeta para Clink, un QR para Ligo. Antes
+                  // era el mismo rayo para todos y los botones se distinguían
+                  // solo por el texto.
                   ...koyweMethods.map(m => ({
                     value: String(m.codigo).toLowerCase(),
                     label: m.nombre,
-                    icon: '⚡',
+                    icon: m.icono || '💸',
                     desc: m.desc,
                   })),
                 ].map(({ value, label, icon, desc }) => (

@@ -95,20 +95,25 @@ PAISES = {
 
 KOYWE_CURRENCIES = tuple(PAISES.keys())
 
-# Nombres para el cliente. Su API devuelve el nombre técnico ("PIX Estatico",
-# "QR"); esto es lo que ve alguien que solo quiere pagar. Lo que no esté aquí
-# se muestra con el nombre que mande Koywe.
+# Nombre, descripción e icono para el cliente. Su API devuelve el nombre
+# técnico ("PIX Estatico", "QR") y ningún logo, así que esto es lo que ve
+# alguien que solo quiere pagar. Lo que no esté aquí se muestra con el nombre
+# que mande Koywe.
+#
+# El icono dice de qué tipo de pago se trata —banco, tarjeta, móvil, QR— en vez
+# del mismo símbolo para todos: elegir entre dos botones idénticos salvo por el
+# texto es más lento de leer.
 NOMBRES = {
-    "KHIPU": ("Khipu", "Transferencia desde tu banco"),
-    "CARD_PAYMENT": ("Tarjeta", "Crédito o débito"),
-    "PSE": ("PSE", "Débito desde tu banco"),
-    "NEQUI": ("Nequi", "Pago instantáneo"),
-    "PIX_STATIC": ("PIX", "Instantáneo, 24/7"),
-    "PIX_DYNAMIC": ("PIX", "Instantáneo, 24/7"),
-    "SPEI": ("SPEI", "Transferencia instantánea"),
-    "CARD": ("Tarjeta", "Crédito o débito"),
-    "LIGO": ("Ligo", "Pago con QR"),
-    "QRI": ("QRI", "Pago con QR"),
+    "KHIPU": ("Khipu", "Transferencia desde tu banco", "🏦"),
+    "CARD_PAYMENT": ("Tarjeta", "Crédito o débito", "💳"),
+    "PSE": ("PSE", "Débito desde tu banco", "🏦"),
+    "NEQUI": ("Nequi", "Pago instantáneo", "📱"),
+    "PIX_STATIC": ("PIX", "Instantáneo, 24/7", "⚡"),
+    "PIX_DYNAMIC": ("PIX", "Instantáneo, 24/7", "⚡"),
+    "SPEI": ("SPEI", "Transferencia instantánea", "🏦"),
+    "CARD": ("Tarjeta", "Crédito o débito", "💳"),
+    "LIGO": ("Ligo", "Pago con QR", "🔳"),
+    "QRI": ("QRI", "Pago con QR", "🔳"),
 }
 
 # Los códigos tal y como se guardan en `orders.payment_method`, en minúscula.
@@ -327,12 +332,14 @@ def _traer_catalogo(modo: str) -> dict:
             codigo = (m.get("method") or "").strip()
             if not codigo:
                 continue
-            nombre, desc = NOMBRES.get(codigo.upper(), (m.get("name") or codigo, ""))
+            nombre, desc, icono = NOMBRES.get(
+                codigo.upper(), (m.get("name") or codigo, "", "💸"))
             requeridos = (m.get("requiredFields") or {}).get("contact") or []
             metodos.append({
                 "codigo": codigo,
                 "nombre": nombre,
                 "desc": desc,
+                "icono": icono,
                 "minimo": m.get("minAmount"),
                 "maximo": m.get("maxAmount"),
                 "respuesta": m.get("responseType"),
@@ -1031,7 +1038,16 @@ def crear_cobro(order, metodo: str, volver_a: str, email: str = "") -> dict:
         raise KoyweError(f"{elegido['nombre']} no acepta más de {maximo:,.0f} {moneda}")
 
     pais = PAISES.get(moneda, "")
-    faltan = _faltan_datos(order, email, elegido.get("requiere") or [], pais)
+
+    # Toda orden PAYIN necesita contacto, diga lo que diga el método. Clink
+    # declara `requiredFields.contact` vacío y aun así Koywe responde "Contact
+    # is required for PAYIN orders" (CT00036). Así que se pide siempre, con el
+    # correo y el nombre como mínimo para poder crearlo; lo que el método
+    # exija además se suma a eso.
+    requeridos = list(dict.fromkeys(
+        list(elegido.get("requiere") or []) + ["email", "first_name"]))
+
+    faltan = _faltan_datos(order, email, requeridos, pais)
     if faltan:
         raise KoyweError(f"{elegido['nombre']} exige {', '.join(faltan)} del remitente")
 
@@ -1057,8 +1073,7 @@ def crear_cobro(order, metodo: str, volver_a: str, email: str = "") -> dict:
         "failedUrl": volver_a,
     }
 
-    if elegido.get("requiere"):
-        cuerpo["contactId"] = _crear_contacto(order, email, pais, modo)
+    cuerpo["contactId"] = _crear_contacto(order, email, pais, modo)
 
     datos = _pedir("POST", f"{_ruta_merchant(modo)}/orders", modo=modo, json=cuerpo)
 
