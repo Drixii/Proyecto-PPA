@@ -12,6 +12,73 @@ const STATUS_LABELS = { en_aprobacion: 'En Aprobación', en_proceso: 'En Proceso
 const darkCard = { background: 'rgba(8,16,44,.85)', border: '1px solid rgba(255,255,255,.08)', boxShadow: '0 4px 16px rgba(0,6,28,.4)' }
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
+// Entradas de dinero reales en la cuenta de Koywe, junto al comprobante.
+//
+// El comprobante lo sube el cliente: puede ser de otra transferencia, estar
+// editado, o ser de un pago que después se revirtió. Esto es el movimiento en
+// la cuenta. Verlos juntos es la diferencia entre creerle a una imagen y
+// comprobar que el dinero está.
+function MovimientosKoywe({ moneda, monto }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['koywe-movimientos', moneda],
+    queryFn: () => api.get('/payments/koywe/movements', { params: { moneda, dias: 15 } })
+      .then(r => r.data.data),
+    retry: false,
+    staleTime: 60000,
+  })
+
+  // Koywe no tiene cuenta en esa moneda, o no está configurado: no es un fallo
+  // que el admin deba ver mientras aprueba, simplemente no hay nada que mostrar.
+  if (error || isLoading || !data) return null
+
+  const cuadra = (e) => Math.abs(e.monto - Number(monto || 0)) < 0.01
+  const entradas = data.entradas || []
+
+  return (
+    <div className="rounded-xl p-6" style={GLASS}>
+      <div className="flex items-baseline justify-between mb-4 gap-3 flex-wrap">
+        <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Entradas en la cuenta de Koywe</h2>
+        <span className="text-xs" style={{color:'#8aa0cc'}}>
+          Saldo {data.moneda}: <strong style={{color:'#eaf2ff'}}>{data.saldo.toLocaleString('es-CL')}</strong>
+        </span>
+      </div>
+
+      {entradas.length === 0 ? (
+        <p className="text-sm" style={{color:'#8aa0cc'}}>
+          Sin entradas en {data.moneda} en los últimos 15 días.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {entradas.map(e => (
+            <div key={e.id} className="flex items-start justify-between gap-3 p-3 rounded-xl"
+              style={cuadra(e)
+                ? {background:'rgba(74,222,128,.08)', border:'1px solid rgba(74,222,128,.25)'}
+                : {background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.06)'}}>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold" style={{color: cuadra(e) ? '#4ade80' : '#eaf2ff'}}>
+                  {e.monto.toLocaleString('es-CL')} {e.moneda}
+                  {cuadra(e) && <span className="text-xs font-bold ml-2">· coincide con esta orden</span>}
+                </p>
+                <p className="text-xs mt-0.5 break-words" style={{color:'#8aa0cc'}}>{e.descripcion}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs" style={{color:'#8aa0cc'}}>{fmtDate(e.fecha)}</p>
+                <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{color:'#475569'}}>{e.categoria}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-xs mt-4 leading-relaxed" style={{color:'#64748b'}}>
+        Que un monto coincida no prueba que sea de esta orden: dos clientes pueden
+        transferir lo mismo el mismo día. Contrasta con el comprobante y el nombre del
+        remitente antes de aprobar.
+      </p>
+    </div>
+  )
+}
+
 export default function OrderAdmin() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -122,6 +189,10 @@ export default function OrderAdmin() {
             </div>
           )}
         </Section>
+
+        {order.status === 'en_aprobacion' && order.payment_method === 'transferencia' && (
+          <MovimientosKoywe moneda={order.currency_from} monto={order.amount_sent} />
+        )}
 
         {order.payment_proof_url && (
           <Section title="Comprobante de pago">

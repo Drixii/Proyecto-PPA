@@ -635,6 +635,83 @@ def estado_cuentas(modo: str | None = None) -> list:
     return salida
 
 
+def saldos(modo: str | None = None) -> list:
+    """Saldo por moneda en Koywe. Solo lee."""
+    modo = modo or get_mode()
+    datos = _pedir("GET", f"{_ruta_merchant(modo)}/accounts/balances", modo=modo)
+    salida = []
+    for s in datos if isinstance(datos, list) else []:
+        if not isinstance(s, dict):
+            continue
+        try:
+            monto = float(s.get("balance") or 0)
+        except (TypeError, ValueError):
+            monto = 0.0
+        salida.append({
+            "cuenta_id": s.get("id"),
+            "moneda": (s.get("currency") or "").upper(),
+            "saldo": monto,
+            "fecha": s.get("balanceDate"),
+        })
+    return salida
+
+
+def movimientos(moneda: str, dias: int = 15, limite: int = 50, modo: str | None = None) -> dict:
+    """Entradas de dinero en la cuenta de esa moneda, según Koywe.
+
+    Esto es lo que deja aprobar una transferencia con criterio: el comprobante
+    lo hace el cliente y se puede falsificar o corresponder a otra cosa; esto
+    es el movimiento real en la cuenta. Ver los dos juntos es la diferencia
+    entre creerle a una imagen y comprobar que el dinero está.
+
+    Solo abonos: los cargos son pagos que salen y no tienen nada que ver con
+    aprobar un envío entrante.
+    """
+    import datetime
+
+    modo = modo or get_mode()
+    moneda = (moneda or "").upper()
+
+    cuenta = next((s for s in saldos(modo) if s["moneda"] == moneda), None)
+    if not cuenta or not cuenta["cuenta_id"]:
+        raise KoyweError(f"Koywe no tiene cuenta en {moneda or '(vacío)'}")
+
+    hoy = datetime.date.today()
+    desde = hoy - datetime.timedelta(days=max(1, min(dias, 120)))
+    datos = _pedir(
+        "GET",
+        f"{_ruta_merchant(modo)}/accounts/{cuenta['cuenta_id']}/reports/ledger-statement",
+        modo=modo,
+        params={"from": str(desde), "to": str(hoy), "limit": max(1, min(limite, 100))},
+    )
+
+    entradas = []
+    for m in (datos.get("movements") or []) if isinstance(datos, dict) else []:
+        if not isinstance(m, dict) or (m.get("type") or "").lower() != "credit":
+            continue
+        try:
+            monto = float(m.get("amount") or 0)
+        except (TypeError, ValueError):
+            monto = 0.0
+        entradas.append({
+            "id": m.get("ledgerEntryId"),
+            "fecha": m.get("postedAt"),
+            "monto": monto,
+            "moneda": (m.get("currency") or moneda).upper(),
+            "descripcion": m.get("description"),
+            "categoria": m.get("category"),
+        })
+
+    entradas.sort(key=lambda e: e["fecha"] or "", reverse=True)
+    return {
+        "moneda": moneda,
+        "saldo": cuenta["saldo"],
+        "desde": str(desde),
+        "hasta": str(hoy),
+        "entradas": entradas,
+    }
+
+
 def datos_de_bank_income(evento: dict) -> dict:
     """Saca lo que se pueda del aviso de dinero recibido.
 

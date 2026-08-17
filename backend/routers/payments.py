@@ -452,6 +452,23 @@ def save_koywe_account(
     }
 
 
+@router.get("/koywe/movements", response_model=dict)
+def koywe_movements(
+    moneda: str,
+    dias: int = 15,
+    _admin: User = Depends(require_super_admin),
+):
+    """Entradas de dinero en la cuenta de Koywe de esa moneda.
+
+    Se consulta al aprobar una transferencia: el comprobante lo sube el
+    cliente, esto es el movimiento real en la cuenta. Solo lee.
+    """
+    try:
+        return {"success": True, "data": koywe_service.movimientos(moneda, dias), "message": ""}
+    except koywe_service.KoyweError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/koywe/test", response_model=dict)
 def probar_koywe(_admin: User = Depends(require_super_admin)):
     """Comprueba las credenciales contra su API sin cobrar nada.
