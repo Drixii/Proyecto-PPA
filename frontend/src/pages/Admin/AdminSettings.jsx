@@ -966,11 +966,18 @@ function KoyweCuentasForm() {
       <p style={{ margin: '0 0 4px', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b' }}>
         Cuentas para recibir transferencias
       </p>
+      <p style={{ margin: '0 0 10px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+        El cliente que elija «Transferencia» en una de estas monedas ve los datos de la
+        cuenta y el dinero cae en tu saldo de ese país, sin pasar por una cuenta tuya.
+        Para que se muestre hacen falta dos cosas: titular y banco rellenos, y marcar
+        «Mostrar a los clientes». Media instrucción de pago es peor que ninguna.
+      </p>
       <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
-        Koywe emite una cuenta bancaria real por país. Si rellenas el titular y el banco,
-        el cliente que elija «Transferencia» en esa moneda ve estos datos y el dinero cae
-        directo en tu saldo de ese país, sin pasar por una cuenta tuya. Sin esos dos datos
-        la cuenta no se muestra: media instrucción de pago es peor que ninguna.
+        Hay dos clases. Las marcadas <strong style={{ color: '#38bdf8' }}>A tu nombre</strong> son
+        cuentas emitidas para ti: lo que entra ahí es tuyo sin discusión. Las marcadas{' '}
+        <strong style={{ color: '#94a3b8' }}>Cuenta de Koywe</strong> las comparte Koywe entre
+        todos sus comercios, y conviene confirmar con ellos cómo atribuyen cada depósito
+        antes de dársela a un cliente.
       </p>
 
       {(!cuentas || cuentas.length === 0) && (
@@ -992,10 +999,27 @@ function KoyweCuentasForm() {
               background: c.publicada ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
               color: c.publicada ? '#4ade80' : '#fcd34d',
             }}>
-              {c.publicada ? 'Visible para clientes' : `Falta ${(c.faltan || []).join(' y ')}`}
+              {c.publicada ? 'Visible para clientes'
+                : (c.faltan || []).length ? `Falta ${(c.faltan || []).join(' y ')}` : 'Sin publicar'}
+            </span>
+            <span style={{
+              fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
+              background: c.clase === 'propia' ? 'rgba(56,189,248,.12)' : 'rgba(148,163,184,.12)',
+              color: c.clase === 'propia' ? '#38bdf8' : '#94a3b8',
+            }}>
+              {c.clase === 'propia' ? 'A tu nombre' : 'Cuenta de Koywe'}
             </span>
             <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#8aa0cc' }}>{c.numero}</span>
           </div>
+
+          {c.clase === 'compartida' && (
+            <p style={{ margin: '0 0 12px', fontSize: 11.5, color: '#fcd34d', background: 'rgba(251,191,36,.08)', padding: '9px 12px', borderRadius: 8, lineHeight: 1.6 }}>
+              Esta cuenta es de <strong>{c.titular}</strong>, no tuya: Koywe la comparte entre
+              todos sus comercios. Antes de publicarla pregúntales cómo saben que un depósito
+              es tuyo y no de otro — si hace falta una glosa o el RUT de quien transfiere.
+              Si se publica sin eso, el cliente paga y el dinero puede no llegar a tu saldo.
+            </p>
+          )}
 
           {campos.map(({ k, label, ph, obligatorio }) => (
             <div key={k} style={{ marginBottom: 9 }}>
@@ -1011,10 +1035,26 @@ function KoyweCuentasForm() {
             </div>
           ))}
 
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, margin: '12px 0 4px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={!!valor(c.moneda, 'habilitada', c.habilitada)}
+              onChange={e => set(c.moneda, 'habilitada', e.target.checked)}
+              style={{ marginTop: 2, width: 15, height: 15, accentColor: '#38bdf8', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 12, color: '#aebfe2', lineHeight: 1.5 }}>
+              <strong>Mostrar a los clientes</strong>
+              <span style={{ display: 'block', fontSize: 11, color: '#64748b' }}>
+                Mientras esté desmarcada nadie la ve, aunque los datos estén completos.
+              </span>
+            </span>
+          </label>
+
           <button
             onClick={() => guardar.mutate({
               moneda: c.moneda,
               ...Object.fromEntries(campos.map(({ k }) => [k, valor(c.moneda, k, c[k])])),
+              habilitada: !!valor(c.moneda, 'habilitada', c.habilitada),
             })}
             disabled={guardar.isPending}
             style={{

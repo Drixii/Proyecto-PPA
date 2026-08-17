@@ -434,6 +434,14 @@ BENEFICIARIO_MINIMO = ("titular", "banco")
 
 CAMPOS_BENEFICIARIO = ("titular", "banco", "documento", "tipo_cuenta", "nota")
 
+# Interruptor explícito por moneda. No basta con que los datos estén completos:
+# la cuenta compartida de Koywe llega con titular y banco ya rellenos desde su
+# API, así que sin esto se publicaría sola en cuanto apareciera — y todavía no
+# sabemos cómo atribuyen un depósito hecho a esa cuenta al comercio correcto.
+# Publicar una cuenta de cobro es de las cosas que no se deshacen: el cliente
+# ya transfirió.
+CAMPO_HABILITADA = "habilitada"
+
 VIDA_CUENTAS = 10 * 60
 
 _cuentas_cache: dict = {"datos": None, "expira": 0.0, "modo": None}
@@ -476,6 +484,8 @@ def guardar_beneficiario(db, moneda: str, datos: dict) -> dict:
         valor = (datos.get(campo) or "").strip()
         if valor:
             limpio[campo] = valor
+    if datos.get(CAMPO_HABILITADA):
+        limpio[CAMPO_HABILITADA] = True
 
     clave = _clave_beneficiario(moneda)
     row = db.query(Setting).filter(Setting.key == clave).first()
@@ -489,9 +499,20 @@ def guardar_beneficiario(db, moneda: str, datos: dict) -> dict:
 
 
 def _traer_cuentas(modo: str) -> dict:
-    """{MONEDA: datos de la cuenta} según su API. Solo las transferibles."""
-    datos = _pedir("GET", f"{_ruta_merchant(modo)}/virtual-accounts", modo=modo)
+    """{MONEDA: datos de la cuenta} según su API. Solo las transferibles.
+
+    Hay dos clases y no se comportan igual:
+
+    - **Propia** (`/virtual-accounts`): cuenta emitida a nombre del comercio.
+      Lo que entre ahí es nuestro sin ambigüedad.
+    - **Compartida** (`/bankIncome/accounts`): la cuenta del propio Koywe, la
+      misma para todos sus comercios. Devuelve titular y banco ya rellenos,
+      pero cómo se atribuye un depósito al comercio correcto no está
+      documentado en ninguna parte. Por eso se marca y no se publica sola.
+    """
     salida = {}
+
+    datos = _pedir("GET", f"{_ruta_merchant(modo)}/virtual-accounts", modo=modo)
     for c in datos if isinstance(datos, list) else []:
         if not isinstance(c, dict) or not c.get("isActive"):
             continue
@@ -505,7 +526,41 @@ def _traer_cuentas(modo: str) -> dict:
             "numero": numero,
             "proveedor": c.get("provider"),
             "alias": c.get("alias"),
+            "clase": "propia",
         }
+
+    # La cuenta de depósito de Koywe. Se pide sin parámetros a propósito: el
+    # endpoint los ignora y devuelve siempre la misma, así que preguntar por
+    # país solo daría la ilusión de que hay una por cada uno. Vale únicamente
+    # para el país y la moneda que ella misma declara — nadie transfiere pesos
+    # colombianos a una cuenta corriente chilena.
+    try:
+        fija = _pedir("GET", f"{_ruta_merchant(modo)}/bankIncome/accounts", modo=modo)
+    except KoyweError as e:
+        log.warning("[koywe] no se pudo leer la cuenta de depósito: %s", e)
+        fija = None
+
+    if isinstance(fija, dict):
+        det = fija.get("accountDetails")
+        det = det if isinstance(det, dict) else {}
+        moneda = (fija.get("currency") or "").upper()
+        numero = (det.get("accountNumber") or "").strip()
+        # Si ya hay una cuenta propia en esa moneda, manda la propia: el dinero
+        # entra a nombre del comercio y no hay nada que atribuir.
+        if moneda and numero and moneda not in salida:
+            salida[moneda] = {
+                "moneda": moneda,
+                "pais": fija.get("country"),
+                "numero": numero,
+                "proveedor": det.get("bankName"),
+                "clase": "compartida",
+                # Estos vienen ya rellenos, al revés que en las propias.
+                "titular": det.get("accountHolderName"),
+                "banco": det.get("bankName"),
+                "documento": det.get("documentNumber"),
+                "tipo_cuenta": det.get("accountType"),
+            }
+
     return salida
 
 
@@ -530,19 +585,37 @@ def cuentas_transferencia(modo: str | None = None, refrescar: bool = False) -> d
     return datos
 
 
+def _fundida(cuenta: dict) -> dict:
+    """Cuenta de su API + lo que haya escrito el admin, que manda.
+
+    Lo escrito a mano pisa a lo que devuelve Koywe: si el titular que mandan no
+    es exactamente el que aparece en el banco, la transferencia rebota, y quien
+    puede corregirlo es el admin.
+    """
+    datos = beneficiario(cuenta["moneda"])
+    return {**cuenta, **{k: v for k, v in datos.items() if v}}
+
+
 def cuentas_completas(modo: str | None = None) -> dict:
-    """Las que ya se le pueden enseñar a un cliente: número + titular + banco.
+    """Las que ya se le pueden enseñar a un cliente.
+
+    Hacen falta dos cosas: los datos mínimos para poder transferir, y que un
+    admin la haya habilitado a mano. Lo segundo no sobra — la cuenta compartida
+    de Koywe llega con titular y banco ya rellenos desde su API y si no, se
+    publicaría sola.
 
     Deliberadamente sin lista fija de países: si Koywe habilita mañana una
-    cuenta en CLP, aparece sola en cuanto se rellene el titular. Nunca levanta,
+    cuenta en otra moneda, aparece en el panel para habilitarla. Nunca levanta,
     porque esto se pinta en la pantalla de envío.
     """
     salida = {}
     for moneda, cuenta in cuentas_transferencia(modo).items():
-        datos = beneficiario(moneda)
-        if not all(datos.get(c) for c in BENEFICIARIO_MINIMO):
+        fundida = _fundida(cuenta)
+        if not fundida.get(CAMPO_HABILITADA):
             continue
-        salida[moneda] = {**cuenta, **datos}
+        if not all(fundida.get(c) for c in BENEFICIARIO_MINIMO):
+            continue
+        salida[moneda] = fundida
     return salida
 
 
@@ -550,9 +623,15 @@ def estado_cuentas(modo: str | None = None) -> list:
     """Para el panel: toda cuenta emitida, con lo que le falta para publicarse."""
     salida = []
     for moneda, cuenta in sorted(cuentas_transferencia(modo).items()):
-        datos = beneficiario(moneda)
-        faltan = [c for c in BENEFICIARIO_MINIMO if not datos.get(c)]
-        salida.append({**cuenta, **datos, "faltan": faltan, "publicada": not faltan})
+        fundida = _fundida(cuenta)
+        faltan = [c for c in BENEFICIARIO_MINIMO if not fundida.get(c)]
+        habilitada = bool(fundida.get(CAMPO_HABILITADA))
+        salida.append({
+            **fundida,
+            "faltan": faltan,
+            "habilitada": habilitada,
+            "publicada": habilitada and not faltan,
+        })
     return salida
 
 

@@ -401,6 +401,7 @@ class KoyweCuentaIn(BaseModel):
     documento: Optional[str] = None
     tipo_cuenta: Optional[str] = None
     nota: Optional[str] = None
+    habilitada: bool = False
 
 
 @router.get("/koywe/accounts", response_model=dict)
@@ -429,14 +430,25 @@ def save_koywe_account(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    faltan = [c for c in koywe_service.BENEFICIARIO_MINIMO if not guardado.get(c)]
+    # Lo guardado puede no bastar: la cuenta compartida trae titular y banco de
+    # su API, así que aquí se mira el resultado fundido, no solo lo escrito.
+    estado = next(
+        (c for c in koywe_service.estado_cuentas() if c["moneda"] == data.moneda.upper()),
+        {"faltan": [c for c in koywe_service.BENEFICIARIO_MINIMO if not guardado.get(c)],
+         "publicada": False},
+    )
+
+    if estado["publicada"]:
+        mensaje = f"Cuenta {data.moneda.upper()} visible para los clientes"
+    elif estado["faltan"]:
+        mensaje = f"Guardado, pero falta {', '.join(estado['faltan'])}"
+    else:
+        mensaje = "Guardado. Marca «Mostrar a los clientes» para publicarla"
+
     return {
         "success": True,
-        "data": {"moneda": data.moneda.upper(), "faltan": faltan, "publicada": not faltan},
-        "message": (
-            f"Cuenta {data.moneda.upper()} publicada"
-            if not faltan else f"Guardado, pero falta {', '.join(faltan)}"
-        ),
+        "data": {"moneda": data.moneda.upper(), **estado},
+        "message": mensaje,
     }
 
 
