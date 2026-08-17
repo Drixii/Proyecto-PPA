@@ -9,10 +9,14 @@ import { CountryWithFlag } from '../../utils/flags.jsx'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
+// «Por Aprobar» y no «En Aprobación»: para el sub-admin es su bandeja de
+// trabajo, no un estado que observa. El resto sale de utils/orderStatus.
 const STATUS_CFG = {
+  pendiente_pago: { label: 'Pendiente de pago', bg: 'rgba(220,38,38,.12)', color: '#f87171' },
   en_aprobacion: { label: 'Por Aprobar', bg: 'rgba(251,146,60,.12)', color: '#fb923c' },
   en_proceso:    { label: 'En Proceso',  bg: 'rgba(96,165,250,.12)',  color: '#60a5fa' },
   completado:    { label: 'Completado',  bg: 'rgba(74,222,128,.12)',  color: '#4ade80' },
+  rechazado:     { label: 'Rechazado',   bg: 'rgba(239,68,68,.12)',   color: '#f87171' },
 }
 
 function StatusChip({ status }) {

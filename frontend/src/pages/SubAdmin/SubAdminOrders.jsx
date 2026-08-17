@@ -4,6 +4,8 @@ import FinexyLayout from '../../components/FinexyLayout'
 import SlidePanel from '../../components/SlidePanel'
 import Portal from '../../components/Portal'
 import StatusBadge from '../../components/StatusBadge'
+import EstadoOrden from '../../components/EstadoOrden'
+import { ESTADO_COLOR } from '../../utils/orderStatus'
 import DateRangePicker from '../../components/DateRangePicker'
 import api from '../../services/api'
 import { flagUrl } from '../../utils/flags'
@@ -16,11 +18,7 @@ const today = new Date()
 const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0)
 const todayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
 
-const STATUS_DOT = {
-  en_aprobacion: '#fb923c',
-  en_proceso: '#60a5fa',
-  completado: '#4ade80',
-}
+const STATUS_DOT = ESTADO_COLOR
 
 const STATUSES = [
   { key: '', label: 'Todos' },
@@ -393,10 +391,7 @@ export default function SubAdminOrders() {
                       <p className="text-xs" style={{color:'#4ade80'}}>{order.amount_received?.toLocaleString()} {order.currency_to}</p>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-1.5">
-                        <div style={{width:'8px', height:'8px', borderRadius:'50%', background:STATUS_DOT[order.status] || '#64748b', flexShrink:0}} />
-                        <span className="text-xs" style={{color:'#aebfe2'}}>{order.status?.replace(/_/g, ' ')}</span>
-                      </div>
+                      <EstadoOrden status={order.status} />
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-xs" style={{color:'#8aa0cc'}}>

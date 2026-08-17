@@ -9,6 +9,8 @@ import TransactionsBackground from '../../components/TransactionsBackground'
 import api from '../../services/api'
 import { useStore } from '../../store/useStore'
 import { flagUrl } from '../../utils/flags'
+import EstadoOrden from '../../components/EstadoOrden'
+import { ESTADO_COLOR } from '../../utils/orderStatus'
 import { fmtDateShort, userTz } from '../../utils/timezone'
 
 const GLASS = {
@@ -18,12 +20,6 @@ const GLASS = {
   backdropFilter: 'blur(14px)',
   WebkitBackdropFilter: 'blur(14px)',
   boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)',
-}
-
-const STATUS_DOT_STYLE = {
-  en_aprobacion: { background: '#eab308' },
-  en_proceso: { background: '#60a5fa' },
-  completado: { background: '#4ade80' },
 }
 
 const STATUS_STEP = { en_aprobacion: 1, en_proceso: 2, completado: 3 }
@@ -221,7 +217,7 @@ export default function Dashboard() {
                     style={{border:'1px solid rgba(255,255,255,.08)'}}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={STATUS_DOT_STYLE[order.status]} />
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background: ESTADO_COLOR[order.status] || '#64748b'}} />
                       <span className="inline-flex items-center gap-1 text-xs font-medium truncate" style={{color:'#aebfe2'}}>
                         {flagUrl(order.receiver_country) && <img src={flagUrl(order.receiver_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />}
                         {order.receiver_country}
@@ -339,7 +335,7 @@ export default function Dashboard() {
                       {order.receiver_country}
                     </span>
                   </div>
-                  <div className="w-2 h-2 rounded-full shrink-0" style={STATUS_DOT_STYLE[order.status]} />
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{background: ESTADO_COLOR[order.status] || '#64748b'}} />
                 </button>
               ))}
             </div>
@@ -420,10 +416,7 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full shrink-0" style={STATUS_DOT_STYLE[order.status]} />
-                        <span className="text-xs capitalize" style={{color:'#aebfe2'}}>{order.status?.replace('_', ' ')}</span>
-                      </div>
+                      <EstadoOrden status={order.status} />
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-xs" style={{color:'#8aa0cc'}}>

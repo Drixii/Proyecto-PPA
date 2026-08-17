@@ -11,6 +11,7 @@ import api from '../../services/api'
 import { fmtDateShort } from '../../utils/timezone'
 import { flagUrl } from '../../utils/flags'
 import { ESTADO_DOT } from '../../utils/orderStatus'
+import EstadoOrden from '../../components/EstadoOrden'
 
 const today = new Date()
 const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0)
@@ -411,10 +412,7 @@ export default function AdminOrders() {
                       }
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[order.status] || 'bg-gray-300'}`} />
-                        <span className="text-xs capitalize" style={{ color:'#aebfe2' }}>{order.status?.replace(/_/g, ' ')}</span>
-                      </div>
+                      <EstadoOrden status={order.status} />
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-xs" style={{ color:'#8aa0cc' }}>

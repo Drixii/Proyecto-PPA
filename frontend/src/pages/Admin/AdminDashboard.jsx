@@ -11,12 +11,10 @@ import TransactionsBackground from '../../components/TransactionsBackground'
 import api from '../../services/api'
 import { useStore } from '../../store/useStore'
 import { flagUrl } from '../../utils/flags'
+import EstadoOrden from '../../components/EstadoOrden'
+import { ESTADO_DOT } from '../../utils/orderStatus'
 
-const STATUS_DOT = {
-  en_aprobacion: 'bg-orange-400',
-  en_proceso: 'bg-blue-500',
-  completado: 'bg-green-500',
-}
+const STATUS_DOT = ESTADO_DOT
 
 const GLASS = {
   background: 'rgba(255,255,255,0.03)',
@@ -379,10 +377,7 @@ function TableRow({ order, onClick }) {
         </span>
       </td>
       <td className="px-4 py-4">
-        <div className="flex items-center gap-1.5">
-          <div className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[order.status]}`} />
-          <span className="text-xs capitalize" style={{ color: '#aebfe2' }}>{order.status?.replace('_', ' ')}</span>
-        </div>
+        <EstadoOrden status={order.status} />
       </td>
       <td className="px-4 py-4">
         <span className="text-xs" style={{ color: '#8aa0cc' }}>
