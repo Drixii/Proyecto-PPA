@@ -248,23 +248,40 @@ export default function NewTransfer() {
 
   // Datos de quien paga. El remitente sale del nombre de la cuenta, que no
   // trae documento ni siempre apellido; los métodos que los exigen (PSE) los
-  // piden aquí antes de crear el cobro.
-  const [pagador, setPagador] = useState({
-    sender_name: '', sender_id_type: '', sender_id_num: '', sender_phone: '',
-  })
+  // piden aquí antes de crear el cobro. Se arranca con lo que ya sabemos para
+  // que solo haya que completar, no reescribir.
+  const [pagador, setPagador] = useState(() => ({
+    sender_name: user?.full_name || '',
+    sender_id_type: '',
+    sender_id_num: '',
+    sender_phone: user?.phone || '',
+  }))
 
-  const faltaDelPagador = (() => {
+  // Qué campos se muestran. Depende SOLO de lo que exige el método, nunca de
+  // si ya están rellenos: cuando dependía de lo que faltaba, terminar de
+  // escribir el apellido hacía desaparecer el campo a media palabra y lo mismo
+  // al elegir el documento.
+  const camposPagador = (() => {
     const exige = (koyweElegido?.requiere || []).map(c => String(c).toLowerCase())
     if (!exige.length) return []
-    const nombre = (pagador.sender_name || user?.full_name || '').trim()
+    const campos = []
+    if (exige.some(c => c.includes('last') || c.includes('first'))) campos.push('nombre')
+    if (exige.some(c => c.includes('document'))) campos.push('documento')
+    if (exige.includes('phone')) campos.push('telefono')
+    return campos
+  })()
+
+  // Qué falta de verdad. Solo decide si el botón de pagar está activo.
+  const faltaDelPagador = (() => {
     const falta = []
-    if (exige.some(c => c.includes('document')) && !(pagador.sender_id_num && pagador.sender_id_type)) {
-      falta.push('documento')
-    }
-    if (exige.some(c => c.includes('last')) && nombre.split(/\s+/).filter(Boolean).length < 2) {
+    const nombre = (pagador.sender_name || '').trim()
+    if (camposPagador.includes('nombre') && nombre.split(/\s+/).filter(Boolean).length < 2) {
       falta.push('apellido')
     }
-    if (exige.includes('phone') && !(pagador.sender_phone || user?.phone)) falta.push('telefono')
+    if (camposPagador.includes('documento') && !(pagador.sender_id_num.trim() && pagador.sender_id_type)) {
+      falta.push('documento')
+    }
+    if (camposPagador.includes('telefono') && !pagador.sender_phone.trim()) falta.push('telefono')
     return falta
   })()
 
@@ -1171,13 +1188,13 @@ export default function NewTransfer() {
                           nunca se pidió: el remitente sale del nombre de la
                           cuenta. Sin preguntarlo aquí, el cobro se creaba y
                           Koywe lo rechazaba después. */}
-                      {faltaDelPagador.length > 0 && (
+                      {camposPagador.length > 0 && (
                         <div className="space-y-3 pb-1">
                           <p className="text-xs" style={{color:'#fcd34d'}}>
                             {koyweElegido.nombre} necesita estos datos de quien paga. El banco
                             los compara con los de tu cuenta.
                           </p>
-                          {faltaDelPagador.includes('apellido') && (
+                          {camposPagador.includes('nombre') && (
                             <div>
                               <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Nombre y apellido</label>
                               <input value={pagador.sender_name} onChange={e => setPagador(p => ({ ...p, sender_name: e.target.value }))}
@@ -1185,7 +1202,7 @@ export default function NewTransfer() {
                                 style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
                             </div>
                           )}
-                          {faltaDelPagador.includes('documento') && (
+                          {camposPagador.includes('documento') && (
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Tipo de documento</label>
@@ -1206,7 +1223,7 @@ export default function NewTransfer() {
                               </div>
                             </div>
                           )}
-                          {faltaDelPagador.includes('telefono') && (
+                          {camposPagador.includes('telefono') && (
                             <div>
                               <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Teléfono</label>
                               <input value={pagador.sender_phone} onChange={e => setPagador(p => ({ ...p, sender_phone: e.target.value }))}
@@ -1215,6 +1232,12 @@ export default function NewTransfer() {
                             </div>
                           )}
                         </div>
+                      )}
+
+                      {faltaDelPagador.length > 0 && (
+                        <p className="text-xs" style={{color:'#fca5a5'}}>
+                          Falta {faltaDelPagador.join(', ')} para poder continuar.
+                        </p>
                       )}
 
                       <p className="text-xs" style={{color:'#8aa0cc'}}>
