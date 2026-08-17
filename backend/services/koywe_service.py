@@ -851,19 +851,92 @@ def _telefono(telefono: str | None, pais: str) -> str:
     return f"+{prefijo}{digitos}"
 
 
+def _contacto_guardado(client_id) -> str:
+    from models.user import User
+    if not client_id:
+        return ""
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == client_id).first()
+        return (u.koywe_contact_id or "").strip() if u else ""
+    except Exception as e:
+        log.warning("[koywe] no se pudo leer el contacto guardado: %s", e)
+        return ""
+    finally:
+        db.close()
+
+
+def _guardar_contacto(client_id, contacto: str) -> None:
+    from models.user import User
+    if not client_id or not contacto:
+        return
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == client_id).first()
+        if u:
+            u.koywe_contact_id = contacto
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        # No es fatal: el cobro puede seguir. Solo significa que el próximo
+        # intento volverá a buscarlo.
+        log.warning("[koywe] no se pudo guardar el contacto %s: %s", contacto, e)
+    finally:
+        db.close()
+
+
+def _buscar_contacto(email: str, telefono: str, modo: str) -> str:
+    """Busca entre los contactos existentes por correo o teléfono.
+
+    Su API no permite filtrar —ni `email`, ni `search`, ni paginar— y solo
+    devuelve los 100 más recientes. Por eso esto es un último recurso para
+    contactos que no creamos nosotros, y el camino normal es el id guardado en
+    el cliente.
+    """
+    try:
+        datos = _pedir("GET", f"{_ruta_merchant(modo)}/contacts", modo=modo,
+                       params={"pageSize": 100})
+    except KoyweError as e:
+        log.warning("[koywe] no se pudo listar contactos: %s", e)
+        return ""
+
+    email = (email or "").strip().lower()
+    telefono = (telefono or "").strip()
+    for c in (datos.get("contacts") or []) if isinstance(datos, dict) else []:
+        if not isinstance(c, dict):
+            continue
+        if email and (c.get("email") or "").strip().lower() == email:
+            return c.get("id") or ""
+        if telefono and (c.get("phone") or "").strip() == telefono:
+            return c.get("id") or ""
+    return ""
+
+
 def _crear_contacto(order, email: str, pais: str, modo: str) -> str:
-    """Registra al pagador en Koywe y devuelve su id.
+    """Devuelve el contacto del pagador en Koywe, creándolo si hace falta.
 
     Algunos métodos (PSE en Colombia) no funcionan sin documento, teléfono y
     correo del pagador. Koywe los quiere como contacto aparte, creado antes de
     la orden, y la orden solo lleva el `contactId`.
+
+    Reutilizarlo no es una optimización: su API responde 409 «Contact with same
+    email or phone already exists», así que crear uno nuevo en cada cobro haría
+    que el segundo envío de cualquier cliente fallara. El id se guarda en el
+    cliente; el rastreo por correo queda para los contactos que ya existían
+    antes de esto o que se crearon desde el panel de Koywe.
     """
+    telefono = _telefono(order.sender_phone, pais)
+
+    guardado = _contacto_guardado(getattr(order, "client_id", None))
+    if guardado:
+        return guardado
+
     nombre, apellido = _nombre_partido(order.sender_name)
     cuerpo = {
         "firstName": nombre,
         "lastName": apellido,
         "email": email,
-        "phone": _telefono(order.sender_phone, pais),
+        "phone": telefono,
         "countrySymbol": pais,
         "documentType": (order.sender_id_type or "").upper() or None,
         "documentNumber": order.sender_id_num or None,
@@ -872,10 +945,29 @@ def _crear_contacto(order, email: str, pais: str, modo: str) -> str:
     }
     cuerpo = {k: v for k, v in cuerpo.items() if v not in (None, "")}
 
-    datos = _pedir("POST", f"{_ruta_merchant(modo)}/contacts", modo=modo, json=cuerpo)
+    try:
+        datos = _pedir("POST", f"{_ruta_merchant(modo)}/contacts", modo=modo, json=cuerpo)
+    except KoyweError as e:
+        # 409: ya existe uno con ese correo o ese teléfono. Es el caso normal
+        # cuando el contacto se creó antes de que guardáramos su id.
+        if "409" not in str(e) and "already exists" not in str(e):
+            raise
+        existente = _buscar_contacto(email, telefono, modo)
+        if not existente:
+            raise KoyweError(
+                "Koywe dice que ya existe un contacto con ese correo o teléfono, "
+                "pero no aparece entre los últimos 100. Búscalo en su panel y "
+                "cambia el correo del cliente, o pídeles que lo borren."
+            ) from e
+        log.info("[koywe] contacto ya existente reutilizado: %s", existente)
+        _guardar_contacto(getattr(order, "client_id", None), existente)
+        return existente
+
     contacto = datos.get("id")
     if not contacto:
         raise KoyweError(f"Koywe no devolvió el contacto: {json.dumps(datos)[:300]}")
+
+    _guardar_contacto(getattr(order, "client_id", None), contacto)
     return contacto
 
 

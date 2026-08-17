@@ -67,6 +67,11 @@ def _run_migrations():
             commission_pct FLOAT NOT NULL,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )""",
+        # Contacto del cliente en Koywe. Su API rechaza crear dos con el mismo
+        # correo o teléfono, y no deja buscarlos: solo devuelve los 100 más
+        # recientes, sin paginar. Guardarlo aquí es la única forma de que el
+        # segundo cobro de un mismo cliente no choque con el primero.
+        "ALTER TABLE users ADD COLUMN koywe_contact_id VARCHAR",
     ]
     # Estas migraciones se reejecutan en cada arranque, así que "la columna ya
     # existe" es el caso normal y se ignora. Cualquier otro fallo sí se registra:

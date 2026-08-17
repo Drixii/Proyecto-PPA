@@ -23,5 +23,10 @@ class User(Base):
     password_changed_at = Column(DateTime(timezone=True), nullable=True)
     super_admin_id = Column(Integer, nullable=True)
     invite_code_used = Column(String, nullable=True)
+    # Identificador de este cliente como contacto en Koywe. Su API no permite
+    # crear dos contactos con el mismo correo o teléfono, ni buscar entre los
+    # existentes, así que sin guardarlo aquí el segundo cobro de un cliente
+    # fallaría contra el contacto que creó el primero.
+    koywe_contact_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime, nullable=True)
