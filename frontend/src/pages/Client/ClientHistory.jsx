@@ -10,14 +10,15 @@ import api from '../../services/api'
 import { flagUrl } from '../../utils/flags'
 import { useStore } from '../../store/useStore'
 import { fmtDateShort, userTz } from '../../utils/timezone'
+import { ESTADO_COLOR, ESTADO_LABEL, ESTADO_PIDE_ACCION } from '../../utils/orderStatus'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
-const STATUS_COLOR = {
-  en_aprobacion: '#f97316',
-  en_proceso: '#60a5fa',
-  completado: '#4ade80',
-}
+// Los colores salen de utils/orderStatus. La lista de aquí no tenía
+// pendiente_pago ni rechazado, así que su punto se pintaba con un color
+// indefinido —transparente— y una orden sin pagar no se distinguía de una
+// completada en la tabla del historial.
+const STATUS_COLOR = ESTADO_COLOR
 
 export default function ClientHistory() {
   const { user } = useStore()
@@ -119,6 +120,9 @@ export default function ClientHistory() {
             {[
               { key: '', label: 'Todos' },
               { key: 'active', label: 'Activos', dotColor: '#60a5fa' },
+              // Sin este filtro, encontrar las que quedaron sin pagar obligaba
+              // a recorrer la tabla entera a ojo.
+              { key: 'pendiente_pago', label: 'Pendiente de pago' },
               { key: 'en_aprobacion', label: 'En Aprobación' },
               { key: 'en_proceso', label: 'En Proceso' },
               { key: 'completado', label: 'Completado' },
@@ -206,8 +210,10 @@ export default function ClientHistory() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{background: STATUS_COLOR[order.status]}} />
-                        <span className="text-xs capitalize" style={{color:'#aebfe2'}}>{order.status?.replace('_', ' ')}</span>
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{background: STATUS_COLOR[order.status] || '#64748b'}} />
+                        <span className="text-xs" style={{color: ESTADO_PIDE_ACCION.has(order.status) ? '#f87171' : '#aebfe2', fontWeight: ESTADO_PIDE_ACCION.has(order.status) ? 600 : 400}}>
+                          {ESTADO_LABEL[order.status] || order.status?.replace('_', ' ')}
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-4">

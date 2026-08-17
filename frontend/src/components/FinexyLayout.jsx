@@ -8,6 +8,7 @@ import api from '../services/api'
 import { fmtDateMini, userTz } from '../utils/timezone'
 import Portal from './Portal'
 import { queryClient } from '../queryClient'
+import { ESTADO_DOT, ESTADO_LABEL } from '../utils/orderStatus'
 
 const ADMIN_TABS = [
   { label: 'Mi panel', path: '/admin' },
@@ -60,11 +61,10 @@ const SUB_ADMIN_SIDEBAR = [
 ]
 
 function StatusDot({ status }) {
-  const colors = { en_aprobacion:'bg-orange-400', en_proceso:'bg-blue-500', completado:'bg-green-500' }
-  return <div className={`w-2 h-2 rounded-full shrink-0 ${colors[status]||'bg-[#8aa0cc]'}`} />
+  return <div className={`w-2 h-2 rounded-full shrink-0 ${ESTADO_DOT[status] || 'bg-[#8aa0cc]'}`} />
 }
 
-const STATUS_LABEL = { en_aprobacion:'En Aprobación', en_proceso:'En Proceso', completado:'Completado' }
+const STATUS_LABEL = ESTADO_LABEL
 
 // ── Client search ─────────────────────────────────────────
 function ClientSearch() {
@@ -341,6 +341,7 @@ function playNotifSound() {
 
 // ── Notification status helpers ───────────────────────────
 const STATUS_NOTIF = {
+  pendiente_pago: { bg: 'rgba(220,38,38,.12)',  dot: '#dc2626', label: '#f87171' },
   en_aprobacion: { bg: 'rgba(251,146,60,.12)', dot: '#fb923c', label: '#fb923c' },
   en_proceso:    { bg: 'rgba(96,165,250,.12)',  dot: '#60a5fa', label: '#60a5fa' },
   completado:    { bg: 'rgba(74,222,128,.12)',  dot: '#4ade80', label: '#4ade80' },

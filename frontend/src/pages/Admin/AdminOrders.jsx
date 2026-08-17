@@ -10,25 +10,23 @@ import FilterDropdown from '../../components/FilterDropdown'
 import api from '../../services/api'
 import { fmtDateShort } from '../../utils/timezone'
 import { flagUrl } from '../../utils/flags'
+import { ESTADO_DOT } from '../../utils/orderStatus'
 
 const today = new Date()
 const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0)
 const todayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
 
-const STATUS_DOT = {
-  pendiente_pago: 'bg-yellow-400',
-  en_aprobacion: 'bg-orange-400',
-  en_proceso: 'bg-blue-500',
-  completado: 'bg-green-500',
-  rechazado: 'bg-red-500',
-}
+const STATUS_DOT = ESTADO_DOT
 
 const STATUSES_DEFAULT = [
   { key: '', label: 'Todos' },
-  { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400' },
-  { key: 'en_proceso', label: 'En Proceso', dot: 'bg-blue-500' },
-  { key: 'completado', label: 'Completado', dot: 'bg-green-500' },
-  { key: 'rechazado', label: 'Rechazado', dot: 'bg-red-500' },
+  // Faltaba: las órdenes sin pagar no se podían filtrar y solo aparecían
+  // mezcladas en "Todos".
+  { key: 'pendiente_pago', label: 'Pendiente de pago', dot: ESTADO_DOT.pendiente_pago },
+  { key: 'en_aprobacion', label: 'En Aprobación', dot: ESTADO_DOT.en_aprobacion },
+  { key: 'en_proceso', label: 'En Proceso', dot: ESTADO_DOT.en_proceso },
+  { key: 'completado', label: 'Completado', dot: ESTADO_DOT.completado },
+  { key: 'rechazado', label: 'Rechazado', dot: ESTADO_DOT.rechazado },
 ]
 const STATUSES_ALL = STATUSES_DEFAULT
 
@@ -111,9 +109,12 @@ export default function AdminOrders() {
   const apiParams = {
     page_size: 500,
     all_orders: true,
-    // Sin las tarjetas creadas y sin cobrar: esta pantalla es el registro de
+    // Sin las órdenes creadas y sin cobrar: esta pantalla es el registro de
     // lo recibido. Quien quiera ver el flujo completo tiene el pipeline.
-    paid_only: true,
+    //
+    // Salvo que se pidan justo esas: un filtro explícito manda sobre el valor
+    // por defecto, o el pill "Pendiente de pago" devolvería siempre cero.
+    paid_only: statusFilter !== 'pendiente_pago',
     ...(dateRange ? {
       date_from: dateRange.from.toISOString(),
       date_to: dateRange.to.toISOString(),
