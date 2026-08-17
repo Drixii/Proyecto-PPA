@@ -9,7 +9,7 @@ import CardPayment from './CardPayment'
 import { flagUrl } from '../utils/flags'
 import { useStore } from '../store/useStore'
 import { fmtDate, userTz } from '../utils/timezone'
-import { esPagoExterno, esKoywe } from '../utils/payments'
+import { esPagoExterno } from '../utils/payments'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -505,6 +505,168 @@ function TabButton2({ active, onClick, children }) {
   )
 }
 
+// Elegir de nuevo cómo pagar una orden que quedó sin cobrar.
+//
+// Antes, "Pagar ahora" devolvía al cliente al mismo portal que acababa de
+// fallarle. Si la tarjeta fue rechazada o el proveedor dio error, repetir el
+// mismo camino repite el error: lo que hace falta es poder cambiar de método
+// sin rellenar el envío otra vez.
+function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
+  const qc = useQueryClient()
+  const [enCurso, setEnCurso] = useState('')
+  const [error, setError] = useState('')
+  const [transferencia, setTransferencia] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['metodos-orden', order.id],
+    queryFn: () => api.get(`/payments/orders/${order.id}/methods`).then(r => r.data.data),
+  })
+
+  const refrescar = () => {
+    qc.invalidateQueries({ queryKey: ['my-orders'] })
+    qc.invalidateQueries({ queryKey: ['my-orders-history'] })
+    qc.invalidateQueries({ queryKey: ['client-order', order.id] })
+  }
+
+  const elegir = async (codigo) => {
+    setEnCurso(codigo)
+    setError('')
+    try {
+      await api.put(`/payments/orders/${order.id}/method`, { payment_method: codigo })
+    } catch (err) {
+      setEnCurso('')
+      setError(err.response?.data?.detail || 'No se pudo cambiar el método')
+      return
+    }
+
+    if (codigo === 'transferencia') {
+      refrescar()
+      setEnCurso('')
+      setTransferencia(true)
+      return
+    }
+    if (codigo === 'tarjeta') {
+      refrescar()
+      alElegirTarjeta()
+      return
+    }
+
+    // Métodos de Koywe: la URL se pide en el momento, porque la de un intento
+    // anterior ya caducó.
+    try {
+      const r = await api.post(`/payments/orders/${order.id}/koywe/checkout`)
+      window.location.href = r.data.data.url
+    } catch (err) {
+      setEnCurso('')
+      alFallar(err.response?.data?.detail || 'No se pudo abrir el portal de pago')
+    }
+  }
+
+  const subirComprobante = async (file) => {
+    if (!file) return
+    setSubiendo(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      await api.post(`/orders/${order.id}/upload-proof`, fd)
+      refrescar()
+      cerrar()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'No se pudo subir el comprobante')
+    } finally {
+      setSubiendo(false)
+    }
+  }
+
+  const cuenta = data?.cuenta_transferencia
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.75)'}}
+        onClick={cerrar}>
+        <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl p-6" style={GLASS}
+          onClick={e => e.stopPropagation()}>
+          <div className="flex items-start justify-between mb-1 gap-3">
+            <h3 className="font-semibold" style={{color:'#eaf2ff'}}>
+              {transferencia ? 'Transfiere y sube tu comprobante' : '¿Cómo quieres pagar?'}
+            </h3>
+            <button onClick={cerrar} className="text-lg leading-none shrink-0" style={{color:'#64748b'}}>×</button>
+          </div>
+          <p className="text-xs mb-4" style={{color:'#8aa0cc'}}>
+            {order.order_number} · {Number(order.amount_sent).toLocaleString('es-CL')} {order.currency_from}
+          </p>
+
+          {error && (
+            <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{color:'#fca5a5', background:'rgba(239,68,68,.08)'}}>{error}</p>
+          )}
+
+          {isLoading && <p className="text-sm" style={{color:'#8aa0cc'}}>Cargando...</p>}
+
+          {!isLoading && !transferencia && (
+            <div className="grid grid-cols-2 gap-3">
+              {(data?.metodos || []).map(m => (
+                <button key={m.codigo} type="button"
+                  onClick={() => elegir(m.codigo)}
+                  disabled={!!enCurso}
+                  className="flex flex-col items-center gap-2 p-4 rounded-2xl transition-all text-center disabled:opacity-50"
+                  style={data?.actual === m.codigo
+                    ? {background:'rgba(56,189,248,.1)', border:'2px solid #38bdf8'}
+                    : {background:'rgba(255,255,255,.04)', border:'2px solid rgba(255,255,255,.08)'}}>
+                  <span className="text-2xl">{m.icono}</span>
+                  <span className="text-xs font-semibold" style={{color:'#eaf2ff'}}>
+                    {enCurso === m.codigo ? 'Abriendo...' : m.nombre}
+                  </span>
+                  <span className="text-[10px]" style={{color:'#8aa0cc'}}>{m.desc}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {transferencia && (
+            <div className="space-y-3">
+              {cuenta ? (
+                <div className="rounded-xl p-4 space-y-2" style={{background:'rgba(56,189,248,.06)', border:'1px solid rgba(56,189,248,.2)'}}>
+                  {[
+                    ['Número de cuenta', cuenta.numero],
+                    ['Titular', cuenta.titular],
+                    ['Banco', cuenta.banco],
+                    ['Documento', cuenta.documento],
+                    ['Tipo de cuenta', cuenta.tipo_cuenta],
+                  ].filter(([, v]) => v).map(([label, v]) => (
+                    <div key={label}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{color:'#475569'}}>{label}</p>
+                      <p className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{v}</p>
+                    </div>
+                  ))}
+                  <p className="text-[11px] pt-1" style={{color:'#fcd34d'}}>
+                    Transfiere exactamente {Number(order.amount_sent).toLocaleString('es-CL')} {order.currency_from}.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs" style={{color:'#8aa0cc'}}>
+                  Transfiere el monto a la cuenta que te indicó tu operador y adjunta el comprobante.
+                </p>
+              )}
+
+              <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl p-6 cursor-pointer"
+                style={{borderColor:'rgba(255,255,255,.12)', background:'rgba(6,13,40,.4)'}}>
+                <input type="file" accept="image/*,.pdf" className="sr-only"
+                  onChange={e => subirComprobante(e.target.files?.[0] || null)} />
+                <span className="text-sm font-semibold" style={{color:'#aebfe2'}}>
+                  {subiendo ? 'Subiendo...' : 'Adjuntar comprobante'}
+                </span>
+                <span className="text-xs" style={{color:'#8aa0cc'}}>JPG, PNG o PDF</span>
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    </Portal>
+  )
+}
+
 export function ClientOrderPanel({ order }) {
   const [tab, setTab] = useState(order?._defaultTab || 'estado')
   const navigate = useNavigate()
@@ -513,8 +675,8 @@ export function ClientOrderPanel({ order }) {
   const [payingCard, setPayingCard] = useState(false)
   // Pidiendo la URL del portal de Koywe. Se sale de la aplicación, así que no
   // se vuelve a poner en false salvo que falle.
-  const [abrirPago, setAbrirPago] = useState(false)
   const [abrirPagoError, setAbrirPagoError] = useState('')
+  const [eligiendoMetodo, setEligiendoMetodo] = useState(false)
 
   // Rechazar no cancela el envío: el cliente sube otro comprobante y la orden
   // vuelve sola a "en aprobación" (backend/routers/orders.py).
@@ -591,43 +753,39 @@ export function ClientOrderPanel({ order }) {
         </button>
       </div>
 
-      {/* Pago externo sin completar: se creó la orden pero el cobro no llegó a
-          pasar (cerró el formulario, falló la tarjeta, abandonó el portal...).
-          Se puede pagar aquí sin volver a rellenar el envío. */}
-      {esPagoExterno(order.payment_method) && !order.paid_at && order.status === 'pendiente_pago' && (
-        <div className="px-6 py-4 shrink-0" style={{background:'rgba(251,191,36,.08)', borderBottom:'1px solid rgba(251,191,36,.2)'}}>
-          <p className="text-sm font-semibold mb-1" style={{color:'#fcd34d'}}>Pago pendiente</p>
-          <p className="text-xs mb-3" style={{color:'#fcd34d'}}>
+      {/* Pago sin completar: se creó la orden pero el cobro no llegó a pasar
+          (cerró el formulario, falló la tarjeta, abandonó el portal...). Se
+          puede pagar aquí sin volver a rellenar el envío. En rojo porque es lo
+          único de la ficha que exige algo del cliente. */}
+      {!order.paid_at && order.status === 'pendiente_pago' && (
+        <div className="px-6 py-4 shrink-0" style={{background:'rgba(239,68,68,.08)', borderBottom:'1px solid rgba(239,68,68,.25)'}}>
+          <p className="text-sm font-semibold mb-1 flex items-center gap-2" style={{color:'#f87171'}}>
+            <span className="inline-block w-2 h-2 rounded-full" style={{background:'#dc2626'}} />
+            Pago pendiente
+          </p>
+          <p className="text-xs mb-3" style={{color:'#fca5a5'}}>
             Esta orden no se ha cobrado todavía. El envío no se procesa hasta que el pago se complete.
           </p>
           {abrirPagoError && (
             <p className="text-xs mb-2" style={{color:'#fca5a5'}}>{abrirPagoError}</p>
           )}
           <button
-            onClick={() => {
-              // La tarjeta se cobra dentro de la aplicación; los métodos de
-              // Koywe se cobran en su portal, así que hay que pedirle la URL
-              // en el momento — las de un intento anterior ya caducaron.
-              if (esKoywe(order.payment_method)) {
-                setAbrirPago(true)
-                setAbrirPagoError('')
-                api.post(`/payments/orders/${order.id}/koywe/checkout`)
-                  .then(r => { window.location.href = r.data.data.url })
-                  .catch(err => {
-                    setAbrirPago(false)
-                    setAbrirPagoError(err.response?.data?.detail || 'No se pudo abrir el portal de pago')
-                  })
-              } else {
-                setPayingCard(true)
-              }
-            }}
-            disabled={abrirPago}
-            className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-            style={{background:'rgba(56,189,248,.12)', border:'1px solid rgba(56,189,248,.3)', color:'#38bdf8'}}
+            onClick={() => { setAbrirPagoError(''); setEligiendoMetodo(true) }}
+            className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+            style={{background:'rgba(239,68,68,.14)', border:'1px solid rgba(239,68,68,.35)', color:'#f87171'}}
           >
-            {abrirPago ? 'Abriendo...' : (esKoywe(order.payment_method) ? 'Pagar ahora' : 'Pagar con tarjeta')}
+            Pagar ahora
           </button>
         </div>
+      )}
+
+      {eligiendoMetodo && (
+        <ElegirMetodoPago
+          order={order}
+          cerrar={() => setEligiendoMetodo(false)}
+          alElegirTarjeta={() => { setEligiendoMetodo(false); setPayingCard(true) }}
+          alFallar={(msg) => { setEligiendoMetodo(false); setAbrirPagoError(msg) }}
+        />
       )}
 
       {payingCard && (

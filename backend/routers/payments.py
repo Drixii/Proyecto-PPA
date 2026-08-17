@@ -535,6 +535,124 @@ def crear_checkout_koywe(
     }
 
 
+class MetodoIn(BaseModel):
+    payment_method: str
+
+
+@router.put("/orders/{order_id}/method", response_model=dict)
+def cambiar_metodo(
+    order_id: int,
+    data: MetodoIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cambia el método de pago de una orden que quedó sin cobrar.
+
+    Existe porque un pago pendiente casi nunca se resuelve reintentando lo
+    mismo: si la tarjeta fue rechazada o el portal falló, mandar al cliente
+    otra vez al mismo sitio repite el error. Aquí elige de nuevo, sin volver a
+    rellenar el envío.
+
+    Solo mientras nadie haya pagado. Una orden cobrada no puede cambiar de
+    método: el dinero ya entró por uno concreto.
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if order.paid_at:
+        raise HTTPException(status_code=400, detail="Esta orden ya está pagada")
+    if order.status not in ("pendiente_pago", "rechazado"):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede cambiar el método de una orden sin pagar")
+
+    metodo = (data.payment_method or "").strip().lower()
+    moneda = (order.currency_from or "").upper()
+
+    permitidos = {"transferencia"}
+    if stripe_service.is_configured() and moneda in stripe_service.CARD_CURRENCIES:
+        permitidos.add("tarjeta")
+    permitidos |= {m["codigo"].lower() for m in koywe_service.metodos_de(moneda)}
+
+    if metodo not in permitidos:
+        raise HTTPException(
+            status_code=400,
+            detail=f"«{data.payment_method}» no se puede usar para pagar en {moneda}")
+
+    order.payment_method = metodo
+    # El cobro anterior queda huérfano a propósito: apuntaba al método viejo y
+    # reutilizarlo devolvería al cliente al portal que acaba de descartar.
+    order.payment_intent_id = None
+    db.commit()
+
+    log.info("[pagos] %s cambia de método a %s", order.order_number, metodo)
+    return {
+        "success": True,
+        "data": {"payment_method": metodo, "status": order.status},
+        "message": "",
+    }
+
+
+@router.get("/orders/{order_id}/methods", response_model=dict)
+def metodos_de_orden(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Con qué puede pagar el cliente esta orden concreta.
+
+    Se calcula aquí y no en el navegador porque depende de la moneda de la
+    orden y de lo que cada proveedor admita hoy; ofrecer uno que no se puede
+    cobrar deja al cliente atascado.
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    moneda = (order.currency_from or "").upper()
+    metodos = [{
+        "codigo": "transferencia",
+        "nombre": "Transferencia",
+        "desc": "Sube tu comprobante",
+        "icono": "🏦",
+    }]
+    if stripe_service.is_configured() and moneda in stripe_service.CARD_CURRENCIES:
+        metodos.append({
+            "codigo": "tarjeta", "nombre": "Pago con tarjeta",
+            "desc": "Portal de pago", "icono": "💳",
+        })
+    metodos += [
+        {"codigo": m["codigo"].lower(), "nombre": m["nombre"],
+         "desc": m["desc"], "icono": m.get("icono") or "💸"}
+        for m in koywe_service.metodos_de(moneda)
+    ]
+
+    cuenta = None
+    try:
+        cuenta = koywe_service.cuentas_completas().get(moneda)
+    except Exception:
+        cuenta = None
+
+    return {
+        "success": True,
+        "data": {
+            "actual": (order.payment_method or "").lower(),
+            "moneda": moneda,
+            "metodos": metodos,
+            "cuenta_transferencia": cuenta,
+        },
+        "message": "",
+    }
+
+
 def _koywe_pagada(evento: dict):
     """Comprueba el aviso contra la API de Koywe y marca la orden pagada.
 

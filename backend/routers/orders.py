@@ -140,6 +140,12 @@ def upload_proof(
     if was_rejected:
         order.status = "en_aprobacion"
         order.rejection_reason = None
+    elif order.status == "pendiente_pago":
+        # Empezó como pago externo —tarjeta, Khipu— y el cliente se pasó a
+        # transferencia al no poder cobrarse. Sin esto la orden se quedaba en
+        # pendiente_pago con el comprobante ya subido, esperando un cobro que
+        # nunca iba a llegar y sin aparecer en la cola de nadie.
+        order.status = "en_aprobacion"
     # Si no, se queda en en_aprobacion — el admin aprueba y pasa a en_proceso
     db.commit()
     db.refresh(order)
