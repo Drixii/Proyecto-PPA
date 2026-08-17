@@ -9,6 +9,7 @@ import { fmtDateMini, userTz } from '../utils/timezone'
 import Portal from './Portal'
 import { queryClient } from '../queryClient'
 import { ESTADO_DOT, ESTADO_LABEL } from '../utils/orderStatus'
+import AvisoPagosPendientes from './AvisoPagosPendientes'
 
 const ADMIN_TABS = [
   { label: 'Mi panel', path: '/admin' },
@@ -677,6 +678,10 @@ export default function FinexyLayout({ children, fullHeight = false }) {
 
   return (
     <>
+    {/* Va en el layout y no en una pantalla concreta: una orden sin pagar hay
+        que avisarla entre en la aplicación por donde entre. El propio aviso
+        decide si toca mostrarlo (solo clientes, una vez por sesión). */}
+    <AvisoPagosPendientes />
     <div className="flex h-screen" style={{ background: '#060d22', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');

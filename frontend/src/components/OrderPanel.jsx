@@ -511,7 +511,7 @@ function TabButton2({ active, onClick, children }) {
 // fallarle. Si la tarjeta fue rechazada o el proveedor dio error, repetir el
 // mismo camino repite el error: lo que hace falta es poder cambiar de método
 // sin rellenar el envío otra vez.
-function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
+export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
   const qc = useQueryClient()
   const [enCurso, setEnCurso] = useState('')
   const [error, setError] = useState('')
