@@ -298,6 +298,13 @@ export default function NewTransfer() {
   }
 
   const handleFromCurrencyChange = (code) => {
+    // Con un destinatario ya guardado, su país está fijado ("bloqueado") y no
+    // se puede tocar: moverlo cambiaría el receptor por debajo y la orden
+    // saldría para otra persona, o crearía un contacto nuevo con el nombre del
+    // anterior. Si la moneda elegida choca con su país, no se acepta el
+    // cambio — el desplegable ya no la ofrece, esto es la última defensa.
+    if (destinoBloqueado && calc.toCurrency === code) return
+
     let newCountry = null, newCurrency = null
     if (calc.toCurrency === code) {
       const avail = receiveCountries.filter(c => c.currency !== code)
@@ -324,13 +331,24 @@ export default function NewTransfer() {
 
   const countriesData = receiveCountries.filter(c => c.currency !== calc.fromCurrency)
 
+  // Con destinatario guardado, su país no se puede cambiar desde aquí.
+  const destinoBloqueado = destinatarioType === 'anterior'
+
+  // Monedas de origen ofrecibles. El destino ya excluía la moneda de origen,
+  // pero el origen no excluía la de destino: con un destinatario colombiano
+  // bloqueado, COP seguía apareciendo como origen. Elegirlo pedía un envío de
+  // Colombia a Colombia y, al intentar resolverlo, movía el país del receptor.
+  const origenesData = destinoBloqueado
+    ? sendCurrencies.filter(c => c.code !== calc.toCurrency)
+    : sendCurrencies
+
   // Si Ajustes quita el país o la moneda elegida, caer en una válida: si no,
   // el paso de calcular se queda pidiendo una tasa inexistente.
   useEffect(() => {
-    if (sendCurrencies.length && !sendCurrencies.some(c => c.code === calc.fromCurrency)) {
-      setCalc(prev => ({ ...prev, fromCurrency: sendCurrencies[0].code }))
+    if (origenesData.length && !origenesData.some(c => c.code === calc.fromCurrency)) {
+      setCalc(prev => ({ ...prev, fromCurrency: origenesData[0].code }))
     }
-  }, [sendCurrencies, calc.fromCurrency])
+  }, [origenesData, calc.fromCurrency])
 
   const { data: banksData } = useQuery({
     queryKey: ['banks', receiver.receiver_country],
@@ -650,7 +668,7 @@ export default function NewTransfer() {
                         <ChevronDown />
                       </button>
                       {fromOpen && (
-                        <FromDropdown value={calc.fromCurrency} onChange={handleFromCurrencyChange} onClose={() => setFromOpen(false)} options={sendCurrencies} />
+                        <FromDropdown value={calc.fromCurrency} onChange={handleFromCurrencyChange} onClose={() => setFromOpen(false)} options={origenesData} />
                       )}
                     </div>
                     <input
