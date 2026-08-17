@@ -430,7 +430,13 @@ AJUSTE_BENEFICIARIO = "koywe_beneficiario"
 
 # Lo mínimo para que un cliente pueda transferir. Sin esto la cuenta no se le
 # muestra: media instrucción de pago es peor que ninguna.
-BENEFICIARIO_MINIMO = ("titular", "banco")
+#
+# Solo el titular. La primera versión exigía también el banco y eso era pedir
+# de más: a un CBU argentino o una CLABE mexicana se transfiere con el número y
+# el nombre de quien recibe, el banco va implícito en el propio número. Donde
+# sí hace falta —una cuenta corriente chilena— viene ya relleno desde su API.
+# Exigirlo dejaba bloqueadas justo las cuentas que no lo necesitan.
+BENEFICIARIO_MINIMO = ("titular",)
 
 CAMPOS_BENEFICIARIO = ("titular", "banco", "documento", "tipo_cuenta", "nota")
 

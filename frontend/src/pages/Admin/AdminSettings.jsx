@@ -953,7 +953,7 @@ function KoyweCuentasForm() {
 
   const campos = [
     { k: 'titular', label: 'Titular de la cuenta', ph: 'nombre exacto que aparece en el banco', obligatorio: true },
-    { k: 'banco', label: 'Banco', ph: 'entidad donde está la cuenta', obligatorio: true },
+    { k: 'banco', label: 'Banco', ph: 'no hace falta para un CBU o una CLABE' },
     { k: 'documento', label: 'RUT / CUIT / RFC', ph: 'opcional' },
     { k: 'tipo_cuenta', label: 'Tipo de cuenta', ph: 'corriente, vista, ahorro...' },
     { k: 'nota', label: 'Nota para el cliente', ph: 'opcional' },
@@ -969,8 +969,9 @@ function KoyweCuentasForm() {
       <p style={{ margin: '0 0 10px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
         El cliente que elija «Transferencia» en una de estas monedas ve los datos de la
         cuenta y el dinero cae en tu saldo de ese país, sin pasar por una cuenta tuya.
-        Para que se muestre hacen falta dos cosas: titular y banco rellenos, y marcar
-        «Mostrar a los clientes». Media instrucción de pago es peor que ninguna.
+        Para que se muestre hacen falta dos cosas: el <strong>titular</strong>, y marcar
+        «Mostrar a los clientes». El resto de campos son opcionales — rellénalos si el
+        país los pide para transferir.
       </p>
       <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
         Hay dos clases. Las marcadas <strong style={{ color: '#38bdf8' }}>A tu nombre</strong> son
