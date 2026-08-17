@@ -874,6 +874,8 @@ function KoyweKeysForm() {
             </button>
           </div>
 
+          {listo && <KoyweCuentasForm />}
+
           {listo && koywe?.methods && Object.keys(koywe.methods).length > 0 && (
             <div style={{ marginTop: 16 }}>
               <p style={{ margin: '0 0 8px', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b' }}>
@@ -911,6 +913,120 @@ function KoyweKeysForm() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Cuentas bancarias que Koywe emite a nombre del comercio. El número lo da su
+// API; el titular y el banco no vienen por ningún lado y sin ellos el cliente
+// no puede completar la transferencia. Por eso se rellenan aquí y la cuenta no
+// se le muestra a nadie hasta que estén.
+function KoyweCuentasForm() {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({})
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+
+  const { data: cuentas, isLoading } = useQuery({
+    queryKey: ['koywe-cuentas'],
+    queryFn: () => api.get('/payments/koywe/accounts').then(r => r.data.data),
+    retry: false,
+  })
+
+  const guardar = useMutation({
+    mutationFn: (body) => api.put('/payments/koywe/accounts', body),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      qc.invalidateQueries({ queryKey: ['koywe-cuentas'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 5000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
+  })
+
+  const valor = (moneda, campo, actual) => {
+    const k = `${moneda}.${campo}`
+    return form[k] !== undefined ? form[k] : (actual || '')
+  }
+  const set = (moneda, campo, v) => setForm(f => ({ ...f, [`${moneda}.${campo}`]: v }))
+
+  const campos = [
+    { k: 'titular', label: 'Titular de la cuenta', ph: 'nombre exacto que aparece en el banco', obligatorio: true },
+    { k: 'banco', label: 'Banco', ph: 'entidad donde está la cuenta', obligatorio: true },
+    { k: 'documento', label: 'RUT / CUIT / RFC', ph: 'opcional' },
+    { k: 'tipo_cuenta', label: 'Tipo de cuenta', ph: 'corriente, vista, ahorro...' },
+    { k: 'nota', label: 'Nota para el cliente', ph: 'opcional' },
+  ]
+
+  if (isLoading) return null
+
+  return (
+    <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,.07)' }}>
+      <p style={{ margin: '0 0 4px', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b' }}>
+        Cuentas para recibir transferencias
+      </p>
+      <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+        Koywe emite una cuenta bancaria real por país. Si rellenas el titular y el banco,
+        el cliente que elija «Transferencia» en esa moneda ve estos datos y el dinero cae
+        directo en tu saldo de ese país, sin pasar por una cuenta tuya. Sin esos dos datos
+        la cuenta no se muestra: media instrucción de pago es peor que ninguna.
+      </p>
+
+      {(!cuentas || cuentas.length === 0) && (
+        <p style={{ margin: 0, fontSize: 12.5, color: '#fcd34d', background: 'rgba(251,191,36,.08)', padding: '9px 12px', borderRadius: 8, lineHeight: 1.6 }}>
+          Koywe no tiene ninguna cuenta emitida todavía. Se piden a soporte@koywe.com,
+          indicando en qué países quieres recibir transferencias.
+        </p>
+      )}
+
+      {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
+      {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
+
+      {(cuentas || []).map(c => (
+        <div key={c.moneda} style={{ marginBottom: 14, padding: '14px 16px', borderRadius: 12, background: 'rgba(4,10,30,.5)', border: '1px solid rgba(255,255,255,.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <strong style={{ fontSize: 13, color: '#eaf2ff' }}>{c.pais} · {c.moneda}</strong>
+            <span style={{
+              fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
+              background: c.publicada ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+              color: c.publicada ? '#4ade80' : '#fcd34d',
+            }}>
+              {c.publicada ? 'Visible para clientes' : `Falta ${(c.faltan || []).join(' y ')}`}
+            </span>
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#8aa0cc' }}>{c.numero}</span>
+          </div>
+
+          {campos.map(({ k, label, ph, obligatorio }) => (
+            <div key={k} style={{ marginBottom: 9 }}>
+              <label style={{ display: 'block', fontSize: 11.5, color: '#8aa0cc', marginBottom: 4 }}>
+                {label}{obligatorio && <span style={{ color: '#fcd34d' }}> *</span>}
+              </label>
+              <input
+                value={valor(c.moneda, k, c[k])}
+                placeholder={ph}
+                onChange={e => { set(c.moneda, k, e.target.value); setError('') }}
+                style={{ ...INP, width: '100%', fontSize: 12.5 }}
+              />
+            </div>
+          ))}
+
+          <button
+            onClick={() => guardar.mutate({
+              moneda: c.moneda,
+              ...Object.fromEntries(campos.map(({ k }) => [k, valor(c.moneda, k, c[k])])),
+            })}
+            disabled={guardar.isPending}
+            style={{
+              marginTop: 4, fontSize: 12.5, fontWeight: 700, padding: '8px 16px', borderRadius: 9,
+              border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)',
+              color: '#aebfe2', cursor: 'pointer',
+            }}
+          >
+            {guardar.isPending ? 'Guardando...' : `Guardar cuenta ${c.moneda}`}
+          </button>
+        </div>
+      ))}
     </div>
   )
 }

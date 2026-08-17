@@ -209,6 +209,7 @@ export default function NewTransfer() {
   })
 
   const [payment, setPayment] = useState({ payment_method: 'transferencia', payment_bank: '' })
+  const [copiadoCuenta, setCopiadoCuenta] = useState(false)
 
   const PAYMENT_BANKS = [
     'BancoEstado', 'Banco de Chile', 'Santander', 'BCI', 'BBVA',
@@ -244,6 +245,12 @@ export default function NewTransfer() {
   )
   const esKoywe = (metodo) => koyweCodes.has(String(metodo || '').toLowerCase())
   const koyweElegido = koyweMethods.find(m => String(m.codigo).toLowerCase() === String(payment.payment_method).toLowerCase())
+
+  // Cuenta a la que transferir. Cuando Koywe tiene una emitida en esta moneda,
+  // el dinero cae directo en el saldo de ese país en vez de en una cuenta
+  // nuestra. No hay lista de países aquí a propósito: la manda el backend, así
+  // que el día que Koywe habilite una moneda nueva aparece sola.
+  const cuentaTransfer = (payCfg?.koywe?.transfer_accounts || {})[calc.fromCurrency] || null
 
   const [displayAmount, setDisplayAmount] = useState(
     calc.amount ? formatDisplay(parseRaw(String(calc.amount)), calc.fromCurrency) : ''
@@ -868,7 +875,10 @@ export default function NewTransfer() {
                   elegiría y se quedaría atascado sin poder pagar. */}
               <div className={`grid gap-3 ${(cardEnabled || koyweMethods.length) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {[
-                  { value: 'transferencia', label: 'Transferencia', icon: '🏦', desc: 'Sube tu comprobante' },
+                  {
+                    value: 'transferencia', label: 'Transferencia', icon: '🏦',
+                    desc: cuentaTransfer ? 'Te damos la cuenta' : 'Sube tu comprobante',
+                  },
                   ...(cardEnabled
                     ? [{ value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' }]
                     : []),
@@ -896,6 +906,59 @@ export default function NewTransfer() {
               {/* Transferencia: file upload */}
               {payment.payment_method === 'transferencia' && (
                 <div className="space-y-3">
+                  {/* A dónde transferir. Sin esto el cliente tenía que saberlo
+                      por fuera de la aplicación. */}
+                  {cuentaTransfer && (
+                    <div className="rounded-2xl p-4 space-y-3" style={{...GLASS, border:'1px solid rgba(56,189,248,.2)'}}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#38bdf8'}}>
+                          Transfiere a esta cuenta
+                        </p>
+                        <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{background:'rgba(56,189,248,.12)', color:'#38bdf8'}}>
+                          {calc.fromCurrency}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {[
+                          { label: 'Número de cuenta', value: cuentaTransfer.numero, copiable: true },
+                          { label: 'Titular', value: cuentaTransfer.titular },
+                          { label: 'Banco', value: cuentaTransfer.banco },
+                          { label: 'Documento', value: cuentaTransfer.documento },
+                          { label: 'Tipo de cuenta', value: cuentaTransfer.tipo_cuenta },
+                        ].filter(f => f.value).map(({ label, value, copiable }) => (
+                          <div key={label} className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{color:'#475569'}}>{label}</p>
+                              <p className="text-sm font-semibold truncate" style={{color:'#eaf2ff', fontFamily: copiable ? 'monospace' : undefined}}>{value}</p>
+                            </div>
+                            {copiable && (
+                              <button type="button"
+                                onClick={() => { navigator.clipboard?.writeText(value); setCopiadoCuenta(true); setTimeout(() => setCopiadoCuenta(false), 2000) }}
+                                className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0"
+                                style={{border:'1px solid rgba(255,255,255,.12)', background:'rgba(255,255,255,.04)', color: copiadoCuenta ? '#4ade80' : '#aebfe2'}}>
+                                {copiadoCuenta ? 'Copiado' : 'Copiar'}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="rounded-xl p-3" style={{background:'rgba(251,191,36,.06)', border:'1px solid rgba(251,191,36,.15)'}}>
+                        <p className="text-[11px] leading-relaxed" style={{color:'#fcd34d'}}>
+                          Transfiere exactamente{' '}
+                          <strong>{(rawAmount || parseFloat(calc.amount || '0')).toLocaleString('es-CL')} {calc.fromCurrency}</strong>.
+                          Un monto distinto retrasa la revisión, porque es lo que usamos para
+                          reconocer tu transferencia.
+                        </p>
+                      </div>
+
+                      {cuentaTransfer.nota && (
+                        <p className="text-[11px] leading-relaxed" style={{color:'#8aa0cc'}}>{cuentaTransfer.nota}</p>
+                      )}
+                    </div>
+                  )}
+
                   <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#aebfe2'}}>Comprobante de transferencia</p>
                   <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl p-6 cursor-pointer transition-colors"
                     style={proofFile

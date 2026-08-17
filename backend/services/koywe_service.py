@@ -237,6 +237,7 @@ _catalogo_cache: dict = {"datos": None, "expira": 0.0, "modo": None}
 def _olvidar_cache() -> None:
     _token_cache.update({"token": None, "expira": 0.0, "modo": None})
     _catalogo_cache.update({"datos": None, "expira": 0.0, "modo": None})
+    _cuentas_cache.update({"datos": None, "expira": 0.0, "modo": None})
 
 
 def _token(modo: str | None = None) -> str:
@@ -403,6 +404,202 @@ def _metodo_valido(moneda: str, codigo: str, modo: str | None = None) -> dict | 
     return None
 
 
+# ── Cuentas para recibir transferencias ──────────────────────────────────────
+#
+# Koywe emite cuentas bancarias reales (CBU en Argentina, CLABE en México...)
+# a nombre del comercio. El cliente transfiere ahí desde su banco y el dinero
+# cae directo en el saldo de esa moneda, sin pasar por una cuenta nuestra.
+#
+# Dos cosas que conviene tener claras:
+#
+# 1. NO son las mismas que devuelve /accounts. Allí también hay una "cuenta"
+#    por moneda con número `VIRTUAL_FIAT-mrc_...-CLP`, pero eso es un saldo
+#    interno, no algo a lo que un banco pueda transferir. Las transferibles
+#    son solo las de /virtual-accounts.
+# 2. Son por moneda, no por cliente. Se comprobó contra su API: crear una solo
+#    admite `country` y `currency`, no acepta contacto. Así que todos los
+#    clientes de un país transfieren al mismo número y el aviso de dinero
+#    recibido no puede traer el número de orden. Por eso `bank_income.received`
+#    se guarda como sugerencia para el admin y no aprueba nada solo — el mismo
+#    criterio que con Global66.
+
+# El número de cuenta lo da su API; el titular y el banco no. Sin esos datos
+# nadie puede completar una transferencia, así que se rellenan a mano en
+# Ajustes y se guardan aquí, uno por moneda.
+AJUSTE_BENEFICIARIO = "koywe_beneficiario"
+
+# Lo mínimo para que un cliente pueda transferir. Sin esto la cuenta no se le
+# muestra: media instrucción de pago es peor que ninguna.
+BENEFICIARIO_MINIMO = ("titular", "banco")
+
+CAMPOS_BENEFICIARIO = ("titular", "banco", "documento", "tipo_cuenta", "nota")
+
+VIDA_CUENTAS = 10 * 60
+
+_cuentas_cache: dict = {"datos": None, "expira": 0.0, "modo": None}
+
+
+def _clave_beneficiario(moneda: str) -> str:
+    return f"{AJUSTE_BENEFICIARIO}_{(moneda or '').upper()}"
+
+
+def beneficiario(moneda: str) -> dict:
+    """Titular, banco y demás de la cuenta de esa moneda. {} si no se rellenó."""
+    from models.setting import Setting
+    db = SessionLocal()
+    try:
+        row = db.query(Setting).filter(Setting.key == _clave_beneficiario(moneda)).first()
+        crudo = row.value if row else ""
+    except Exception as e:
+        log.warning("[koywe] no se pudo leer el beneficiario de %s: %s", moneda, e)
+        crudo = ""
+    finally:
+        db.close()
+    if not crudo:
+        return {}
+    try:
+        datos = json.loads(crudo)
+    except ValueError:
+        return {}
+    return datos if isinstance(datos, dict) else {}
+
+
+def guardar_beneficiario(db, moneda: str, datos: dict) -> dict:
+    """Guarda los datos del titular de esa moneda. Devuelve lo que quedó."""
+    from models.setting import Setting
+    moneda = (moneda or "").upper()
+    if moneda not in PAISES:
+        raise ValueError(f"Koywe no opera en {moneda or '(vacío)'}")
+
+    limpio = {}
+    for campo in CAMPOS_BENEFICIARIO:
+        valor = (datos.get(campo) or "").strip()
+        if valor:
+            limpio[campo] = valor
+
+    clave = _clave_beneficiario(moneda)
+    row = db.query(Setting).filter(Setting.key == clave).first()
+    valor = json.dumps(limpio, ensure_ascii=False) if limpio else ""
+    if row:
+        row.value = valor
+    else:
+        db.add(Setting(key=clave, value=valor))
+    db.commit()
+    return limpio
+
+
+def _traer_cuentas(modo: str) -> dict:
+    """{MONEDA: datos de la cuenta} según su API. Solo las transferibles."""
+    datos = _pedir("GET", f"{_ruta_merchant(modo)}/virtual-accounts", modo=modo)
+    salida = {}
+    for c in datos if isinstance(datos, list) else []:
+        if not isinstance(c, dict) or not c.get("isActive"):
+            continue
+        moneda = (c.get("currency") or "").upper()
+        numero = (c.get("virtualBankAccountNumber") or "").strip()
+        if not moneda or not numero:
+            continue
+        salida[moneda] = {
+            "moneda": moneda,
+            "pais": c.get("country"),
+            "numero": numero,
+            "proveedor": c.get("provider"),
+            "alias": c.get("alias"),
+        }
+    return salida
+
+
+def cuentas_transferencia(modo: str | None = None, refrescar: bool = False) -> dict:
+    """Cuentas que Koywe tiene emitidas hoy, cacheadas. {} si no hay o falla."""
+    modo = modo or get_mode()
+    ahora = time.time()
+    if (not refrescar and _cuentas_cache["datos"] is not None
+            and _cuentas_cache["modo"] == modo and _cuentas_cache["expira"] > ahora):
+        return _cuentas_cache["datos"]
+
+    if not is_configured(modo):
+        return {}
+
+    try:
+        datos = _traer_cuentas(modo)
+    except KoyweError as e:
+        log.warning("[koywe] no se pudieron leer las cuentas de transferencia: %s", e)
+        return _cuentas_cache["datos"] or {}
+
+    _cuentas_cache.update({"datos": datos, "expira": ahora + VIDA_CUENTAS, "modo": modo})
+    return datos
+
+
+def cuentas_completas(modo: str | None = None) -> dict:
+    """Las que ya se le pueden enseñar a un cliente: número + titular + banco.
+
+    Deliberadamente sin lista fija de países: si Koywe habilita mañana una
+    cuenta en CLP, aparece sola en cuanto se rellene el titular. Nunca levanta,
+    porque esto se pinta en la pantalla de envío.
+    """
+    salida = {}
+    for moneda, cuenta in cuentas_transferencia(modo).items():
+        datos = beneficiario(moneda)
+        if not all(datos.get(c) for c in BENEFICIARIO_MINIMO):
+            continue
+        salida[moneda] = {**cuenta, **datos}
+    return salida
+
+
+def estado_cuentas(modo: str | None = None) -> list:
+    """Para el panel: toda cuenta emitida, con lo que le falta para publicarse."""
+    salida = []
+    for moneda, cuenta in sorted(cuentas_transferencia(modo).items()):
+        datos = beneficiario(moneda)
+        faltan = [c for c in BENEFICIARIO_MINIMO if not datos.get(c)]
+        salida.append({**cuenta, **datos, "faltan": faltan, "publicada": not faltan})
+    return salida
+
+
+def datos_de_bank_income(evento: dict) -> dict:
+    """Saca lo que se pueda del aviso de dinero recibido.
+
+    Su formato no está documentado y todavía no hemos visto uno real, así que
+    se leen varios nombres posibles para cada dato y el cuerpo entero se guarda
+    aparte: si algo no se reconoce, no se pierde y se puede reconstruir.
+    """
+    if not isinstance(evento, dict):
+        return {}
+
+    datos = evento.get("data")
+    datos = datos if isinstance(datos, dict) else {}
+    rel = evento.get("relationships")
+    rel = rel if isinstance(rel, dict) else {}
+    propia = rel.get("self")
+    propia = propia if isinstance(propia, dict) else {}
+
+    def primero(*nombres):
+        for n in nombres:
+            if datos.get(n) not in (None, ""):
+                return datos[n]
+        return None
+
+    def numero(valor):
+        try:
+            return float(valor)
+        except (TypeError, ValueError):
+            return None
+
+    ident = (propia.get("id") or primero("id", "bank_income_id", "transaction_id")
+             or evento.get("id") or "")
+
+    return {
+        "id": str(ident).strip(),
+        "monto": numero(primero("amount", "amount_in", "originAmount")),
+        "moneda": (primero("currency", "currency_symbol", "currencySymbol") or "").upper() or None,
+        "pais": primero("country", "country_symbol", "countrySymbol"),
+        "remitente": primero("sender_name", "senderName", "third_party_name", "payer_name"),
+        "banco": primero("sender_bank", "senderBank", "bank_name"),
+        "referencia": primero("reference", "description", "concept", "external_id"),
+        "estado": (primero("status") or "").upper() or None,
+    }
+
+
 def probar_conexion(modo: str | None = None) -> dict:
     """Inicia sesión, comprueba el comercio y lista los métodos. Solo lee.
 
@@ -428,6 +625,8 @@ def probar_conexion(modo: str | None = None) -> dict:
         raise KoyweError(f"la sesión funciona pero el comercio no responde — {e}") from e
 
     salida["metodos"] = catalogo(modo, refrescar=True)
+    cuentas_transferencia(modo, refrescar=True)
+    salida["cuentas"] = estado_cuentas(modo)
     return salida
 
 

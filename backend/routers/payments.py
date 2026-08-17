@@ -42,6 +42,16 @@ def payment_config():
     # y viene vacío si no está configurado o si no responde — así nadie elige
     # un método que después no se puede cobrar.
     koywe_metodos = koywe_service.metodos_publicos()
+    # Monedas en las que Koywe tiene una cuenta bancaria emitida Y ya se
+    # rellenó el titular. El cliente que elija "Transferencia" en una de ellas
+    # ve esos datos en vez de los de una cuenta nuestra, y el dinero cae
+    # directo en el saldo de su país.
+    try:
+        koywe_cuentas = koywe_service.cuentas_completas()
+    except Exception as e:
+        log.warning("[koywe] cuentas no disponibles para /config: %s", e)
+        koywe_cuentas = {}
+
     return {
         "success": True,
         "data": {
@@ -52,6 +62,7 @@ def payment_config():
                 "enabled": bool(koywe_metodos),
                 "currencies": sorted(koywe_metodos.keys()),
                 "methods": koywe_metodos,
+                "transfer_accounts": koywe_cuentas,
             },
         },
         "message": "",
@@ -383,6 +394,52 @@ def save_koywe_keys(
     }
 
 
+class KoyweCuentaIn(BaseModel):
+    moneda: str
+    titular: Optional[str] = None
+    banco: Optional[str] = None
+    documento: Optional[str] = None
+    tipo_cuenta: Optional[str] = None
+    nota: Optional[str] = None
+
+
+@router.get("/koywe/accounts", response_model=dict)
+def get_koywe_accounts(_admin: User = Depends(require_super_admin)):
+    """Cuentas de transferencia emitidas por Koywe y qué les falta.
+
+    El número lo da su API; el titular y el banco no vienen por ningún lado y
+    sin ellos nadie puede completar una transferencia, así que se rellenan a
+    mano aquí.
+    """
+    try:
+        return {"success": True, "data": koywe_service.estado_cuentas(), "message": ""}
+    except koywe_service.KoyweError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/koywe/accounts", response_model=dict)
+def save_koywe_account(
+    data: KoyweCuentaIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda el titular y el banco de la cuenta de una moneda."""
+    try:
+        guardado = koywe_service.guardar_beneficiario(db, data.moneda, data.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    faltan = [c for c in koywe_service.BENEFICIARIO_MINIMO if not guardado.get(c)]
+    return {
+        "success": True,
+        "data": {"moneda": data.moneda.upper(), "faltan": faltan, "publicada": not faltan},
+        "message": (
+            f"Cuenta {data.moneda.upper()} publicada"
+            if not faltan else f"Guardado, pero falta {', '.join(faltan)}"
+        ),
+    }
+
+
 @router.get("/koywe/test", response_model=dict)
 def probar_koywe(_admin: User = Depends(require_super_admin)):
     """Comprueba las credenciales contra su API sin cobrar nada.
@@ -560,10 +617,96 @@ async def koywe_webhook(request: Request):
     tipo = (evento.get("type") or "") if isinstance(evento, dict) else ""
     if tipo in ("order.paid", "order.completed"):
         await run_in_threadpool(_koywe_pagada, evento)
+    elif tipo in ("bank_income.received", "bank_income.rejected"):
+        await run_in_threadpool(_koywe_deposito, evento)
 
     # 200 a todo lo demás: reintentar un evento que no nos interesa (o que ya
     # procesamos) solo lo trae otra vez.
     return {"received": True}
+
+
+def _koywe_deposito(evento: dict):
+    """Guarda una transferencia recibida en la cuenta de Koywe. No aprueba nada.
+
+    A diferencia de un cobro por Khipu o PSE, aquí no hay orden en Koywe contra
+    la que confirmar: es dinero que llegó a la cuenta bancaria del comercio. La
+    cuenta es por moneda y no por cliente —lo permite solo su API—, así que el
+    aviso no puede traer nuestro número de orden y el cruce se hace por monto,
+    moneda y nombre del remitente.
+
+    Eso acierta casi siempre, y "casi" no basta para mover dinero solo: se
+    guarda como sugerencia y decide el admin. Es el mismo criterio que con
+    Global66, y por eso comparten tabla y función de cruce.
+    """
+    from models.bank_deposit import BankDeposit
+
+    datos = koywe_service.datos_de_bank_income(evento)
+    ident = datos.get("id")
+    if not ident:
+        log.warning("[koywe] aviso de transferencia sin identificador: %s",
+                    json.dumps(evento)[:2000])
+        return
+
+    # El identificador lleva prefijo del proveedor: la tabla es compartida con
+    # Global66 y `transaction_id` es único, así que dos avisos distintos con el
+    # mismo id nativo se pisarían.
+    tx = f"koywe:{ident}"
+
+    db = SessionLocal()
+    try:
+        dep = db.query(BankDeposit).filter(BankDeposit.transaction_id == tx).first()
+        nuevo = dep is None
+        if nuevo:
+            dep = BankDeposit(provider="koywe", transaction_id=tx)
+            db.add(dep)
+
+        dep.tipo = (evento.get("type") or "").split(".")[-1].upper() or None
+        dep.amount = datos.get("monto")
+        dep.currency = datos.get("moneda")
+        dep.country_code = datos.get("pais")
+        dep.remitter_name = datos.get("remitente")
+        dep.remitter_bank = datos.get("banco")
+        dep.account_branch = f"Koywe {datos.get('moneda') or ''}".strip()
+        dep.status = datos.get("estado") or (
+            "RECEIVED" if evento.get("type") == "bank_income.received" else "REJECTED")
+        dep.raw = json.dumps(evento)[:20000]
+
+        # Si algún día mandan una referencia escrita por el cliente y resulta
+        # ser nuestro número de orden, se aprovecha: es una prueba mucho más
+        # fuerte que el parecido de un nombre.
+        orden_ref = None
+        referencia = (datos.get("referencia") or "").strip()
+        if referencia:
+            numero = koywe_service.orden_de_externo(referencia)
+            if numero:
+                orden_ref = db.query(Order).filter(
+                    Order.order_number == numero,
+                    Order.deleted_at == None,
+                ).first()
+
+        if not dep.applied:
+            if orden_ref:
+                dep.match_order_id = orden_ref.id
+                dep.match_note = f"{orden_ref.order_number}: la referencia de la transferencia lo dice"
+            else:
+                try:
+                    dep.match_order_id, dep.match_note = global66_service.sugerir_orden(db, dep)
+                except Exception as e:
+                    dep.match_order_id, dep.match_note = None, "No se pudo calcular el cruce"
+                    log.warning("[koywe] fallo al cruzar el depósito %s: %s", tx, e)
+
+        db.commit()
+        log.info("[koywe] transferencia %s %s %s %s -> %s",
+                 "nueva" if nuevo else "actualizada", tx, dep.amount, dep.currency, dep.match_note)
+    except Exception as e:
+        db.rollback()
+        # Koywe sí reintenta ante 5xx, así que aquí se propaga: es preferible
+        # que lo vuelvan a mandar a perder el aviso de una transferencia.
+        log.error("[koywe] NO SE PUDO GUARDAR la transferencia: %s | cuerpo=%s",
+                  e, json.dumps(evento)[:4000])
+        raise
+    finally:
+        db.close()
 
 
 # ── Global66 (transferencias bancarias a nuestras cuentas) ────────────────────
@@ -685,6 +828,9 @@ def list_global66_deposits(
 
         salida.append({
             "id": d.id,
+            # La tabla es compartida: aquí caen los avisos de Global66 y los de
+            # transferencias a la cuenta de Koywe. Sin esto no se distinguen.
+            "provider": d.provider,
             "transaction_id": d.transaction_id,
             "tipo": d.tipo,
             "amount": d.amount,
@@ -694,7 +840,12 @@ def list_global66_deposits(
             "remitter_name": d.remitter_name,
             "remitter_bank": d.remitter_bank,
             "status": d.status,
-            "confirmado": global66_service.es_confirmado(d.status),
+            # Koywe usa RECEIVED/REJECTED, Global66 COMPLETED/PAID/... Cada uno
+            # con su vocabulario: mezclarlos daría por bueno un rechazo.
+            "confirmado": (
+                (d.status or "").upper() == "RECEIVED" if d.provider == "koywe"
+                else global66_service.es_confirmado(d.status)
+            ),
             "match_note": d.match_note,
             "orden": orden,
             "received_at": d.received_at.isoformat() if d.received_at else None,
