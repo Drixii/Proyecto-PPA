@@ -535,7 +535,14 @@ def crear_checkout_koywe(
 
     return {
         "success": True,
-        "data": {"url": cobro["url"], "metodo": cobro["metodo"]},
+        "data": {
+            # `tipo` decide qué hace el navegador: 'enlace' es una redirección
+            # al portal, 'qr' una imagen que el cliente escanea sin salir.
+            "tipo": cobro["tipo"],
+            "url": cobro["url"],
+            "qr": cobro["qr"],
+            "metodo": cobro["metodo"],
+        },
         "message": "",
     }
 

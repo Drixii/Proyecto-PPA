@@ -520,6 +520,7 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
   const [pidiendoDatos, setPidiendoDatos] = useState(null)
   const [pagador, setPagador] = useState({})
   const [guardandoDatos, setGuardandoDatos] = useState(false)
+  const [qr, setQr] = useState(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['metodos-orden', order.id],
@@ -585,11 +586,19 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
       return
     }
 
-    // Métodos de Koywe: la URL se pide en el momento, porque la de un intento
-    // anterior ya caducó.
+    // Métodos de Koywe: se pide en el momento, porque lo de un intento
+    // anterior ya caducó. Puede venir un enlace al portal o un QR para
+    // escanear, según el método.
     try {
       const r = await api.post(`/payments/orders/${order.id}/koywe/checkout`)
-      window.location.href = r.data.data.url
+      const cobro = r.data.data
+      if (cobro.tipo === 'qr') {
+        refrescar()
+        setEnCurso('')
+        setQr(cobro)
+        return
+      }
+      window.location.href = cobro.url
     } catch (err) {
       setEnCurso('')
       alFallar(err.response?.data?.detail || 'No se pudo abrir el portal de pago')
@@ -623,7 +632,9 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
           onClick={e => e.stopPropagation()}>
           <div className="flex items-start justify-between mb-1 gap-3">
             <h3 className="font-semibold" style={{color:'#eaf2ff'}}>
-              {transferencia ? 'Transfiere y sube tu comprobante' : '¿Cómo quieres pagar?'}
+              {qr ? `Escanea con ${qr.metodo}`
+                : transferencia ? 'Transfiere y sube tu comprobante'
+                : '¿Cómo quieres pagar?'}
             </h3>
             <button onClick={cerrar} className="text-lg leading-none shrink-0" style={{color:'#64748b'}}>×</button>
           </div>
@@ -635,9 +646,34 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
             <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{color:'#fca5a5', background:'rgba(239,68,68,.08)'}}>{error}</p>
           )}
 
-          {isLoading && <p className="text-sm" style={{color:'#8aa0cc'}}>Cargando...</p>}
+          {isLoading && !qr && <p className="text-sm" style={{color:'#8aa0cc'}}>Cargando...</p>}
 
-          {pidiendoDatos && (
+          {/* Métodos que se cobran mostrando un código (Ligo en Perú, SIP en
+              Bolivia): Koywe devuelve la imagen del QR en vez de un enlace, así
+              que el cliente paga sin salir de aquí. */}
+          {qr && (
+            <div className="space-y-3">
+              <div className="rounded-2xl p-4 flex justify-center" style={{background:'#fff'}}>
+                <img src={qr.qr} alt="Código QR para pagar" className="w-full max-w-[240px]" />
+              </div>
+              <p className="text-sm font-semibold text-center" style={{color:'#eaf2ff'}}>
+                {Number(order.amount_sent).toLocaleString('es-CL')} {order.currency_from}
+              </p>
+              <p className="text-xs text-center leading-relaxed" style={{color:'#8aa0cc'}}>
+                Abre la aplicación de tu banco, escanea el código y confirma el pago.
+                El envío avanza solo en cuanto se acredite — no hace falta subir comprobante
+                ni volver aquí.
+              </p>
+              <button
+                onClick={cerrar}
+                className="w-full text-xs font-semibold py-2.5 rounded-lg"
+                style={{background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc'}}>
+                Ya pagué / cerrar
+              </button>
+            </div>
+          )}
+
+          {pidiendoDatos && !qr && (
             <div className="space-y-3">
               <p className="text-xs" style={{color:'#8aa0cc'}}>
                 {pidiendoDatos.nombre} necesita estos datos de quien paga. El banco los
@@ -725,7 +761,7 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
             </div>
           )}
 
-          {!isLoading && !transferencia && !pidiendoDatos && (
+          {!isLoading && !transferencia && !pidiendoDatos && !qr && (
             <div className="grid grid-cols-2 gap-3">
               {(data?.metodos || []).map(m => (
                 <button key={m.codigo} type="button"
@@ -745,7 +781,7 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
             </div>
           )}
 
-          {transferencia && (
+          {transferencia && !qr && (
             <div className="space-y-3">
               {cuenta ? (
                 <div className="rounded-xl p-4 space-y-2" style={{background:'rgba(56,189,248,.06)', border:'1px solid rgba(56,189,248,.2)'}}>

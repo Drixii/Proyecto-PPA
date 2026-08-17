@@ -91,6 +91,7 @@ PAISES = {
     "BRL": "BR",
     "MXN": "MX",
     "PEN": "PE",
+    "BOB": "BO",
 }
 
 KOYWE_CURRENCIES = tuple(PAISES.keys())
@@ -112,8 +113,9 @@ NOMBRES = {
     "PIX_DYNAMIC": ("PIX", "Instantáneo, 24/7", "⚡"),
     "SPEI": ("SPEI", "Transferencia instantánea", "🏦"),
     "CARD": ("Tarjeta", "Crédito o débito", "💳"),
-    "LIGO": ("Ligo", "Pago con QR", "🔳"),
-    "QRI": ("QRI", "Pago con QR", "🔳"),
+    "LIGO": ("Ligo", "Escanea el QR con tu banco", "🔳"),
+    "QRI": ("QRI", "Escanea el QR con tu banco", "🔳"),
+    "SIP_QR": ("QR simple", "Escanea el QR con tu banco", "🔳"),
 }
 
 # Los códigos tal y como se guardan en `orders.payment_method`, en minúscula.
@@ -125,12 +127,15 @@ NOMBRES = {
 # el método siga estando disponible cuando se consulte.
 CODIGOS = {c.lower() for c in NOMBRES}
 
-# De momento solo se ofrecen los métodos que devuelven un enlace al que
-# redirigir. Los de tipo QR (PIX en Brasil, Ligo en Perú) devuelven un código
-# para escanear, que necesita una pantalla propia; ofrecerlos sin ella mandaría
-# al cliente a una página en blanco. Se activan cuando esa pantalla exista y se
-# haya visto una respuesta real en sandbox.
-RESPUESTAS_SOPORTADAS = ("PAYMENT_LINK",)
+# Formas en las que Koywe entrega el pago, ambas soportadas:
+#
+#   PAYMENT_LINK  `providedAction` es una URL y se redirige al cliente.
+#   QR            `providedAction` es un PNG en base64 que hay que mostrar.
+#
+# Lo segundo no está documentado; se comprobó creando órdenes reales: Ligo en
+# Perú y SIP_QR en Bolivia devuelven una imagen que empieza por "iVBORw0KGgo",
+# la firma de un PNG.
+RESPUESTAS_SOPORTADAS = ("PAYMENT_LINK", "QR")
 
 # Estados en los que el dinero ya es nuestro. PAID es "pago confirmado" y
 # COMPLETED "fondos liquidados"; a efectos del cliente ambos significan que
@@ -814,6 +819,7 @@ DOCUMENTOS = {
     "BR": [("CPF", "CPF"), ("CNPJ", "CNPJ"), ("PP", "Pasaporte")],
     "MX": [("CURP", "CURP"), ("RFC", "RFC"), ("PP", "Pasaporte")],
     "PE": [("DNI", "DNI"), ("RUC", "RUC"), ("PP", "Pasaporte")],
+    "BO": [("CED_CIU", "Cédula de identidad"), ("NIT", "NIT"), ("PP", "Pasaporte")],
 }
 
 # Cómo se llamaban antes en nuestro formulario. Las órdenes viejas guardaron el
@@ -1141,15 +1147,29 @@ def crear_cobro(order, metodo: str, volver_a: str, email: str = "") -> dict:
 
     datos = _pedir("POST", f"{_ruta_merchant(modo)}/orders", modo=modo, json=cuerpo)
 
-    url = datos.get("providedAction")
+    accion = datos.get("providedAction")
     koywe_id = datos.get("id")
-    if not url or not koywe_id:
-        raise KoyweError(f"Koywe creó la orden pero sin URL de pago: {json.dumps(datos)[:300]}")
+    if not accion or not koywe_id:
+        raise KoyweError(f"Koywe creó la orden pero sin forma de pagarla: {json.dumps(datos)[:300]}")
 
-    log.info("[koywe] %s -> %s (%s %s por %s)",
-             order.order_number, koywe_id, moneda, order.amount_sent, elegido["codigo"])
-    return {"url": url, "koywe_order_id": koywe_id, "external_id": external_id,
-            "metodo": elegido["nombre"]}
+    # El mismo campo trae dos cosas distintas según el método: una URL a la que
+    # mandar al cliente, o la imagen del QR que tiene que escanear. Se decide
+    # por el contenido y no por `responseType`, para que un método nuevo que
+    # devuelva un enlace funcione aunque lo declaren de otra forma.
+    es_enlace = accion.strip().lower().startswith(("http://", "https://"))
+
+    log.info("[koywe] %s -> %s (%s %s por %s, %s)",
+             order.order_number, koywe_id, moneda, order.amount_sent, elegido["codigo"],
+             "enlace" if es_enlace else "QR")
+    return {
+        "tipo": "enlace" if es_enlace else "qr",
+        "url": accion if es_enlace else None,
+        # Data URI listo para un <img>. Koywe lo manda en base64 pelado.
+        "qr": None if es_enlace else f"data:image/png;base64,{accion.strip()}",
+        "koywe_order_id": koywe_id,
+        "external_id": external_id,
+        "metodo": elegido["nombre"],
+    }
 
 
 def consultar_orden(koywe_order_id: str, modo: str | None = None) -> dict:

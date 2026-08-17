@@ -210,6 +210,9 @@ export default function NewTransfer() {
 
   const [payment, setPayment] = useState({ payment_method: 'transferencia', payment_bank: '' })
   const [copiadoCuenta, setCopiadoCuenta] = useState(false)
+  // Cobro por QR pendiente de escanear (Ligo, SIP). No hay redirección:
+  // el cliente paga desde su banco y la orden avanza con el aviso de Koywe.
+  const [qrPago, setQrPago] = useState(null)
 
   const PAYMENT_BANKS = [
     'BancoEstado', 'Banco de Chile', 'Santander', 'BCI', 'BBVA',
@@ -483,7 +486,15 @@ export default function NewTransfer() {
         setShowConfirm(false)
         try {
           const chk = await api.post(`/payments/orders/${orderId}/koywe/checkout`)
-          window.location.href = chk.data.data.url
+          const cobro = chk.data.data
+          // Ligo en Perú o SIP en Bolivia no dan enlace sino la imagen de un
+          // QR: se muestra aquí en vez de redirigir a ninguna parte.
+          if (cobro.tipo === 'qr') {
+            setQrPago({ ...cobro, orderId })
+            setLoading(false)
+            return
+          }
+          window.location.href = cobro.url
           return
         } catch (err) {
           setError(err.response?.data?.detail
@@ -519,6 +530,30 @@ export default function NewTransfer() {
 
   return (
     <FinexyLayout>
+      {qrPago && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.8)'}}>
+          <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.25)'}}>
+            <h3 className="font-semibold text-center mb-1" style={{color:'#eaf2ff'}}>Escanea con {qrPago.metodo}</h3>
+            <p className="text-xs text-center mb-4" style={{color:'#8aa0cc'}}>
+              {(rawAmount || parseFloat(calc.amount || '0')).toLocaleString('es-CL')} {calc.fromCurrency}
+            </p>
+            <div className="rounded-2xl p-4 flex justify-center mb-4" style={{background:'#fff'}}>
+              <img src={qrPago.qr} alt="Código QR para pagar" className="w-full max-w-[240px]" />
+            </div>
+            <p className="text-xs text-center leading-relaxed mb-4" style={{color:'#8aa0cc'}}>
+              Abre la aplicación de tu banco, escanea el código y confirma el pago.
+              El envío avanza solo en cuanto se acredite — no hace falta subir comprobante.
+            </p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full text-sm font-semibold py-3 rounded-xl"
+              style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', color:'#fff'}}>
+              Ya pagué
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="p-6 max-w-2xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold" style={{color:'#eaf2ff'}}>Nueva transferencia</h1>
