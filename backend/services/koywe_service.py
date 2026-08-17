@@ -806,6 +806,51 @@ def _nombre_partido(nombre: str | None) -> tuple[str, str]:
     return partes[0], " ".join(partes[1:])
 
 
+# Prefijo telefónico de cada país donde se cobra. Koywe rechaza el contacto con
+# "Invalid phone number" si el número no lleva código internacional, y el
+# formulario de envío pide el teléfono tal y como lo marca la gente en su país
+# ("959595959" en Chile). Sin esta traducción, ningún cobro con Khipu llegaba a
+# crearse.
+PREFIJOS = {"CL": "56", "AR": "54", "CO": "57", "MX": "52", "PE": "51", "BR": "55"}
+
+
+def _telefono(telefono: str | None, pais: str) -> str:
+    """Número en formato internacional, o "" si no se puede construir.
+
+    Devolver "" y no un número dudoso es deliberado: el campo se omite del
+    contacto, y para los métodos que no piden teléfono —Khipu, Clink— el cobro
+    sigue adelante. Mandar algo inventado lo tumbaría entero.
+    """
+    crudo = (telefono or "").strip()
+    if not crudo:
+        return ""
+
+    if crudo.startswith("+"):
+        digitos = "".join(c for c in crudo[1:] if c.isdigit())
+        return f"+{digitos}" if digitos else ""
+
+    digitos = "".join(c for c in crudo if c.isdigit())
+    if not digitos:
+        return ""
+
+    prefijo = PREFIJOS.get((pais or "").upper())
+    if not prefijo:
+        return ""
+
+    # Puede venir ya con el código delante, sin el "+". Se distingue por el
+    # largo: un móvil nacional no llega a los 11 dígitos en estos países, así
+    # que si empieza por el prefijo y es largo, ya lo lleva.
+    if digitos.startswith(prefijo) and len(digitos) >= len(prefijo) + 9:
+        return f"+{digitos}"
+
+    # Algunos los escriben con el cero de larga distancia delante.
+    digitos = digitos.lstrip("0")
+    if len(digitos) < 8:
+        return ""
+
+    return f"+{prefijo}{digitos}"
+
+
 def _crear_contacto(order, email: str, pais: str, modo: str) -> str:
     """Registra al pagador en Koywe y devuelve su id.
 
@@ -818,7 +863,7 @@ def _crear_contacto(order, email: str, pais: str, modo: str) -> str:
         "firstName": nombre,
         "lastName": apellido,
         "email": email,
-        "phone": order.sender_phone or "",
+        "phone": _telefono(order.sender_phone, pais),
         "countrySymbol": pais,
         "documentType": (order.sender_id_type or "").upper() or None,
         "documentNumber": order.sender_id_num or None,
@@ -834,11 +879,16 @@ def _crear_contacto(order, email: str, pais: str, modo: str) -> str:
     return contacto
 
 
-def _faltan_datos(order, email: str, requeridos: list) -> list:
-    """Qué exige el método que no tengamos. Se avisa antes de llamar a Koywe."""
+def _faltan_datos(order, email: str, requeridos: list, pais: str = "") -> list:
+    """Qué exige el método que no tengamos. Se avisa antes de llamar a Koywe.
+
+    El teléfono cuenta como ausente si no se puede poner en formato
+    internacional: Koywe lo rechazaría igual, y es mejor decirlo aquí con
+    nombre y apellido que devolver su "Invalid phone number".
+    """
     tiene = {
         "email": bool(email),
-        "phone": bool(order.sender_phone),
+        "phone": bool(_telefono(order.sender_phone, pais)),
         "firstname": bool(order.sender_name),
         "first_name": bool(order.sender_name),
         "lastname": bool(order.sender_name and len(order.sender_name.split()) > 1),
@@ -888,7 +938,8 @@ def crear_cobro(order, metodo: str, volver_a: str, email: str = "") -> dict:
     if maximo is not None and monto > float(maximo):
         raise KoyweError(f"{elegido['nombre']} no acepta más de {maximo:,.0f} {moneda}")
 
-    faltan = _faltan_datos(order, email, elegido.get("requiere") or [])
+    pais = PAISES.get(moneda, "")
+    faltan = _faltan_datos(order, email, elegido.get("requiere") or [], pais)
     if faltan:
         raise KoyweError(f"{elegido['nombre']} exige {', '.join(faltan)} del remitente")
 
@@ -915,8 +966,7 @@ def crear_cobro(order, metodo: str, volver_a: str, email: str = "") -> dict:
     }
 
     if elegido.get("requiere"):
-        cuerpo["contactId"] = _crear_contacto(
-            order, email, PAISES.get(moneda, ""), modo)
+        cuerpo["contactId"] = _crear_contacto(order, email, pais, modo)
 
     datos = _pedir("POST", f"{_ruta_merchant(modo)}/orders", modo=modo, json=cuerpo)
 

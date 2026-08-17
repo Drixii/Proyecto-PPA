@@ -515,6 +515,12 @@ def crear_checkout_koywe(
             order, order.payment_method, f"{base}/orders/{order.id}",
             email=current_user.email or "")
     except koywe_service.KoyweError as e:
+        # Al log ANTES de responder. Sin esto, un cobro rechazado dejaba en el
+        # journal un 400 pelado y el motivo real —el que trae su cuerpo de
+        # error— solo lo veía el cliente en pantalla, que no lo va a copiar.
+        log.error("[koywe] cobro rechazado para %s (%s %s por %s): %s",
+                  order.order_number, order.amount_sent, order.currency_from,
+                  order.payment_method, e)
         # 400 y no 5xx: Cloudflare sustituye cualquier 5xx del origen por su
         # propia pantalla de error y el motivo real no llegaría al cliente.
         raise HTTPException(status_code=400, detail=f"Koywe rechazó el cobro: {e}")
