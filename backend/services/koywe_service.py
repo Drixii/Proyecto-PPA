@@ -4,32 +4,41 @@ Cómo funciona
 -------------
 Koywe no da una cuenta bancaria a la que el cliente transfiere a ciegas. Se
 crea una orden PAYIN y ellos devuelven una URL de checkout (`providedAction`);
-el cliente paga ahí con el método de su país (Khipu en Chile, PIX en Brasil,
-PSE en Colombia...) y Koywe avisa por webhook cuando el dinero entró.
+el cliente paga ahí con el método de su país (Khipu en Chile, PSE en
+Colombia...) y Koywe avisa por webhook cuando el dinero entró.
 
-Por qué esto SÍ puede aprobar la orden solo, y Global66 no
-----------------------------------------------------------
-Son las dos diferencias que importan:
+Por qué el aviso se comprueba contra su API y no por firma
+-----------------------------------------------------------
+Koywe documenta una cabecera `Koywe-Signature` (HMAC-SHA256 del cuerpo), pero
+NO entrega el secreto con el que firmarla: ni al crear el endpoint en su panel,
+ni por API, ni lo dice su documentación. Sin ese secreto la firma no se puede
+verificar, y aceptar un aviso sin verificar sería dejar que cualquiera marque
+órdenes como pagadas mandando un POST.
 
-1. **La orden lleva nuestro identificador.** Al crearla se manda `externalId`
-   con el número de orden, y el webhook lo devuelve. No hay que adivinar de
-   quién es el dinero cruzando monto y nombre como en Global66.
-2. **El aviso va firmado.** `Koywe-Signature` es el HMAC-SHA256 del cuerpo
-   exacto con el secreto del endpoint. Falsificarlo exige el secreto Y
-   recalcular la firma sobre el cuerpo, igual que en Stripe. Global66 solo
-   manda una clave fija, que quien la tenga puede reusar con el cuerpo que
-   quiera.
+La salida es preguntarle a Koywe. Cuando llega un aviso no se cree nada de lo
+que dice: se busca la orden nuestra, y si existe y está sin pagar, se consulta
+su API con nuestras credenciales para ver si esa orden está realmente pagada y
+por el monto correcto. Es más fuerte que la firma — la firma demuestra quién
+mandó el mensaje, la consulta demuestra que el pago existe — y no depende de un
+secreto que no tenemos.
 
-Además reintentan ante 5xx, 429 y errores de red, así que un fallo nuestro no
-pierde el aviso.
+Si algún día Koywe entrega el secreto, se guarda y la firma pasa a comprobarse
+además de la consulta. Ver `verificar_firma` y `confirmar_pago`.
+
+De dónde salen los métodos de pago
+-----------------------------------
+De su API, no de una lista escrita a mano. La primera versión llevaba la tabla
+copiada de la documentación y no coincidía con la realidad del merchant: Nequi
+no existía, México no tenía ningún método, el de Perú se llamaba LIGO y no QRI,
+y Argentina —que la documentación no mencionaba— sí funcionaba con Khipu. Una
+tabla fija se desincroniza en silencio y el cliente se entera al no poder pagar.
 
 Dónde cae el dinero
 -------------------
 Cada merchant tiene una cuenta virtual por moneda, creadas solas. Un cobro en
-CLP suma al saldo CLP, uno en BRL al saldo BRL: no se mezclan ni se convierten
-sin pedirlo. Sacarlo a una cuenta bancaria real de ese país es aparte
-(`POST .../withdrawals` contra una cuenta externa registrada), y se hace desde
-su panel — aquí no se mueve saldo.
+CLP suma al saldo CLP, uno en COP al saldo COP: no se mezclan ni se convierten
+sin pedirlo. Sacarlo a una cuenta bancaria real de ese país es aparte, y se
+hace desde su panel — aquí no se mueve saldo.
 """
 import hashlib
 import hmac
@@ -41,10 +50,6 @@ import time
 import httpx
 
 from database import SessionLocal
-# El modo (prueba/real) es uno solo para toda la plataforma, compartido con
-# Stripe. La clave con la que se guarda se llama "stripe_mode" por historia:
-# existía antes de que hubiera un segundo proveedor.
-from services.stripe_service import get_mode
 
 log = logging.getLogger("ppa")
 
@@ -56,49 +61,71 @@ CLAVE_WEBHOOK = "koywe_webhook_secret"
 
 CAMPOS = (CLAVE_API, CLAVE_SECRET, CLAVE_ORG, CLAVE_MERCHANT, CLAVE_WEBHOOK)
 
+# Lo que hace falta para cobrar. El secreto del webhook queda fuera a propósito:
+# Koywe no lo entrega, y exigirlo dejaría la integración apagada para siempre.
+# Los avisos se validan consultando su API (ver el encabezado del módulo).
+CAMPOS_OBLIGATORIOS = (CLAVE_API, CLAVE_SECRET, CLAVE_ORG, CLAVE_MERCHANT)
+
 URLS = {
     "test": "https://api-sandbox.koywe.com",
     "live": "https://api.koywe.com",
 }
 
-# Métodos de cobro por moneda. La moneda decide el país: nadie paga en pesos
-# chilenos desde un banco brasileño.
+MODOS = ("test", "live")
+
+# Koywe tiene su propio interruptor de modo, separado del de Stripe.
 #
-# `codigo` es lo que espera su API en `paymentMethods[].method`; el resto es
-# para pintar el selector sin tener que llamarles.
-#
-# Falta Argentina a propósito: su documentación dice "métodos locales" sin
-# nombrar ninguno ni dar código. Ofrecer ARS aquí sería mandar al cliente a un
-# checkout que puede no tener con qué pagar.
-#
-# Estados Unidos, Bolivia y Venezuela no tienen PAYIN en Koywe — solo PAYOUT.
-# Los cobros en USD siguen siendo cosa de Stripe o de transferencia manual.
-METODOS = {
-    "CLP": ("CL", [
-        {"codigo": "KHIPU", "nombre": "Khipu", "desc": "Transferencia desde tu banco"},
-    ]),
-    "COP": ("CO", [
-        {"codigo": "PSE", "nombre": "PSE", "desc": "Débito desde tu banco"},
-        {"codigo": "NEQUI", "nombre": "Nequi", "desc": "Pago instantáneo"},
-    ]),
-    "BRL": ("BR", [
-        {"codigo": "PIX_STATIC", "nombre": "PIX", "desc": "Instantáneo, 24/7"},
-    ]),
-    "MXN": ("MX", [
-        {"codigo": "SPEI", "nombre": "SPEI", "desc": "Transferencia instantánea"},
-        {"codigo": "CARD", "nombre": "Tarjeta", "desc": "Crédito o débito"},
-    ]),
-    "PEN": ("PE", [
-        {"codigo": "QRI", "nombre": "QRI", "desc": "Pago con QR"},
-    ]),
+# El de Stripe (`stripe_mode`) manda sobre toda la plataforma, y mientras esté
+# en prueba Koywe tampoco podría cobrar de verdad. Como el sandbox de Koywe se
+# pide por correo y tarda, se separan: Koywe puede estar en real mientras el
+# resto sigue en prueba, o al revés, sin que activar uno active el otro sin
+# querer.
+AJUSTE_MODO = "koywe_mode"
+
+# Moneda -> país donde se paga. La moneda decide el país: nadie paga en pesos
+# chilenos desde un banco brasileño. Qué métodos hay en cada uno lo dice su API.
+PAISES = {
+    "CLP": "CL",
+    "ARS": "AR",
+    "COP": "CO",
+    "BRL": "BR",
+    "MXN": "MX",
+    "PEN": "PE",
 }
 
-KOYWE_CURRENCIES = tuple(METODOS.keys())
+KOYWE_CURRENCIES = tuple(PAISES.keys())
+
+# Nombres para el cliente. Su API devuelve el nombre técnico ("PIX Estatico",
+# "QR"); esto es lo que ve alguien que solo quiere pagar. Lo que no esté aquí
+# se muestra con el nombre que mande Koywe.
+NOMBRES = {
+    "KHIPU": ("Khipu", "Transferencia desde tu banco"),
+    "CARD_PAYMENT": ("Tarjeta", "Crédito o débito"),
+    "PSE": ("PSE", "Débito desde tu banco"),
+    "NEQUI": ("Nequi", "Pago instantáneo"),
+    "PIX_STATIC": ("PIX", "Instantáneo, 24/7"),
+    "PIX_DYNAMIC": ("PIX", "Instantáneo, 24/7"),
+    "SPEI": ("SPEI", "Transferencia instantánea"),
+    "CARD": ("Tarjeta", "Crédito o débito"),
+    "LIGO": ("Ligo", "Pago con QR"),
+    "QRI": ("QRI", "Pago con QR"),
+}
 
 # Los códigos tal y como se guardan en `orders.payment_method`, en minúscula.
 # Sirve para distinguir una orden de Koywe de una de tarjeta o de una
 # transferencia con comprobante, que tienen ciclos de vida distintos.
-CODIGOS = {m["codigo"].lower() for _, ms in METODOS.values() for m in ms}
+#
+# Es una lista fija y a propósito más larga que la que ofrece el merchant hoy:
+# clasificar una orden vieja no puede depender de que Koywe responda, ni de que
+# el método siga estando disponible cuando se consulte.
+CODIGOS = {c.lower() for c in NOMBRES}
+
+# De momento solo se ofrecen los métodos que devuelven un enlace al que
+# redirigir. Los de tipo QR (PIX en Brasil, Ligo en Perú) devuelven un código
+# para escanear, que necesita una pantalla propia; ofrecerlos sin ella mandaría
+# al cliente a una página en blanco. Se activan cuando esa pantalla exista y se
+# haya visto una respuesta real en sandbox.
+RESPUESTAS_SOPORTADAS = ("PAYMENT_LINK",)
 
 # Estados en los que el dinero ya es nuestro. PAID es "pago confirmado" y
 # COMPLETED "fondos liquidados"; a efectos del cliente ambos significan que
@@ -109,6 +136,11 @@ ESTADOS_PAGADOS = ("PAID", "COMPLETED")
 # un cobro a que caduque a mitad de la petición.
 VIDA_TOKEN = 45 * 60
 
+# Cuánto se reutiliza el catálogo de métodos antes de volver a preguntarlo. Es
+# una lista que cambia cada meses, y se consulta en cada carga del formulario
+# de envío: pedirla cada vez añadiría medio segundo a algo que no cambia.
+VIDA_CATALOGO = 10 * 60
+
 TIMEOUT = 20.0
 
 
@@ -118,6 +150,37 @@ class KoyweError(Exception):
 
 class KoyweNotConfigured(KoyweError):
     pass
+
+
+# ── Modo y credenciales ──────────────────────────────────────────────────────
+
+def get_mode() -> str:
+    """Modo activo de Koywe: 'test' o 'live'."""
+    from models.setting import Setting
+    db = SessionLocal()
+    try:
+        row = db.query(Setting).filter(Setting.key == AJUSTE_MODO).first()
+        valor = (row.value if row else "") or "live"
+    except Exception:
+        valor = "live"
+    finally:
+        db.close()
+    return valor if valor in MODOS else "live"
+
+
+def set_mode(db, modo: str) -> None:
+    from models.setting import Setting
+    if modo not in MODOS:
+        raise ValueError(f"Modo inválido: {modo}")
+    row = db.query(Setting).filter(Setting.key == AJUSTE_MODO).first()
+    if row:
+        row.value = modo
+    else:
+        db.add(Setting(key=AJUSTE_MODO, value=modo))
+    db.commit()
+    # El catálogo y el token son de un modo concreto: al cambiar de modo dejan
+    # de valer, y reutilizarlos mostraría los métodos del sandbox en producción.
+    _olvidar_cache()
 
 
 def clave_de(nombre: str, modo: str | None = None) -> str:
@@ -148,33 +211,18 @@ def credenciales(modo: str | None = None) -> dict:
 
 
 def is_configured(modo: str | None = None) -> bool:
-    """Listo para cobrar.
-
-    Exige también el secreto del webhook: sin él llega el aviso de pago pero
-    no se puede verificar su firma, así que la orden nunca avanzaría y el
-    cliente habría pagado para nada. Mismo criterio que con Stripe.
-    """
+    """Listo para cobrar: credenciales de API e identificadores de la cuenta."""
     creds = credenciales(modo)
-    return all(creds[c] for c in CAMPOS)
+    return all(creds[c] for c in CAMPOS_OBLIGATORIOS)
 
 
-def metodos_de(moneda: str | None) -> list:
-    """Métodos disponibles para esa moneda. Vacío si Koywe no la cubre."""
-    if not is_configured():
-        return []
-    _, ms = METODOS.get((moneda or "").upper(), (None, []))
-    return list(ms)
+def firma_disponible(modo: str | None = None) -> bool:
+    """Si además se puede comprobar la firma del webhook.
 
-
-def es_metodo(payment_method: str | None) -> bool:
-    return (payment_method or "").strip().lower() in CODIGOS
-
-
-def _metodo_valido(moneda: str, codigo: str) -> dict | None:
-    for m in metodos_de(moneda):
-        if m["codigo"].lower() == (codigo or "").lower():
-            return m
-    return None
+    Hoy es False: Koywe no entrega el secreto. Se consulta para poder decirlo
+    en el panel en vez de que parezca que falta algo por rellenar.
+    """
+    return bool(_config(CLAVE_WEBHOOK, modo))
 
 
 # ── Cliente de la API ────────────────────────────────────────────────────────
@@ -183,6 +231,12 @@ def _metodo_valido(moneda: str, codigo: str) -> dict | None:
 # y el backend corre con --workers 1, así que hay un único proceso que lo
 # comparte. Si se reinicia, se pide otro y ya.
 _token_cache: dict = {"token": None, "expira": 0.0, "modo": None}
+_catalogo_cache: dict = {"datos": None, "expira": 0.0, "modo": None}
+
+
+def _olvidar_cache() -> None:
+    _token_cache.update({"token": None, "expira": 0.0, "modo": None})
+    _catalogo_cache.update({"datos": None, "expira": 0.0, "modo": None})
 
 
 def _token(modo: str | None = None) -> str:
@@ -247,8 +301,110 @@ def _ids(modo: str | None = None) -> tuple[str, str]:
     return org, merchant
 
 
+def _ruta_merchant(modo: str | None = None) -> str:
+    org, merchant = _ids(modo)
+    return f"/api/v1/organizations/{org}/merchants/{merchant}"
+
+
+# ── Catálogo de métodos ──────────────────────────────────────────────────────
+
+def _traer_catalogo(modo: str) -> dict:
+    """Pregunta a Koywe qué se puede cobrar en cada moneda."""
+    salida = {}
+    for moneda, pais in PAISES.items():
+        try:
+            r = _pedir("GET", "/api/v1/payment-method", modo=modo,
+                       params={"countrySymbol": pais, "currencySymbol": moneda})
+        except KoyweError as e:
+            # Una moneda que falla no puede tumbar el resto del formulario: se
+            # deja vacía y las demás siguen ofreciéndose.
+            log.warning("[koywe] no se pudieron leer los métodos de %s: %s", moneda, e)
+            continue
+
+        metodos = []
+        for m in (r.get("paymentMethods") or []) if isinstance(r, dict) else []:
+            codigo = (m.get("method") or "").strip()
+            if not codigo:
+                continue
+            nombre, desc = NOMBRES.get(codigo.upper(), (m.get("name") or codigo, ""))
+            requeridos = (m.get("requiredFields") or {}).get("contact") or []
+            metodos.append({
+                "codigo": codigo,
+                "nombre": nombre,
+                "desc": desc,
+                "minimo": m.get("minAmount"),
+                "maximo": m.get("maxAmount"),
+                "respuesta": m.get("responseType"),
+                "requiere": list(requeridos),
+                # Lo que se le puede ofrecer hoy al cliente. Los QR se listan
+                # igual para que el panel de admin muestre que existen y por
+                # qué no están.
+                "soportado": (m.get("responseType") in RESPUESTAS_SOPORTADAS),
+            })
+        if metodos:
+            salida[moneda] = metodos
+    return salida
+
+
+def catalogo(modo: str | None = None, refrescar: bool = False) -> dict:
+    """{moneda: [métodos]} según Koywe, cacheado. {} si no está configurado."""
+    modo = modo or get_mode()
+    ahora = time.time()
+    if (not refrescar and _catalogo_cache["datos"] is not None
+            and _catalogo_cache["modo"] == modo and _catalogo_cache["expira"] > ahora):
+        return _catalogo_cache["datos"]
+
+    if not is_configured(modo):
+        return {}
+
+    datos = _traer_catalogo(modo)
+    _catalogo_cache.update({"datos": datos, "expira": ahora + VIDA_CATALOGO, "modo": modo})
+    return datos
+
+
+def metodos_publicos(modo: str | None = None) -> dict:
+    """Lo que se le ofrece al cliente: {moneda: [métodos ofrecibles]}.
+
+    Nunca levanta: se llama desde /config, que carga en cada pantalla de envío.
+    Si Koywe no responde, el cliente ve el resto de métodos de pago y no una
+    página rota.
+    """
+    try:
+        todo = catalogo(modo)
+    except KoyweError as e:
+        log.warning("[koywe] catálogo no disponible: %s", e)
+        return {}
+    salida = {}
+    for moneda, metodos in todo.items():
+        ofrecibles = [m for m in metodos if m["soportado"]]
+        if ofrecibles:
+            salida[moneda] = ofrecibles
+    return salida
+
+
+def metodos_de(moneda: str | None, modo: str | None = None) -> list:
+    """Métodos ofrecibles para esa moneda. Vacío si Koywe no la cubre."""
+    try:
+        todo = catalogo(modo)
+    except KoyweError as e:
+        log.warning("[koywe] catálogo no disponible: %s", e)
+        return []
+    return [m for m in todo.get((moneda or "").upper(), []) if m["soportado"]]
+
+
+def es_metodo(payment_method: str | None) -> bool:
+    return (payment_method or "").strip().lower() in CODIGOS
+
+
+def _metodo_valido(moneda: str, codigo: str, modo: str | None = None) -> dict | None:
+    for m in metodos_de(moneda, modo):
+        if m["codigo"].lower() == (codigo or "").lower():
+            return m
+    return None
+
+
 def probar_conexion(modo: str | None = None) -> dict:
-    """Inicia sesión y consulta los métodos de una moneda. Solo lee.
+    """Inicia sesión, comprueba el comercio y lista los métodos. Solo lee.
 
     Existe para poder comprobar unas credenciales recién pegadas sin crear
     ninguna orden: si esto pasa, el cobro va a funcionar; si falla, dice
@@ -258,42 +414,122 @@ def probar_conexion(modo: str | None = None) -> dict:
     _token(modo)                       # falla aquí si la key o el secreto están mal
     org, merchant = _ids(modo)
 
-    salida = {"modo": modo, "base_url": base_url(modo), "org_id": org, "merchant_id": merchant}
+    salida = {"modo": modo, "base_url": base_url(modo), "org_id": org,
+              "merchant_id": merchant, "firma_disponible": firma_disponible(modo)}
 
     # Que el merchant exista y sea nuestro: es el error silencioso más probable
-    # cuando la organización tiene más de uno.
+    # cuando la organización tiene más de uno, y equivocarse manda el dinero a
+    # la cuenta virtual de la otra unidad de negocio.
     try:
-        datos = _pedir("GET", f"/api/v1/organizations/{org}/merchants/{merchant}", modo=modo)
-        salida["merchant_nombre"] = datos.get("name") or datos.get("legalName")
+        datos = _pedir("GET", _ruta_merchant(modo), modo=modo)
+        perfil = datos.get("profile") or {}
+        salida["merchant_nombre"] = perfil.get("name") or datos.get("name") or datos.get("slug")
     except KoyweError as e:
         raise KoyweError(f"la sesión funciona pero el comercio no responde — {e}") from e
 
-    monedas = {}
-    for moneda, (pais, _) in METODOS.items():
-        try:
-            r = _pedir("GET", f"/api/v1/payment-method?countrySymbol={pais}&currencySymbol={moneda}", modo=modo)
-            monedas[moneda] = [m.get("method") for m in (r or []) if isinstance(m, dict)]
-        except KoyweError as e:
-            monedas[moneda] = f"error: {e}"
-    salida["metodos"] = monedas
+    salida["metodos"] = catalogo(modo, refrescar=True)
     return salida
 
 
-def crear_cobro(order, metodo: str, volver_a: str) -> dict:
+# ── Cobro ────────────────────────────────────────────────────────────────────
+
+def _nombre_partido(nombre: str | None) -> tuple[str, str]:
+    partes = (nombre or "").strip().split()
+    if not partes:
+        return "", ""
+    if len(partes) == 1:
+        return partes[0], partes[0]
+    # Dos apellidos es lo normal en la región: la primera palabra es el nombre
+    # y el resto el apellido. Partir por la mitad daría "Juan Carlos" / "Pérez
+    # Gómez" en unos casos y basura en otros.
+    return partes[0], " ".join(partes[1:])
+
+
+def _crear_contacto(order, email: str, pais: str, modo: str) -> str:
+    """Registra al pagador en Koywe y devuelve su id.
+
+    Algunos métodos (PSE en Colombia) no funcionan sin documento, teléfono y
+    correo del pagador. Koywe los quiere como contacto aparte, creado antes de
+    la orden, y la orden solo lleva el `contactId`.
+    """
+    nombre, apellido = _nombre_partido(order.sender_name)
+    cuerpo = {
+        "firstName": nombre,
+        "lastName": apellido,
+        "email": email,
+        "phone": order.sender_phone or "",
+        "countrySymbol": pais,
+        "documentType": (order.sender_id_type or "").upper() or None,
+        "documentNumber": order.sender_id_num or None,
+        "businessType": "PERSON",
+        "type": "PERSON",
+    }
+    cuerpo = {k: v for k, v in cuerpo.items() if v not in (None, "")}
+
+    datos = _pedir("POST", f"{_ruta_merchant(modo)}/contacts", modo=modo, json=cuerpo)
+    contacto = datos.get("id")
+    if not contacto:
+        raise KoyweError(f"Koywe no devolvió el contacto: {json.dumps(datos)[:300]}")
+    return contacto
+
+
+def _faltan_datos(order, email: str, requeridos: list) -> list:
+    """Qué exige el método que no tengamos. Se avisa antes de llamar a Koywe."""
+    tiene = {
+        "email": bool(email),
+        "phone": bool(order.sender_phone),
+        "firstname": bool(order.sender_name),
+        "first_name": bool(order.sender_name),
+        "lastname": bool(order.sender_name and len(order.sender_name.split()) > 1),
+        "last_name": bool(order.sender_name and len(order.sender_name.split()) > 1),
+        "documentnumber": bool(order.sender_id_num),
+        "document_number": bool(order.sender_id_num),
+        "documenttype": bool(order.sender_id_type),
+        "document_type": bool(order.sender_id_type),
+    }
+    etiquetas = {
+        "email": "correo", "phone": "teléfono",
+        "documentnumber": "número de documento", "document_number": "número de documento",
+        "documenttype": "tipo de documento", "document_type": "tipo de documento",
+        "lastname": "apellido", "last_name": "apellido",
+    }
+    faltan = []
+    for campo in requeridos:
+        clave = campo.strip().lower()
+        if clave in tiene and not tiene[clave]:
+            etiqueta = etiquetas.get(clave, campo)
+            if etiqueta not in faltan:
+                faltan.append(etiqueta)
+    return faltan
+
+
+def crear_cobro(order, metodo: str, volver_a: str, email: str = "") -> dict:
     """Crea la orden PAYIN y devuelve a dónde mandar al cliente a pagar.
 
-    No toca la orden nuestra: quien decide si está pagada es el webhook.
+    No toca la orden nuestra: quien decide si está pagada es el webhook, y solo
+    después de preguntárselo a Koywe.
     """
     modo = get_mode()
     if not is_configured(modo):
         raise KoyweNotConfigured("Falta configurar las credenciales de Koywe")
 
     moneda = (order.currency_from or "").upper()
-    elegido = _metodo_valido(moneda, metodo)
+    elegido = _metodo_valido(moneda, metodo, modo)
     if not elegido:
         raise KoyweError(f"«{metodo}» no es un método de pago válido para {moneda}")
 
-    org, merchant = _ids(modo)
+    # Los límites los pone el método, no nosotros. Comprobarlos aquí convierte
+    # un rechazo críptico de su API en algo que el cliente entiende.
+    monto = float(order.amount_sent or 0)
+    minimo, maximo = elegido.get("minimo"), elegido.get("maximo")
+    if minimo is not None and monto < float(minimo):
+        raise KoyweError(f"{elegido['nombre']} no acepta menos de {minimo:,.0f} {moneda}")
+    if maximo is not None and monto > float(maximo):
+        raise KoyweError(f"{elegido['nombre']} no acepta más de {maximo:,.0f} {moneda}")
+
+    faltan = _faltan_datos(order, email, elegido.get("requiere") or [])
+    if faltan:
+        raise KoyweError(f"{elegido['nombre']} exige {', '.join(faltan)} del remitente")
 
     # El externalId debe ser único por intento: si el cliente abandona el
     # checkout y vuelve a intentarlo, Koywe rechazaría uno repetido. El número
@@ -317,8 +553,11 @@ def crear_cobro(order, metodo: str, volver_a: str) -> dict:
         "failedUrl": volver_a,
     }
 
-    datos = _pedir("POST", f"/api/v1/organizations/{org}/merchants/{merchant}/orders",
-                   modo=modo, json=cuerpo)
+    if elegido.get("requiere"):
+        cuerpo["contactId"] = _crear_contacto(
+            order, email, PAISES.get(moneda, ""), modo)
+
+    datos = _pedir("POST", f"{_ruta_merchant(modo)}/orders", modo=modo, json=cuerpo)
 
     url = datos.get("providedAction")
     koywe_id = datos.get("id")
@@ -331,12 +570,10 @@ def crear_cobro(order, metodo: str, volver_a: str) -> dict:
             "metodo": elegido["nombre"]}
 
 
-def consultar_orden(koywe_order_id: str) -> dict:
-    """Estado de una orden según Koywe. Fuente de verdad si dudamos del webhook."""
-    modo = get_mode()
-    org, merchant = _ids(modo)
-    return _pedir("GET", f"/api/v1/organizations/{org}/merchants/{merchant}/orders/{koywe_order_id}",
-                  modo=modo)
+def consultar_orden(koywe_order_id: str, modo: str | None = None) -> dict:
+    """Estado de una orden según Koywe. Fuente de verdad."""
+    modo = modo or get_mode()
+    return _pedir("GET", f"{_ruta_merchant(modo)}/orders/{koywe_order_id}", modo=modo)
 
 
 # ── Webhook ──────────────────────────────────────────────────────────────────
@@ -347,6 +584,10 @@ def verificar_firma(cuerpo: bytes, firma: str | None, modo: str | None = None) -
     Sobre los bytes tal y como llegaron, no sobre el JSON re-serializado: un
     espacio de más o un orden de claves distinto cambia el hash y tiraría
     avisos legítimos.
+
+    Hoy no se usa como única defensa porque Koywe no entrega el secreto; si
+    algún día lo entrega, esto empieza a comprobarse ADEMÁS de la consulta a su
+    API, no en su lugar.
     """
     secreto = _config(CLAVE_WEBHOOK, modo)
     if not secreto or not firma:
@@ -355,6 +596,64 @@ def verificar_firma(cuerpo: bytes, firma: str | None, modo: str | None = None) -
     # La cabecera puede venir como "sha256=abc..." según cómo la emitan.
     recibida = firma.strip().split("=")[-1].strip()
     return hmac.compare_digest(esperada, recibida)
+
+
+def datos_de_evento(evento: dict) -> dict:
+    """Saca lo que importa del aviso, que viene en snake_case.
+
+    Su formato real, comprobado contra eventos de la cuenta:
+
+        {"type": "order.paid",
+         "data": {"status": "PAID", "external_id": "CC-2026-0011-1699…"},
+         "relationships": {"self": {"type": "order", "id": "ord_…"}}}
+
+    El id de la orden NO está en `data`, sino en `relationships.self.id`. La
+    primera versión lo buscaba en `data.orderId` y no encontraba ninguna orden.
+    """
+    if not isinstance(evento, dict):
+        return {"tipo": "", "koywe_id": "", "external_id": None, "estado": ""}
+
+    datos = evento.get("data")
+    datos = datos if isinstance(datos, dict) else {}
+    rel = evento.get("relationships")
+    rel = rel if isinstance(rel, dict) else {}
+    propia = rel.get("self")
+    propia = propia if isinstance(propia, dict) else {}
+
+    koywe_id = propia.get("id") or datos.get("order_id") or datos.get("orderId") or ""
+    external = datos.get("external_id") or datos.get("externalId")
+
+    return {
+        "tipo": (evento.get("type") or "").strip(),
+        "koywe_id": str(koywe_id).strip(),
+        "external_id": external,
+        "estado": (datos.get("status") or "").strip().upper(),
+    }
+
+
+def confirmar_pago(koywe_order_id: str, modo: str | None = None) -> dict:
+    """Le pregunta a Koywe si esa orden está pagada de verdad.
+
+    Esto es lo que sustituye a la firma. Devuelve lo necesario para cotejar el
+    aviso con nuestra orden: estado, monto, moneda y nuestro externalId.
+    """
+    datos = consultar_orden(koywe_order_id, modo)
+    if not isinstance(datos, dict):
+        raise KoyweError("Koywe devolvió una orden con formato inesperado")
+
+    estado = (datos.get("status") or datos.get("state") or "").strip().upper()
+    monto = datos.get("amountIn")
+    if monto is None:
+        monto = datos.get("amount_in")
+    moneda = (datos.get("originCurrencySymbol") or datos.get("origin_currency_symbol") or "")
+
+    return {
+        "estado": estado,
+        "pagada": estado in ESTADOS_PAGADOS,
+        "monto": monto,
+        "moneda": moneda.upper(),
+        "external_id": datos.get("externalId") or datos.get("external_id"),
+    }
 
 
 def orden_de_externo(external_id: str | None) -> str | None:

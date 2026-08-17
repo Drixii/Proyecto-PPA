@@ -1,13 +1,17 @@
 // Métodos que se cobran fuera de la aplicación: el cliente paga en un portal
-// externo y la orden solo avanza cuando llega el webhook firmado. Nacen en
+// externo y la orden solo avanza cuando llega el aviso del proveedor. Nacen en
 // `pendiente_pago`, no en `en_aprobacion`, y no llevan comprobante — así que
 // la ficha se pinta distinta que la de una transferencia manual.
 //
-// Los códigos de Koywe salen de backend/services/koywe_service.py (METODOS).
-// Si se añade un país allí, hay que añadirlo aquí.
+// Los códigos de Koywe salen de backend/services/koywe_service.py (NOMBRES).
+// Es una lista fija a propósito: clasificar una orden vieja no puede depender
+// de que Koywe responda ni de que el método siga contratado. Si allí se añade
+// un código, hay que añadirlo aquí — el script de pruebas compara las dos.
 export const METODOS_EXTERNOS = [
   'tarjeta',                                  // Stripe
-  'khipu', 'pse', 'nequi', 'pix_static', 'pix_dynamic', 'spei', 'card', 'qri',  // Koywe
+  // Koywe
+  'khipu', 'card_payment', 'pse', 'nequi', 'pix_static', 'pix_dynamic',
+  'spei', 'card', 'ligo', 'qri',
 ]
 
 export const esPagoExterno = (metodo) =>

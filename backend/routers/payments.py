@@ -37,7 +37,11 @@ log = logging.getLogger("ppa")
 @router.get("/config", response_model=dict)
 def payment_config():
     """Lo que el navegador necesita saber para pintar el formulario."""
-    koywe_listo = koywe_service.is_configured()
+    # El catálogo entero de una vez: el selector cambia de moneda sin volver a
+    # preguntar. Sale de la API de Koywe (cacheado), no de una lista nuestra,
+    # y viene vacío si no está configurado o si no responde — así nadie elige
+    # un método que después no se puede cobrar.
+    koywe_metodos = koywe_service.metodos_publicos()
     return {
         "success": True,
         "data": {
@@ -45,15 +49,9 @@ def payment_config():
             "publishable_key": stripe_service.publishable_key(),
             "currencies": list(stripe_service.CARD_CURRENCIES),
             "koywe": {
-                "enabled": koywe_listo,
-                "currencies": list(koywe_service.KOYWE_CURRENCIES),
-                # El catálogo entero de una vez: el selector cambia de moneda
-                # sin volver a preguntar, y sin métodos si Koywe no está
-                # configurado, para que nadie elija uno que no puede cobrar.
-                "methods": (
-                    {moneda: metodos for moneda, (_, metodos) in koywe_service.METODOS.items()}
-                    if koywe_listo else {}
-                ),
+                "enabled": bool(koywe_metodos),
+                "currencies": sorted(koywe_metodos.keys()),
+                "methods": koywe_metodos,
             },
         },
         "message": "",
@@ -282,10 +280,19 @@ def get_koywe_keys(
     """
     from services import secret_store as ss
 
-    modo = stripe_service.get_mode()
+    modo = koywe_service.get_mode()
     creds = koywe_service.credenciales(modo)
     publicos = (koywe_service.CLAVE_ORG, koywe_service.CLAVE_MERCHANT)
     base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+
+    # El catálogo aquí va entero, incluidos los métodos que aún no se ofrecen,
+    # para que el admin vea qué tiene contratado y por qué falta alguno. Si
+    # Koywe no responde queda vacío, sin romper la pantalla de ajustes.
+    try:
+        metodos = koywe_service.catalogo(modo)
+    except koywe_service.KoyweError as e:
+        log.warning("[koywe] catálogo no disponible en ajustes: %s", e)
+        metodos = {}
 
     return {
         "success": True,
@@ -295,13 +302,41 @@ def get_koywe_keys(
             # La URL que hay que registrar en su panel para recibir los avisos.
             "webhook_url": f"{base}/api/payments/koywe/webhook",
             "listo": koywe_service.is_configured(modo),
+            # Koywe no entrega el secreto de firma. Se dice explícitamente para
+            # que un campo vacío no parezca un olvido.
+            "firma_disponible": koywe_service.firma_disponible(modo),
             "currencies": list(koywe_service.KOYWE_CURRENCIES),
-            "methods": {
-                moneda: metodos for moneda, (_, metodos) in koywe_service.METODOS.items()
-            },
+            "methods": metodos,
             **{c: (creds[c] if c in publicos else ss.mask(creds[c])) for c in koywe_service.CAMPOS},
         },
         "message": "",
+    }
+
+
+class KoyweModeIn(BaseModel):
+    modo: str
+
+
+@router.put("/koywe/mode", response_model=dict)
+def set_koywe_mode(
+    data: KoyweModeIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Cambia Koywe entre prueba y real, sin tocar el modo de Stripe.
+
+    Son interruptores separados a propósito: el sandbox de Koywe se pide por
+    correo y llega cuando llega, así que atar los dos obligaría a dejar Stripe
+    en prueba —o a cobrar de verdad— solo por el estado del otro proveedor.
+    """
+    try:
+        koywe_service.set_mode(db, data.modo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "success": True,
+        "data": {"modo": data.modo, "listo": koywe_service.is_configured(data.modo)},
+        "message": f"Koywe en modo {'real' if data.modo == 'live' else 'prueba'}",
     }
 
 
@@ -319,7 +354,7 @@ def save_koywe_keys(
     """
     from services import secret_store as ss
 
-    modo = stripe_service.get_mode()
+    modo = koywe_service.get_mode()
     guardados = []
     for campo in koywe_service.CAMPOS:
         valor = getattr(data, campo, None)
@@ -337,6 +372,9 @@ def save_koywe_keys(
 
     if not guardados:
         return {"success": True, "data": {}, "message": "No había nada que guardar"}
+
+    # Credenciales nuevas: el token y el catálogo en memoria son de las viejas.
+    koywe_service._olvidar_cache()
 
     return {
         "success": True,
@@ -387,7 +425,9 @@ def crear_checkout_koywe(
     base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
 
     try:
-        cobro = koywe_service.crear_cobro(order, order.payment_method, f"{base}/orders/{order.id}")
+        cobro = koywe_service.crear_cobro(
+            order, order.payment_method, f"{base}/orders/{order.id}",
+            email=current_user.email or "")
     except koywe_service.KoyweError as e:
         # 400 y no 5xx: Cloudflare sustituye cualquier 5xx del origen por su
         # propia pantalla de error y el motivo real no llegaría al cliente.
@@ -403,16 +443,24 @@ def crear_checkout_koywe(
     }
 
 
-def _koywe_pagada(datos: dict, tipo: str):
-    """Traduce el aviso de Koywe a nuestra orden y la marca pagada.
+def _koywe_pagada(evento: dict):
+    """Comprueba el aviso contra la API de Koywe y marca la orden pagada.
 
-    Solo se llega aquí con la firma ya verificada. El monto se comprueba si el
-    aviso lo trae: no protege contra un tercero — la firma ya lo hace — sino
-    contra un desajuste nuestro, como haber mandado un importe y cobrado otro.
+    Del aviso NO se cree nada. Solo se usa para saber de qué orden habla; que
+    esté pagada, y por cuánto, se lo preguntamos a Koywe con nuestras
+    credenciales. Por eso este endpoint puede vivir sin firma: un POST
+    inventado no encuentra orden, o encuentra una que Koywe dice que no está
+    pagada, y no pasa nada.
+
+    El orden de los pasos importa. Primero se busca la orden en nuestra base y
+    solo si existe y está sin pagar se sale a la red: así un tercero que
+    bombardee el endpoint no nos convierte en generador de tráfico contra
+    Koywe.
     """
-    koywe_id = str(datos.get("orderId") or datos.get("id") or "").strip()
-    external = datos.get("externalId")
+    info = koywe_service.datos_de_evento(evento)
+    koywe_id, external = info["koywe_id"], info["external_id"]
     numero = koywe_service.orden_de_externo(external)
+    tipo = info["tipo"]
 
     db = SessionLocal()
     try:
@@ -425,53 +473,93 @@ def _koywe_pagada(datos: dict, tipo: str):
         if not orden:
             # Normal: una organización de Koywe manda todos sus eventos a todos
             # sus endpoints, así que aquí caen también los de otros sistemas.
-            log.info("[koywe] %s de %s (externalId=%s) sin orden nuestra — se ignora",
+            log.info("[koywe] %s de %s (external_id=%s) sin orden nuestra — se ignora",
                      tipo, koywe_id, external)
             return
-
-        monto = datos.get("amountIn")
-        moneda = (datos.get("originCurrencySymbol") or "").upper()
-        if monto is not None and abs(float(monto) - float(orden.amount_sent)) > 0.01:
-            log.error("[koywe] %s: el aviso dice %s y la orden %s — NO se marca pagada",
-                      orden.order_number, monto, orden.amount_sent)
-            return
-        if moneda and moneda != (orden.currency_from or "").upper():
-            log.error("[koywe] %s: el aviso viene en %s y la orden en %s — NO se marca pagada",
-                      orden.order_number, moneda, orden.currency_from)
+        if orden.paid_at:
+            log.info("[koywe] %s ya estaba pagada — se ignora el aviso repetido",
+                     orden.order_number)
             return
 
         orden_id = orden.id
+        numero_orden = orden.order_number
+        monto_nuestro = float(orden.amount_sent or 0)
+        moneda_nuestra = (orden.currency_from or "").upper()
+        koywe_id = koywe_id or (orden.payment_intent_id or "")
     finally:
         db.close()
 
-    _mark_paid(koywe_id, order_id=orden_id, order_number=numero, proveedor="koywe")
+    if not koywe_id:
+        log.error("[koywe] %s: el aviso no trae id de orden y no hay uno guardado — "
+                  "NO se marca pagada", numero_orden)
+        return
+
+    # Aquí está la verificación de verdad.
+    try:
+        real = koywe_service.confirmar_pago(koywe_id)
+    except koywe_service.KoyweError as e:
+        # Sin confirmación no se marca nada. Koywe reintenta ante 5xx, así que
+        # se devuelve error para que vuelvan a intentarlo cuando su API o la
+        # red se recuperen.
+        log.error("[koywe] %s: no se pudo confirmar %s contra su API — %s",
+                  numero_orden, koywe_id, e)
+        raise
+
+    if not real["pagada"]:
+        log.error("[koywe] %s: el aviso decía %s pero su API dice %s — NO se marca pagada",
+                  numero_orden, tipo, real["estado"] or "(sin estado)")
+        return
+
+    # Que la orden confirmada sea la nuestra y no otra: si el external_id que
+    # nos devuelven no lleva a nuestro número de orden, algo se cruzó.
+    numero_real = koywe_service.orden_de_externo(real.get("external_id"))
+    if numero_real and numero_real != numero_orden:
+        log.error("[koywe] %s: la orden %s en Koywe pertenece a %s — NO se marca pagada",
+                  numero_orden, koywe_id, numero_real)
+        return
+
+    if real["monto"] is not None and abs(float(real["monto"]) - monto_nuestro) > 0.01:
+        log.error("[koywe] %s: Koywe cobró %s y la orden es de %s — NO se marca pagada",
+                  numero_orden, real["monto"], monto_nuestro)
+        return
+    if real["moneda"] and real["moneda"] != moneda_nuestra:
+        log.error("[koywe] %s: Koywe cobró en %s y la orden es en %s — NO se marca pagada",
+                  numero_orden, real["moneda"], moneda_nuestra)
+        return
+
+    _mark_paid(koywe_id, order_id=orden_id, order_number=numero_orden, proveedor="koywe")
 
 
 @router.post("/koywe/webhook")
 async def koywe_webhook(request: Request):
     """Recibe los eventos de Koywe.
 
-    async def porque hace falta el cuerpo crudo para validar la firma; el
+    No exige firma. Koywe documenta la cabecera `Koywe-Signature` pero no
+    entrega el secreto con el que se calcula, ni en su panel ni por API, así
+    que no hay nada con qué comprobarla. En su lugar, cada aviso se contrasta
+    con su API antes de tocar una orden (ver `_koywe_pagada`).
+
+    Si el secreto llega a estar guardado, la firma se comprueba ADEMÁS de la
+    consulta, y un aviso mal firmado se rechaza sin llegar a la base.
+
+    async def porque hace falta el cuerpo crudo para poder validar la firma; el
     trabajo con la base y con su API, que sí bloquea, va al threadpool.
     """
     payload = await request.body()
 
-    if not koywe_service.verificar_firma(payload, request.headers.get("Koywe-Signature")):
-        # O el secreto del panel no coincide con el guardado, o alguien está
-        # intentando marcar órdenes como pagadas a mano.
-        raise HTTPException(status_code=400, detail="Firma inválida")
+    if koywe_service.firma_disponible():
+        if not koywe_service.verificar_firma(payload, request.headers.get("Koywe-Signature")):
+            raise HTTPException(status_code=400, detail="Firma inválida")
 
     try:
         evento = json.loads(payload)
     except ValueError:
-        log.error("[koywe] cuerpo firmado pero no era JSON: %r", payload[:1000])
+        log.error("[koywe] aviso que no era JSON: %r", payload[:1000])
         return {"received": True}
 
     tipo = (evento.get("type") or "") if isinstance(evento, dict) else ""
     if tipo in ("order.paid", "order.completed"):
-        datos = evento.get("data") or {}
-        if isinstance(datos, dict):
-            await run_in_threadpool(_koywe_pagada, datos, tipo)
+        await run_in_threadpool(_koywe_pagada, evento)
 
     # 200 a todo lo demás: reintentar un evento que no nos interesa (o que ya
     # procesamos) solo lo trae otra vez.

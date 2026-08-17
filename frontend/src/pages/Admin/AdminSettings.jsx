@@ -687,12 +687,26 @@ function KoyweKeysForm() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
   })
 
+  // Interruptor propio, separado del de Stripe: el sandbox de Koywe se pide
+  // por correo, y atarlos obligaria a dejar Stripe en prueba solo por eso.
+  const cambiarModo = useMutation({
+    mutationFn: (modo) => api.put('/payments/koywe/mode', { modo }),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      qc.invalidateQueries({ queryKey: ['koywe-keys'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar el modo'); setMsg('') },
+  })
+
   const campos = [
     { k: 'koywe_api_key', label: 'API key', ph: 'la que te env\u00ede Koywe' },
     { k: 'koywe_secret', label: 'Secret', ph: 'firma la autenticaci\u00f3n' },
-    { k: 'koywe_org_id', label: 'ID de organizaci\u00f3n', ph: 'org_...', publico: true },
-    { k: 'koywe_merchant_id', label: 'ID de comercio', ph: 'mer_...', publico: true },
-    { k: 'koywe_webhook_secret', label: 'Secreto del webhook', ph: 'valida los avisos de pago' },
+    { k: 'koywe_org_id', label: 'ID de organizaci\u00f3n', ph: 'org3_...', publico: true },
+    { k: 'koywe_merchant_id', label: 'ID de comercio', ph: 'mrc_...', publico: true },
+    { k: 'koywe_webhook_secret', label: 'Secreto del webhook (opcional)', ph: 'solo si Koywe llega a darlo' },
   ]
 
   const hayAlgo = Object.values(form).some(v => (v || '').trim())
@@ -716,24 +730,61 @@ function KoyweKeysForm() {
             </span>
           </div>
           <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
-            M\u00e9todos locales por pa\u00eds \u2014 Khipu, PIX, PSE, SPEI, Nequi, QRI
+            M\u00e9todos locales por pa\u00eds \u2014 los que ofrezca tu comercio
           </p>
         </div>
         <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '\u2304' : '\u203a'}</span>
       </button>
 
       {abierto && (
-        <div style={{ marginTop: 18 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 4, padding: 4, marginTop: 18,
+          background: 'rgba(4,10,30,.6)', borderRadius: 12, border: '1px solid rgba(255,255,255,.07)',
+        }}>
+          {[
+            { v: 'test', txt: 'Modo prueba', hint: 'Sandbox de Koywe \u2014 no mueve dinero' },
+            { v: 'live', txt: 'Modo real', hint: 'Cobra dinero de verdad' },
+          ].map(({ v, txt, hint }) => {
+            const activo = koywe?.modo === v
+            return (
+              <button
+                key={v}
+                onClick={() => cambiarModo.mutate(v)}
+                disabled={cambiarModo.isPending || activo}
+                title={hint}
+                style={{
+                  flex: 1, padding: '9px 12px', borderRadius: 9, border: 'none', cursor: activo ? 'default' : 'pointer',
+                  fontSize: 12.5, fontWeight: 700,
+                  background: activo ? (v === 'test' ? 'rgba(251,191,36,.16)' : 'rgba(74,222,128,.16)') : 'transparent',
+                  color: activo ? (v === 'test' ? '#fcd34d' : '#4ade80') : '#8aa0cc',
+                }}
+              >
+                {txt}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {abierto && (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+            Este interruptor es solo de Koywe: no toca el de Stripe. Cada modo guarda su
+            propio juego de credenciales, y las del sandbox se piden por correo a
+            soporte@koywe.com.
+          </p>
+
           <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', marginBottom: 16 }}>
             <p style={{ margin: 0, fontSize: 12.5, color: '#aebfe2', lineHeight: 1.6 }}>
               El cliente paga en el portal de Koywe con el m\u00e9todo de su pa\u00eds y la orden
-              avanza sola: el aviso viene firmado y trae nuestro n\u00famero de orden, as\u00ed que
-              aqu\u00ed <strong>no hay nada que aprobar a mano</strong>.
+              avanza sola: cuando llega el aviso, se le pregunta a Koywe si ese cobro
+              existe de verdad antes de dar nada por pagado. Aqu\u00ed{' '}
+              <strong>no hay nada que aprobar a mano</strong>.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
               La API key y el secreto salen de <strong>Configuraci\u00f3n \u2192 Organizaci\u00f3n \u2192
-              Usuarios \u2192 Crear usuario API</strong> en su panel. El secreto del webhook
-              lo dan al registrar la URL de abajo.
+              Usuarios \u2192 Crear usuario API</strong> en su panel. Los dos identificadores
+              los devuelve \u00abProbar conexi\u00f3n\u00bb si te equivocas de comercio.
             </p>
           </div>
 
@@ -760,9 +811,11 @@ function KoyweKeysForm() {
               </button>
             </div>
             <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
-              Guarda el secreto que te den al registrarla en \u00abSecreto del webhook\u00bb. Sin \u00e9l
-              llega el aviso de pago pero no se puede verificar su firma, y la orden se
-              quedar\u00eda parada con el cliente ya habiendo pagado.
+              Koywe no entrega ning\u00fan secreto de firma al registrarla, as\u00ed que{' '}
+              <strong style={{ color: '#8aa0cc' }}>el campo de abajo puede quedar vac\u00edo</strong>.
+              Cada aviso se comprueba consultando su API, que es m\u00e1s fiable que la firma:
+              demuestra que el cobro existe, no solo qui\u00e9n mand\u00f3 el mensaje. Si alg\u00fan d\u00eda
+              te dan el secreto, p\u00e9galo y se comprobar\u00e1n las dos cosas.
             </p>
           </div>
 
@@ -821,23 +874,38 @@ function KoyweKeysForm() {
             </button>
           </div>
 
-          {listo && koywe?.methods && (
+          {listo && koywe?.methods && Object.keys(koywe.methods).length > 0 && (
             <div style={{ marginTop: 16 }}>
               <p style={{ margin: '0 0 8px', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#64748b' }}>
-                Métodos que verán tus clientes
+                Lo que tu comercio tiene contratado
               </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Object.entries(koywe.methods).map(([moneda, ms]) => (
-                  <span key={moneda} style={{ fontSize: 11.5, padding: '5px 10px', borderRadius: 8, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', color: '#aebfe2' }}>
-                    <strong style={{ color: '#eaf2ff' }}>{moneda}</strong> · {ms.map(m => m.nombre).join(', ')}
-                  </span>
+                  <div key={moneda} style={{ fontSize: 11.5, color: '#aebfe2', lineHeight: 1.7 }}>
+                    <strong style={{ color: '#eaf2ff' }}>{moneda}</strong>
+                    {' · '}
+                    {ms.map((m, i) => (
+                      <span key={m.codigo}>
+                        {i > 0 && ', '}
+                        <span style={{ color: m.soportado ? '#aebfe2' : '#64748b' }}>
+                          {m.nombre}
+                          {!m.soportado && ' (aún no)'}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
                 ))}
               </div>
               <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+                Esta lista sale de la API de Koywe, no de una tabla nuestra: si contratas
+                un método nuevo aparece solo. Los marcados «aún no» se cobran mostrando un
+                QR en vez de un enlace, y esa pantalla está pendiente.
+              </p>
+              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
                 El dinero queda en la cuenta de ese país y en esa misma moneda: un pago en
-                CLP suma al saldo chileno, uno en BRL al brasileño. Pasarlo a tu banco se
-                hace desde el panel de Koywe. Argentina y Estados Unidos no aparecen porque
-                Koywe no cobra ahí — solo paga.
+                CLP suma al saldo chileno, uno en COP al colombiano. Pasarlo a tu banco se
+                hace desde el panel de Koywe. Estados Unidos no aparece porque Koywe no
+                cobra ahí — solo paga.
               </p>
             </div>
           )}
