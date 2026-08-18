@@ -157,9 +157,8 @@ export default function Login() {
     'Per\u00fa': [['DNI', 'DNI']],
     'Bolivia': [['CED_CIU', 'C\u00e9dula de identidad']],
   }
-  const docsDisponibles = [...(DOCS_POR_PAIS[regForm.country] || []), ['PP', 'Pasaporte']]
-
   const [regForm, setRegForm] = useState({ email: urlEmail, full_name: '', password: '', confirmPassword: '', phone: '', country: 'Chile', document_type: 'RUT', document_number: '' })
+  const docsDisponibles = [...(DOCS_POR_PAIS[regForm.country] || []), ['PP', 'Pasaporte']]
   const [loginError, setLoginError] = useState('')
   const [regError, setRegError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
