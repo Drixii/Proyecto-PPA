@@ -210,6 +210,11 @@ export default function NewTransfer() {
 
   const [payment, setPayment] = useState({ payment_method: 'transferencia', payment_bank: '' })
   const [copiadoCuenta, setCopiadoCuenta] = useState(false)
+  // Aviso de titularidad. Sale una vez por sesión al elegir cómo pagar: si
+  // saliera en cada envío se aprende a cerrarlo sin leerlo, y si no saliera
+  // nunca el cliente no tiene forma de saber la regla hasta que le rechazan
+  // un pago.
+  const [avisoTitular, setAvisoTitular] = useState(false)
   // Cobro por QR pendiente de escanear (Ligo, SIP). No hay redirección:
   // el cliente paga desde su banco y la orden avanza con el aviso de Koywe.
   const [qrPago, setQrPago] = useState(null)
@@ -275,6 +280,15 @@ export default function NewTransfer() {
   })()
 
   // Qué falta de verdad. Solo decide si el botón de pagar está activo.
+  // Al entrar al paso de pago (3), una vez por sesión.
+  useEffect(() => {
+    if (step !== 3) return
+    try {
+      if (sessionStorage.getItem('aviso-titular') === 'visto') return
+    } catch { /* sin sessionStorage: se muestra igual */ }
+    setAvisoTitular(true)
+  }, [step])
+
   const faltaDelPagador = (() => {
     const falta = []
     const nombre = (pagador.sender_name || '').trim()
@@ -534,6 +548,36 @@ export default function NewTransfer() {
 
   return (
     <FinexyLayout>
+      {avisoTitular && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.82)'}}>
+          <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(251,191,36,.3)'}}>
+            <div className="flex items-start gap-3 mb-3">
+              <span className="text-2xl shrink-0">⚠️</span>
+              <h3 className="font-semibold" style={{color:'#eaf2ff'}}>
+                Paga desde una cuenta a tu nombre
+              </h3>
+            </div>
+            <p className="text-sm leading-relaxed mb-3" style={{color:'#aebfe2'}}>
+              Solo aceptamos pagos emitidos por el mismo titular que registra el envío.
+              El nombre de la cuenta desde la que pagues tiene que coincidir con el tuyo.
+            </p>
+            <p className="text-xs leading-relaxed mb-5" style={{color:'#8aa0cc'}}>
+              Si pagas desde la cuenta de otra persona, el envío queda retenido y puede
+              anularse. Es para proteger tanto tu dinero como el de quien recibe.
+            </p>
+            <button
+              onClick={() => {
+                try { sessionStorage.setItem('aviso-titular', 'visto') } catch { /* da igual */ }
+                setAvisoTitular(false)
+              }}
+              className="w-full text-sm font-semibold py-3 rounded-xl"
+              style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', color:'#fff'}}>
+              Entendido, pagaré desde mi cuenta
+            </button>
+          </div>
+        </div>
+      )}
+
       {qrPago && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.8)'}}>
           <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.25)'}}>

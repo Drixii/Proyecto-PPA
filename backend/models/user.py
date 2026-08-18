@@ -23,6 +23,15 @@ class User(Base):
     password_changed_at = Column(DateTime(timezone=True), nullable=True)
     super_admin_id = Column(Integer, nullable=True)
     invite_code_used = Column(String, nullable=True)
+    # Documento del titular de la cuenta. Único: una persona, una cuenta.
+    # Sin esa unicidad, cualquier límite por cliente se esquiva abriendo otra.
+    # Se guarda normalizado (services/documento_service.normaliza) para que
+    # "12345678-5" y "12.345.678-5" no pasen por documentos distintos.
+    document_type = Column(String, nullable=True)
+    document_number = Column(String, nullable=True, index=True)
+    # Correo verificado con un código de 6 cifras. Sin esto no se puede enviar
+    # dinero: es lo que impide crear cuentas con correos inventados.
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
     # Identificador de este cliente como contacto en Koywe. Su API no permite
     # crear dos contactos con el mismo correo o teléfono, ni buscar entre los
     # existentes, así que sin guardarlo aquí el segundo cobro de un cliente

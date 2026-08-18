@@ -7,7 +7,12 @@ class UserCreate(BaseModel):
     email: EmailStr
     full_name: str
     password: str
-    phone: Optional[str] = None
+    # Obligatorios desde ahora: el teléfono es la única vía para contactar a
+    # alguien antes de soltar un envío dudoso, y el documento es lo que hace
+    # que una persona sea una sola cuenta.
+    phone: str
+    document_type: str
+    document_number: str
     country: Optional[str] = None
     invite_code: Optional[str] = None
 
@@ -18,6 +23,7 @@ class UserLogin(BaseModel):
 
 
 class UserOut(BaseModel):
+    email_verified: bool = False
     id: int
     email: str
     full_name: str

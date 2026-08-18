@@ -72,6 +72,28 @@ def _run_migrations():
         # recientes, sin paginar. Guardarlo aquí es la única forma de que el
         # segundo cobro de un mismo cliente no choque con el primero.
         "ALTER TABLE users ADD COLUMN koywe_contact_id VARCHAR",
+        # Documento del titular y verificación de correo.
+        "ALTER TABLE users ADD COLUMN document_type VARCHAR",
+        "ALTER TABLE users ADD COLUMN document_number VARCHAR",
+        "ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP WITH TIME ZONE",
+        # Único entre cuentas vivas. Parcial a propósito: una cuenta borrada no
+        # debe impedir que esa misma persona vuelva a registrarse, y los NULL
+        # de las cuentas antiguas no chocan entre sí.
+        """CREATE UNIQUE INDEX IF NOT EXISTS ux_users_document
+           ON users (document_number)
+           WHERE document_number IS NOT NULL AND deleted_at IS NULL""",
+        # Códigos de verificación de correo. Se guarda el hash, no el código:
+        # quien lea la base no debe poder verificar la cuenta de otro.
+        """CREATE TABLE IF NOT EXISTS email_codes (
+            id SERIAL PRIMARY KEY,
+            email VARCHAR NOT NULL,
+            code_hash VARCHAR NOT NULL,
+            intentos INTEGER NOT NULL DEFAULT 0,
+            expira_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            usado_at TIMESTAMP WITH TIME ZONE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_email_codes_email ON email_codes (email)",
     ]
     # Estas migraciones se reejecutan en cada arranque, así que "la columna ya
     # existe" es el caso normal y se ignora. Cualquier otro fallo sí se registra:

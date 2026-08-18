@@ -128,6 +128,16 @@ def _validar_destino(db: Session, data):
 def create_order(db: Session, data, client: User) -> Order:
     _validar_destino(db, data)
 
+    # Sin correo verificado no se manda dinero.
+    #
+    # Es lo que impide crear cuentas con correos inventados: registrarse sigue
+    # siendo libre, pero para enviar hay que demostrar que el buzon es tuyo.
+    # Solo se exige si el envio de correos esta configurado; si no lo esta,
+    # nadie podria verificarse y esto dejaria la web inutilizable.
+    from services import email_service
+    if email_service.configurado() and not getattr(client, "email_verified_at", None):
+        raise ValueError("Verifica tu correo antes de enviar dinero")
+
     rate = get_rate(db, data.currency_from, data.currency_to)
     if not rate:
         raise ValueError(f"Tasa no disponible: {data.currency_from} -> {data.currency_to}")

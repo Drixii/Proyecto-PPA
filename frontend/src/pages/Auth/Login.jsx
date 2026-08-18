@@ -145,7 +145,21 @@ export default function Login() {
 
   const [mode, setMode] = useState(urlMode === 'register' ? 'register' : (location.state?.mode || 'login'))
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
-  const [regForm, setRegForm] = useState({ email: urlEmail, full_name: '', password: '', confirmPassword: '', phone: '', country: 'Chile' })
+  // Documentos por país. Los marcados como verificables llevan dígito
+  // verificador y se comprueban con aritmética al enviar el formulario; el
+  // resto solo por formato.
+  const DOCS_POR_PAIS = {
+    'Chile': [['RUT', 'RUT']],
+    'Colombia': [['CED_CIU', 'C\u00e9dula de ciudadan\u00eda'], ['CED_EXT', 'C\u00e9dula de extranjer\u00eda'], ['NIT', 'NIT']],
+    'Argentina': [['DNI', 'DNI'], ['CUIL', 'CUIL'], ['CUIT', 'CUIT']],
+    'Brasil': [['CPF', 'CPF']],
+    'M\u00e9xico': [['CURP', 'CURP'], ['RFC', 'RFC']],
+    'Per\u00fa': [['DNI', 'DNI']],
+    'Bolivia': [['CED_CIU', 'C\u00e9dula de identidad']],
+  }
+  const docsDisponibles = [...(DOCS_POR_PAIS[regForm.country] || []), ['PP', 'Pasaporte']]
+
+  const [regForm, setRegForm] = useState({ email: urlEmail, full_name: '', password: '', confirmPassword: '', phone: '', country: 'Chile', document_type: 'RUT', document_number: '' })
   const [loginError, setLoginError] = useState('')
   const [regError, setRegError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
@@ -381,34 +395,45 @@ export default function Login() {
                   <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>Las contraseñas no coinciden</p>
                 )}
               </div>
-              <div><label style={labelStyle}>Teléfono (opcional)</label>
-                <input className="login-input" type="tel" value={regForm.phone} onChange={e => setRegForm({ ...regForm, phone: e.target.value })} placeholder="+56 9 1234 5678" style={inputStyle} />
+              <div><label style={labelStyle}>Teléfono</label>
+                <input className="login-input" type="tel" value={regForm.phone} onChange={e => setRegForm({ ...regForm, phone: e.target.value })} required placeholder="+56 9 1234 5678" style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>País</label>
-                <select value={regForm.country} onChange={e => setRegForm({ ...regForm, country: e.target.value })} style={{ ...inputStyle, appearance: 'none' }}>
+                <select value={regForm.country} onChange={e => {
+                  const pais = e.target.value
+                  // El tipo de documento cambia con el país: si el elegido no
+                  // existe en el nuevo, se pone el primero que sí.
+                  const tipos = [...(DOCS_POR_PAIS[pais] || []), ['PP', 'Pasaporte']]
+                  const sigueValiendo = tipos.some(([c]) => c === regForm.document_type)
+                  setRegForm({ ...regForm, country: pais, document_type: sigueValiendo ? regForm.document_type : tipos[0][0] })
+                }} style={{ ...inputStyle, appearance: 'none' }}>
                   {REGISTER_COUNTRIES.map(c => <option key={c} value={c} style={{ background: '#0f172a', color: '#fff' }}>{c}</option>)}
                 </select>
               </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: '0 0 42%' }}>
+                  <label style={labelStyle}>Documento</label>
+                  <select value={regForm.document_type} onChange={e => setRegForm({ ...regForm, document_type: e.target.value })} style={{ ...inputStyle, appearance: 'none' }}>
+                    {docsDisponibles.map(([codigo, nombre]) => (
+                      <option key={codigo} value={codigo} style={{ background: '#0f172a', color: '#fff' }}>{nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Número</label>
+                  <input className="login-input" type="text" value={regForm.document_number}
+                    onChange={e => setRegForm({ ...regForm, document_number: e.target.value })}
+                    required placeholder="12.345.678-5" style={inputStyle} />
+                </div>
+              </div>
+
               {regError && <div style={{ padding: '11px 14px', borderRadius: 12, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.3)' }}><p style={{ margin: 0, fontSize: 13, color: '#fca5a5' }}>{regError}</p></div>}
               <button type="submit" disabled={regLoading} style={{ width: '100%', padding: 15, fontSize: 15.5, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 14, cursor: 'pointer', boxShadow: '0 10px 30px rgba(56,189,248,.35)', opacity: regLoading ? 0.65 : 1 }}>
                 {regLoading ? 'Creando cuenta...' : 'Crear cuenta gratis →'}
               </button>
             </form>
           )}
-
-          {/* Divider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 0' }}>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
-            <span style={{ fontSize: 12, color: '#475569' }}>o continúa con</span>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
-          </div>
-
-          {/* Google (UI only) */}
-          <button style={{ width: '100%', padding: 13, fontSize: 14, fontWeight: 600, color: '#eaf2ff', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.13)', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
-            Continuar con Google
-          </button>
 
           <p style={{ margin: '20px 0 0', textAlign: 'center', fontSize: 11.5, color: '#475569', lineHeight: 1.6 }}>
             Al continuar aceptas nuestros{' '}

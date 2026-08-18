@@ -1,3 +1,5 @@
+import re
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from utils.image import validate_and_convert
 from sqlalchemy.orm import Session
@@ -14,6 +16,8 @@ from utils.timezones import country_to_tz
 def _user_out(user: User, db: Session) -> dict:
     """Build UserOut dict including managed_countries for sub-admins."""
     data = UserOut.model_validate(user).model_dump()
+    # Se deriva de la fecha: el front solo necesita saber si esta o no.
+    data["email_verified"] = bool(getattr(user, "email_verified_at", None))
     if user.role == 'sub_admin':
         from models.sub_admin_country import SubAdminCountry
         rows = db.query(SubAdminCountry).filter(SubAdminCountry.user_id == user.id).all()
@@ -45,12 +49,48 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
     else:
         raise HTTPException(status_code=400, detail="Se requiere un código de invitación para registrarse")
 
+    # Documento: válido y de nadie más.
+    #
+    # La validación es aritmética (dígito verificador) donde el país lo
+    # permite. No prueba que el documento sea suyo — eso solo lo da una
+    # verificación con el registro civil — pero descarta números inventados y,
+    # sobre todo, erratas: un dígito mal escrito convierte a una persona en dos
+    # a ojos del sistema, y todo lo que depende del documento deja de funcionar
+    # sin que nadie se entere.
+    from services import documento_service as docs
+
+    ok, motivo = docs.valida(data.document_type, data.document_number)
+    if not ok:
+        raise HTTPException(status_code=400, detail=motivo)
+
+    documento = docs.normaliza(data.document_type, data.document_number)
+
+    # Una persona, una cuenta. Sin esto, cualquier límite por cliente se
+    # esquiva abriendo otra cuenta y repartiendo los envíos.
+    ya_existe = db.query(User).filter(
+        User.document_number == documento,
+        User.deleted_at == None,
+    ).first()
+    if ya_existe:
+        # Mensaje neutro a propósito: decir a qué correo pertenece confirmaría
+        # a un desconocido que ese documento tiene cuenta aquí, y con quién.
+        raise HTTPException(
+            status_code=400,
+            detail="Ese documento ya tiene una cuenta. Si es tuyo y perdiste el acceso, escríbenos.",
+        )
+
+    telefono = (data.phone or "").strip()
+    if len(re.sub(r"\D", "", telefono)) < 8:
+        raise HTTPException(status_code=400, detail="El teléfono no parece válido")
+
     hashed = pwd_context.hash(data.password)
     user = User(
         email=data.email,
         full_name=data.full_name,
         password=hashed,
-        phone=data.phone,
+        phone=telefono,
+        document_type=data.document_type.upper().strip(),
+        document_number=documento,
         country=data.country,
         timezone=country_to_tz(data.country),
         super_admin_id=super_admin_id,
@@ -71,12 +111,71 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(user)
+
+    # Código de verificación. Si SMTP no está configurado la cuenta se crea
+    # igual y queda sin verificar: preferible a dejar fuera a los clientes
+    # porque falte una credencial. El envío de dinero es lo que se bloquea.
+    from services import email_service
+    enviado = False
+    if email_service.configurado():
+        enviado, _ = email_service.enviar_codigo(db, user.email)
+
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return {
         "success": True,
-        "data": {"access_token": token, "token_type": "bearer", "user": _user_out(user, db)},
+        "data": {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": _user_out(user, db),
+            "email_verification_sent": enviado,
+        },
         "message": "Cuenta creada exitosamente"
     }
+
+
+class CodigoIn(BaseModel):
+    code: str
+
+
+@router.post("/verify-email/send", response_model=dict)
+def enviar_verificacion(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manda (o reenvía) el código al correo del usuario."""
+    from services import email_service
+
+    if current_user.email_verified_at:
+        return {"success": True, "data": {"verificado": True}, "message": "Tu correo ya está verificado"}
+    if not email_service.configurado():
+        raise HTTPException(status_code=400, detail="El envío de correos no está configurado. Escríbenos para verificar tu cuenta.")
+
+    ok, motivo = email_service.enviar_codigo(db, current_user.email)
+    if not ok:
+        raise HTTPException(status_code=400, detail=motivo)
+    return {"success": True, "data": {}, "message": "Te enviamos un código"}
+
+
+@router.post("/verify-email", response_model=dict)
+def verificar_email(
+    data: CodigoIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Comprueba el código y marca el correo como verificado."""
+    from services import email_service
+    from datetime import datetime, timezone
+
+    if current_user.email_verified_at:
+        return {"success": True, "data": {"verificado": True}, "message": "Tu correo ya está verificado"}
+
+    ok, motivo = email_service.verificar_codigo(db, current_user.email, data.code)
+    if not ok:
+        raise HTTPException(status_code=400, detail=motivo)
+
+    current_user.email_verified_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"success": True, "data": {"verificado": True}, "message": "Correo verificado"}
 
 
 @router.post("/login", response_model=dict)
