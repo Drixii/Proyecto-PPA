@@ -45,6 +45,14 @@ export default function ClientHistory() {
     staleTime: 0,
   })
 
+  const todas = data || []
+  const totales = {
+    enviado: todas.reduce((suma, o) => suma + (o.amount_sent || 0), 0),
+    cuantas: todas.length,
+    completadas: todas.filter(o => o.status === 'completado').length,
+    paises: new Set(todas.map(o => o.receiver_country).filter(Boolean)).size,
+  }
+
   const orders = (data || []).filter(o => {
     const matchStatus = !statusFilter
       || (statusFilter === 'active' ? o.status !== 'completado' : o.status === statusFilter)
@@ -80,9 +88,42 @@ export default function ClientHistory() {
     <FinexyLayout>
       <div className="p-6 max-w-[1200px] mx-auto">
         {/* Header */}
-        <div className="mb-6">
+        <div className="mb-5">
           <h1 className="text-2xl font-bold" style={{color:'#eaf2ff'}}>Historial de transferencias</h1>
-          <p className="text-sm mt-1" style={{color:'#8aa0cc'}}>{(data || []).length} transferencias en total</p>
+          <p className="text-sm mt-1" style={{color:'#8aa0cc'}}>Todo lo que has enviado, desde el primero</p>
+        </div>
+
+        {/* Resumen. Estaba en el panel principal, que es donde se decide si
+            enviar hoy; el acumulado no ayuda a esa decisión y aquí sí:
+            es el encabezado natural de un historial. */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="rounded-2xl p-4" style={{ ...GLASS, border: '1px solid rgba(56,189,248,.2)' }}>
+            <p className="text-xs uppercase tracking-wider" style={{color:'#8aa0cc'}}>Total enviado</p>
+            <p className="text-2xl font-bold mt-1" style={{color:'#38bdf8'}}>
+              {totales.enviado.toLocaleString('es-CL')}
+            </p>
+            <p className="text-[11px] mt-0.5" style={{color:'#8aa0cc'}}>CLP acumulados</p>
+          </div>
+
+          <div className="rounded-2xl p-4" style={GLASS}>
+            <p className="text-xs uppercase tracking-wider" style={{color:'#8aa0cc'}}>Transferencias</p>
+            <p className="text-2xl font-bold mt-1" style={{color:'#eaf2ff'}}>{totales.cuantas}</p>
+            <p className="text-[11px] mt-0.5" style={{color:'#8aa0cc'}}>en total</p>
+          </div>
+
+          <div className="rounded-2xl p-4" style={GLASS}>
+            <p className="text-xs uppercase tracking-wider" style={{color:'#8aa0cc'}}>Completadas</p>
+            <p className="text-2xl font-bold mt-1" style={{color:'#4ade80'}}>{totales.completadas}</p>
+            <p className="text-[11px] mt-0.5" style={{color:'#8aa0cc'}}>ya recibidas</p>
+          </div>
+
+          <div className="rounded-2xl p-4" style={GLASS}>
+            <p className="text-xs uppercase tracking-wider" style={{color:'#8aa0cc'}}>Destinos</p>
+            <p className="text-2xl font-bold mt-1" style={{color:'#eaf2ff'}}>{totales.paises}</p>
+            <p className="text-[11px] mt-0.5" style={{color:'#8aa0cc'}}>
+              {totales.paises === 1 ? 'país distinto' : 'países distintos'}
+            </p>
+          </div>
         </div>
 
         {/* Filters */}
