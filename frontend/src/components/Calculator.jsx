@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { flagUrl } from '../utils/flags'
+import { Bandera } from '../utils/flags'
 
 const SEND_CURRENCIES = [
   { code: 'CLP', iso2: 'cl', name: 'Peso Chileno' },
@@ -53,8 +54,7 @@ function FromDropdown({ value, onChange, onClose }) {
         <button key={c.code} type="button"
           onClick={() => { onChange(c.code); onClose() }}
           className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left ${value === c.code ? 'bg-blue-50/70' : ''}`}>
-          <img src={currencyFlagUrl(c.iso2)} alt="" className="w-5 h-[14px] rounded-sm object-cover shrink-0"
-            onError={e => { e.target.style.display = 'none' }} />
+          <Bandera iso2={c.iso2} ancho={20} alto={14} />
           <span className="text-sm font-bold text-gray-800">{c.code}</span>
           <span className="text-xs text-gray-400 flex-1 text-right truncate">{c.name}</span>
         </button>
@@ -215,9 +215,7 @@ export default function Calculator({ onSend }) {
               <button type="button"
                 onClick={() => { setFromOpen(v => !v); setToOpen(false) }}
                 className="flex items-center gap-2 border border-gray-200 hover:border-blue-300 bg-gray-50 hover:bg-blue-50 rounded-full px-3 py-2 transition-colors">
-                <img src={currencyFlagUrl(selectedFrom?.iso2)} alt=""
-                  className="w-[22px] h-[15px] rounded-sm object-cover shrink-0"
-                  onError={e => { e.target.style.display = 'none' }} />
+                <Bandera iso2={selectedFrom?.iso2} ancho={22} alto={15} />
                 <span className="text-sm font-bold text-gray-800">{fromCurrency}</span>
                 <ChevronDown />
               </button>

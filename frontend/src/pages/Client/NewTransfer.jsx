@@ -6,6 +6,7 @@ import CardPayment from '../../components/CardPayment'
 import api from '../../services/api'
 import { useStore } from '../../store/useStore'
 import { useCountries } from '../../hooks/useCountries'
+import { Bandera } from '../../utils/flags'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -99,8 +100,7 @@ function FromDropdown({ value, onChange, onClose, options }) {
           onClick={() => { onChange(c.code); onClose() }}
           className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left"
           style={{background: value === c.code ? 'rgba(56,189,248,.12)' : 'transparent', color:'#eaf2ff'}}>
-          <img src={currencyFlagUrl(c.iso2)} alt="" className="w-5 h-[14px] rounded-sm object-cover shrink-0"
-            onError={e => { e.target.style.display = 'none' }} />
+          <Bandera iso2={c.iso2} ancho={20} alto={14} />
           <span className="text-sm font-bold">{c.code}</span>
           <span className="text-xs flex-1 text-right truncate" style={{color:'#8aa0cc'}}>{c.name}</span>
         </button>
@@ -737,9 +737,7 @@ export default function NewTransfer() {
                         onClick={() => { setFromOpen(v => !v); setToOpen(false) }}
                         className="flex items-center gap-2 rounded-full px-3 py-2 transition-colors"
                         style={{border:'1px solid rgba(255,255,255,.1)', background:'rgba(6,13,40,.8)'}}>
-                        <img src={currencyFlagUrl(selectedFrom?.iso2)} alt=""
-                          className="w-[22px] h-[15px] rounded-sm object-cover shrink-0"
-                          onError={e => { e.target.style.display = 'none' }} />
+                        <Bandera iso2={selectedFrom?.iso2} ancho={22} alto={15} />
                         <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.fromCurrency}</span>
                         <ChevronDown />
                       </button>

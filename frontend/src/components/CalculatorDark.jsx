@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import api from '../services/api'
-import { flagUrl } from '../utils/flags'
+import { Bandera } from '../utils/flags'
 import { useCountries } from '../hooks/useCountries'
 
 // Los países y monedas ya no viven aquí: se editan en Ajustes → Países y
 // llegan por API (hooks/useCountries).
 const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
-
-const cflag = iso2 => `https://flagcdn.com/40x30/${iso2}.png`
 
 function fmt(num, currency) {
   if (num == null || isNaN(num)) return ''
@@ -63,7 +61,7 @@ function FromDropdown({ value, onChange, onClose, mobile, options = [] }) {
   const items = options.map(c => (
     <button key={c.code} type="button" onClick={() => { onChange(c.code); onClose() }}
       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: mobile ? '14px 20px' : '11px 14px', background: value === c.code ? 'rgba(56,189,248,.15)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-      <img src={cflag(c.iso2)} alt="" style={{ width: mobile ? 30 : 22, height: mobile ? 20 : 15, borderRadius: 3, objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
+      <Bandera iso2={c.iso2} ancho={mobile ? 30 : 22} alto={mobile ? 20 : 15} />
       <span style={{ fontSize: mobile ? 15 : 14, fontWeight: 700, color: '#eaf2ff' }}>{c.code}</span>
       <span style={{ flex: 1, textAlign: 'right', fontSize: mobile ? 12.5 : 11.5, color: '#8aa0cc' }}>{c.name}</span>
       {value === c.code && <span style={{ color: '#38bdf8', fontSize: 16 }}>✓</span>}
@@ -117,10 +115,7 @@ function ToDropdown({ countries, value, onChange, onClose, mobile }) {
       {filtered.map(c => (
         <button key={c.country} type="button" onClick={() => { onChange(c); onClose() }}
           style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: mobile ? '14px 20px' : '11px 14px', background: value === c.country ? 'rgba(56,189,248,.15)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-          {flagUrl(c.country)
-            ? <img src={flagUrl(c.country)} alt="" style={{ width: mobile ? 30 : 22, height: mobile ? 20 : 15, borderRadius: 3, objectFit: 'cover' }} />
-            : <span style={{ width: mobile ? 30 : 22, height: mobile ? 20 : 15, background: 'rgba(255,255,255,.1)', borderRadius: 3, display: 'inline-block' }} />
-          }
+          <Bandera iso2={c.iso2} ancho={mobile ? 30 : 22} alto={mobile ? 20 : 15} />
           <span style={{ flex: 1, fontSize: mobile ? 15 : 14, fontWeight: 500, color: '#eaf2ff' }}>{c.country}</span>
           <span style={{ fontSize: mobile ? 12.5 : 11.5, color: '#8aa0cc', fontFamily: "'JetBrains Mono',monospace" }}>{c.currency}</span>
           {value === c.country && <span style={{ color: '#38bdf8', fontSize: 16 }}>✓</span>}
@@ -165,6 +160,9 @@ export default function CalculatorDark({ onSend }) {
 
   const { sendCurrencies, receiveCountries } = useCountries()
   const countries   = receiveCountries.filter(c => c.currency !== fromCurrency)
+  // El iso2 del pais elegido sale de la propia lista: el mapa de nombres no
+  // cubre a todos (Canada, China, Japon, Reino Unido se quedaban sin bandera).
+  const isoDestino  = receiveCountries.find(c => c.country === toCountry)?.iso2
   const selectedFrom = sendCurrencies.find(c => c.code === fromCurrency)
   const rawAmount   = parseRaw(displayAmount)
 
@@ -296,8 +294,7 @@ export default function CalculatorDark({ onSend }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <button type="button" onClick={() => { setFromOpen(v => !v); setToOpen(false) }} style={btnCurrency()}>
-                <img src={cflag(selectedFrom?.iso2)} alt="" style={{ width: 24, height: 16, borderRadius: 3, objectFit: 'cover', ...flagAnim }}
-                  onError={e => { e.target.style.display = 'none' }} />
+                <Bandera iso2={selectedFrom?.iso2} ancho={24} alto={16} style={flagAnim} />
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{fromCurrency}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9fb3dd" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>
@@ -328,10 +325,8 @@ export default function CalculatorDark({ onSend }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <button type="button" onClick={() => { setToOpen(v => !v); setFromOpen(false) }} style={btnCurrency({ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.2)' })}>
-                {flagUrl(toCountry)
-                  ? <img src={flagUrl(toCountry)} alt="" style={{ width: 24, height: 16, borderRadius: 3, objectFit: 'cover', animation: 'flagWave 2.8s ease-in-out infinite', transformOrigin: 'left center', animationDelay: '.4s' }} />
-                  : <span>🌍</span>
-                }
+                <Bandera iso2={isoDestino} ancho={24} alto={16}
+                  style={{ animation: 'flagWave 2.8s ease-in-out infinite', transformOrigin: 'left center', animationDelay: '.4s' }} />
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{toCurrency}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9fb3dd" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import api from '../services/api'
+import { Bandera } from '../utils/flags'
 
 // ── Aeropuertos por país ──────────────────────────────────────────────────────
 const AIRPORTS = [
@@ -242,7 +243,7 @@ function AirportPicker({ label, value, onChange, exclude, lightMode = false }) {
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', background: value === a.iata ? 'rgba(56,189,248,.1)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                 onMouseEnter={e => { if (value !== a.iata) e.currentTarget.style.background = 'rgba(255,255,255,.05)' }}
                 onMouseLeave={e => { if (value !== a.iata) e.currentTarget.style.background = 'transparent' }}>
-                <img src={flag(a.iso2)} alt="" style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />
+                <Bandera iso2={a.iso2} ancho={24} alto={17} />
                 <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#38bdf8', width: 38, flexShrink: 0 }}>{a.iata}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, color: '#eaf2ff', fontWeight: 600 }}>{a.city}</div>

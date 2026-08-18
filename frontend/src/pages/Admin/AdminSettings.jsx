@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import FinexyLayout from '../../components/FinexyLayout'
 import CountriesManager from './CountriesManager'
 import api from '../../services/api'
+import { Bandera } from '../../utils/flags'
 
 const GLASS = {
   background: 'rgba(255,255,255,0.03)',
@@ -28,9 +29,7 @@ const ISO2 = { CLP:'cl', COP:'co', USD:'us', EUR:'es', PEN:'pe', BRL:'br', MXN:'
 const flag = cur => ISO2[cur] ? `https://flagcdn.com/20x15/${ISO2[cur]}.png` : null
 
 function FlagImg({ cur, size = 20 }) {
-  const src = flag(cur)
-  if (!src) return null
-  return <img src={src} alt={cur} style={{ width: size, height: Math.round(size * 0.75), borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} onError={e => e.target.style.display='none'} />
+  return <Bandera iso2={ISO2[cur]} ancho={size} alto={Math.round(size * 0.75)} />
 }
 
 function fmt(n, cur) {
