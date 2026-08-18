@@ -32,6 +32,9 @@ class User(Base):
     # Correo verificado con un código de 6 cifras. Sin esto no se puede enviar
     # dinero: es lo que impide crear cuentas con correos inventados.
     email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    # Marcado a mano por un super-admin: se salta la retención del primer
+    # envío grande. Para clientes que ya se conocen fuera de la web.
+    is_trusted = Column(Boolean, default=False)
     # Identificador de este cliente como contacto en Koywe. Su API no permite
     # crear dos contactos con el mismo correo o teléfono, ni buscar entre los
     # existentes, así que sin guardarlo aquí el segundo cobro de un cliente

@@ -24,6 +24,7 @@ class UserLogin(BaseModel):
 
 class UserOut(BaseModel):
     email_verified: bool = False
+    is_trusted: bool = False
     id: int
     email: str
     full_name: str

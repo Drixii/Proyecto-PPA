@@ -20,6 +20,10 @@ const COLUMNS = [
   // sino al cliente, y en amarillo se confundía con "en aprobación".
   { key: 'pendiente_pago', label: 'Pendiente de pago', dot: 'bg-red-600', bg: 'border-t-red-600' },
   { key: 'en_aprobacion', label: 'En Aprobación', dot: 'bg-orange-400', bg: 'border-t-orange-400' },
+  // Envíos detenidos esperando revisión. No pasan al encargado hasta que un
+  // super-admin los libere, así que tienen columna propia y no se mezclan con
+  // los que ya están en curso.
+  { key: 'retenido', label: 'En Verificación', dot: 'bg-purple-500', bg: 'border-t-purple-500' },
   { key: 'en_proceso',    label: 'En Proceso',    dot: 'bg-blue-500',   bg: 'border-t-blue-500'   },
   { key: 'completado',    label: 'Completado',    dot: 'bg-green-500',  bg: 'border-t-green-500'  },
   { key: 'rechazado',     label: 'Rechazado',     dot: 'bg-red-500',    bg: 'border-t-red-500'    },

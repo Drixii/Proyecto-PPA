@@ -12,6 +12,7 @@ import Pipeline from './pages/Admin/Pipeline'
 import OrderAdmin from './pages/Admin/OrderAdmin'
 import AdminSettings from './pages/Admin/AdminSettings'
 import AdminOrders from './pages/Admin/AdminOrders'
+import Retenciones from './pages/Admin/Retenciones'
 import AdminUsers from './pages/Admin/AdminUsers'
 import ClientHistory from './pages/Client/ClientHistory'
 import ClientProfile from './pages/Client/ClientProfile'
@@ -158,6 +159,7 @@ export default function App() {
         <Route path="/admin/orders/:id" element={<RequireAuth role="admin"><OrderAdmin /></RequireAuth>} />
         <Route path="/admin/settings" element={<RequireAuth role="admin"><AdminSettings /></RequireAuth>} />
         <Route path="/admin/orders" element={<RequireAuth role="admin"><AdminOrders /></RequireAuth>} />
+        <Route path="/admin/retenciones" element={<RequireAuth role="admin"><Retenciones /></RequireAuth>} />
         <Route path="/admin/users" element={<RequireAuth role="admin"><AdminUsers /></RequireAuth>} />
 
         {/* Super-Admin Profile */}

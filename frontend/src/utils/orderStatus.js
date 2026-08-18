@@ -10,6 +10,7 @@
 
 export const ESTADO_LABEL = {
   pendiente_pago: 'Pendiente de pago',
+  retenido: 'En verificación',
   en_aprobacion: 'En Aprobación',
   en_proceso: 'En Proceso',
   completado: 'Completado',
@@ -19,6 +20,7 @@ export const ESTADO_LABEL = {
 // Color del punto, como valor CSS (para style={{ background }}).
 export const ESTADO_COLOR = {
   pendiente_pago: '#dc2626',
+  retenido: '#a855f7',
   en_aprobacion: '#f97316',
   en_proceso: '#60a5fa',
   completado: '#4ade80',
@@ -28,6 +30,7 @@ export const ESTADO_COLOR = {
 // El mismo color como clase de Tailwind, para las vistas que ya lo usaban así.
 export const ESTADO_DOT = {
   pendiente_pago: 'bg-red-600',
+  retenido: 'bg-purple-500',
   en_aprobacion: 'bg-orange-400',
   en_proceso: 'bg-blue-500',
   completado: 'bg-green-500',
@@ -38,6 +41,10 @@ export const ESTADO_DOT = {
 // comprobante nuevo. Se marcan aparte para que destaquen en una lista larga,
 // donde el color por sí solo se pierde.
 export const ESTADO_PIDE_ACCION = new Set(['pendiente_pago', 'rechazado'])
+
+// Estados en los que el envio espera a la casa, no al cliente. Se marcan
+// aparte porque el cliente no tiene nada que hacer: solo esperar.
+export const ESTADO_EN_ESPERA = new Set(['retenido'])
 
 export const etiquetaEstado = (estado) =>
   ESTADO_LABEL[estado] || (estado || '').replace(/_/g, ' ')

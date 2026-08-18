@@ -94,6 +94,11 @@ def _run_migrations():
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )""",
         "CREATE INDEX IF NOT EXISTS ix_email_codes_email ON email_codes (email)",
+        # Retención del primer envío grande.
+        "ALTER TABLE users ADD COLUMN is_trusted BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE orders ADD COLUMN hold_reason VARCHAR",
+        "ALTER TABLE orders ADD COLUMN released_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE orders ADD COLUMN released_by_id INTEGER",
     ]
     # Estas migraciones se reejecutan en cada arranque, así que "la columna ya
     # existe" es el caso normal y se ignora. Cualquier otro fallo sí se registra:

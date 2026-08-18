@@ -52,9 +52,25 @@ def payment_config():
         log.warning("[koywe] cuentas no disponibles para /config: %s", e)
         koywe_cuentas = {}
 
+    # Umbral de retencion, para poder avisar ANTES de que pague. Retener sin
+    # haberlo advertido es peor: el cliente ya puso el dinero.
+    from database import SessionLocal
+    from services import retencion_service
+    _db = SessionLocal()
+    try:
+        retencion = {
+            "activa": retencion_service.activa(_db),
+            "umbral_clp": retencion_service.umbral_clp(_db),
+        }
+    except Exception:
+        retencion = {"activa": False, "umbral_clp": None}
+    finally:
+        _db.close()
+
     return {
         "success": True,
         "data": {
+            "retencion": retencion,
             "enabled": stripe_service.is_configured(),
             "publishable_key": stripe_service.publishable_key(),
             "currencies": list(stripe_service.CARD_CURRENCIES),
@@ -1304,17 +1320,38 @@ def _mark_paid(
         order.paid_at = datetime.now(timezone.utc)
         order.payment_intent_id = payment_intent_id
         old_status = order.status
-        order.status = "en_proceso"
-        order.sub_admin_id = find_sub_admin_for_country(
-            db, order.receiver_country, order.super_admin_id
-        )
+
+        # Primer envío grande de un cliente nuevo: se detiene aquí.
+        #
+        # El dinero ya entró; lo que se retiene es el pago al destinatario, que
+        # es el único momento en que todavía se puede deshacer. No se asigna
+        # encargado: mientras esté retenida no debe aparecer en la cola de
+        # nadie salvo del super-admin.
+        from services import retencion_service
+        retener, motivo = retencion_service.evaluar(db, order)
+
+        if retener:
+            order.status = "retenido"
+            order.hold_reason = motivo
+            order.sub_admin_id = None
+        else:
+            order.status = "en_proceso"
+            order.sub_admin_id = find_sub_admin_for_country(
+                db, order.receiver_country, order.super_admin_id
+            )
         db.commit()
         db.refresh(order)
 
         try:
-            from services.notification_service import notify_status_change, notify_sub_admin
-            notify_status_change(db, order, old_status, "en_proceso")
-            if order.sub_admin_id:
+            from services.notification_service import notify_status_change, notify_sub_admin, notify_owning_admin
+            notify_status_change(db, order, old_status, order.status)
+            if retener:
+                notify_owning_admin(
+                    db, order, "order_held",
+                    title=f"Envío retenido: {order.order_number}",
+                    body=motivo,
+                )
+            elif order.sub_admin_id:
                 notify_sub_admin(db, order, order.sub_admin_id)
         except Exception as e:
             log.error("[%s] pago registrado pero fallaron las notificaciones: %s", proveedor, e)

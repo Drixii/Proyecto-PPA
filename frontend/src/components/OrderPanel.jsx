@@ -480,12 +480,14 @@ const TRANSFER_STATUS_STEPS = ['en_aprobacion', 'en_proceso', 'completado']
 const CARD_STATUS_STEPS = ['en_proceso', 'completado']
 const CLIENT_STATUS_LABELS = {
   pendiente_pago: 'Pendiente de pago',
+  retenido: 'En verificación',
   en_aprobacion: 'En Aprobación',
   en_proceso: 'En Proceso',
   completado: 'Completado',
 }
 const STATUS_TIMELINE = {
   pendiente_pago: { label: 'Pendiente de pago', desc: 'Tu envío se procesa en cuanto completes el pago.' },
+  retenido: { label: 'En verificación', desc: 'Tu pago se recibió. Por el monto, estamos verificando el envío antes de entregarlo.' },
   en_aprobacion: { label: 'En aprobación', desc: 'Tu comprobante está siendo revisado por el operador.' },
   en_proceso: { label: 'En proceso', desc: 'El operador está procesando el envío.' },
   completado: { label: 'Completado', desc: 'El receptor recibió el dinero exitosamente.' },

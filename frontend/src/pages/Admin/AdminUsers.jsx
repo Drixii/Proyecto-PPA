@@ -234,6 +234,13 @@ export default function AdminUsers() {
     onError: (err) => setPwdError(err.response?.data?.detail || 'Error'),
   })
 
+  // Cliente confiable: se salta la retención del primer envío grande. Para
+  // gente que ya se conoce fuera de la web, donde la revisión solo estorba.
+  const confiableMutation = useMutation({
+    mutationFn: ({ id, is_trusted }) => api.put(`/admin/users/${id}/trusted`, { is_trusted }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+  })
+
   const toggleMutation = useMutation({
     mutationFn: (id) => api.patch(`/admin/users/${id}/toggle-active`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
@@ -489,6 +496,9 @@ export default function AdminUsers() {
                     <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Países</th>
                   )}
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Estado</th>
+                  {roleTab === 'client' && (
+                    <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Confianza</th>
+                  )}
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Registro</th>
                   <th className="text-right text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Acciones</th>
                 </tr>
@@ -551,6 +561,22 @@ export default function AdminUsers() {
                         {u.is_active ? 'Activo' : 'Inactivo'}
                       </button>
                     </td>
+                    {roleTab === 'client' && (
+                      <td className="px-4 py-4">
+                        <button
+                          onClick={() => confiableMutation.mutate({ id: u.id, is_trusted: !u.is_trusted })}
+                          disabled={confiableMutation.isPending}
+                          title={u.is_trusted
+                            ? 'Sus envíos no pasan por verificación'
+                            : 'Su primer envío grande se retendrá para revisión'}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
+                          style={u.is_trusted
+                            ? {background:'rgba(74,222,128,.1)', color:'#4ade80', border:'1px solid rgba(74,222,128,.2)'}
+                            : {background:'rgba(255,255,255,.04)', color:'#64748b', border:'1px solid rgba(255,255,255,.08)'}}>
+                          {u.is_trusted ? '✓ Confiable' : 'Sin marcar'}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-4">
                       <span className="text-xs" style={{color:'#8aa0cc'}}>
                         {u.created_at ? new Date(u.created_at).toLocaleDateString('es-CL') : '—'}

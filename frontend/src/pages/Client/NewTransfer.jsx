@@ -215,6 +215,9 @@ export default function NewTransfer() {
   // nunca el cliente no tiene forma de saber la regla hasta que le rechazan
   // un pago.
   const [avisoTitular, setAvisoTitular] = useState(false)
+  // Aviso de verificación por monto. Se enseña ANTES de pagar: retener un
+  // envío sin haberlo advertido es peor, porque el cliente ya puso el dinero.
+  const [avisoMonto, setAvisoMonto] = useState(false)
   // Cobro por QR pendiente de escanear (Ligo, SIP). No hay redirección:
   // el cliente paga desde su banco y la orden avanza con el aviso de Koywe.
   const [qrPago, setQrPago] = useState(null)
@@ -280,6 +283,18 @@ export default function NewTransfer() {
   })()
 
   // Qué falta de verdad. Solo decide si el botón de pagar está activo.
+  // ¿Este envío pasará por verificación? Solo aplica a clientes sin envíos
+  // completados; el backend decide de verdad, esto solo avisa.
+  const umbralCLP = payCfg?.retencion?.activa ? payCfg?.retencion?.umbral_clp : null
+  const montoActual = rawAmount || parseFloat(calc.amount || '0')
+  const superaUmbral = (() => {
+    if (!umbralCLP || !montoActual) return false
+    if (calc.fromCurrency === 'CLP') return montoActual >= umbralCLP
+    // Fuera de CLP no se estima aquí: sin tasa a mano, un aviso inventado
+    // asusta sin motivo. El backend igual retiene si corresponde.
+    return false
+  })()
+
   // Al entrar al paso de pago (3), una vez por sesión.
   useEffect(() => {
     if (step !== 3) return
@@ -573,6 +588,30 @@ export default function NewTransfer() {
               className="w-full text-sm font-semibold py-3 rounded-xl"
               style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', color:'#fff'}}>
               Entendido, pagaré desde mi cuenta
+            </button>
+          </div>
+        </div>
+      )}
+
+      {avisoMonto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.82)'}}>
+          <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(168,85,247,.3)'}}>
+            <h3 className="font-semibold mb-3" style={{color:'#eaf2ff'}}>
+              Este envío pasará por verificación
+            </h3>
+            <p className="text-sm leading-relaxed mb-3" style={{color:'#aebfe2'}}>
+              Por ser tu primer envío y por el monto, lo revisaremos antes de entregarlo
+              al destinatario. Tu pago se procesa con normalidad.
+            </p>
+            <p className="text-xs leading-relaxed mb-5" style={{color:'#8aa0cc'}}>
+              Es un paso único: tus siguientes envíos no pasan por aquí. Si necesitamos
+              algo más, te escribimos al correo o al teléfono que registraste.
+            </p>
+            <button
+              onClick={() => setAvisoMonto(false)}
+              className="w-full text-sm font-semibold py-3 rounded-xl"
+              style={{background:'linear-gradient(135deg,#a855f7,#7e22ce)', border:'none', color:'#fff'}}>
+              Entendido, continuar
             </button>
           </div>
         </div>
@@ -1328,6 +1367,7 @@ export default function NewTransfer() {
                       <button
                         onClick={() => {
                           setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult || calc.result }))
+                          if (superaUmbral) setAvisoMonto(true)
                           setShowConfirm(true)
                         }}
                         disabled={loading || faltaDelPagador.length > 0}

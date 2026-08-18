@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
@@ -25,6 +26,7 @@ import secrets, os
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+log = logging.getLogger("ppa")
 
 DEFAULT_SETTINGS = {
     "commission_pct": "1.5",
@@ -346,17 +348,28 @@ def approve_order(
     if not order.payment_proof:
         raise HTTPException(status_code=400, detail="La orden no tiene comprobante adjunto")
 
-    # Assign sub-admin by receiver_country and advance to en_proceso
-    sub_admin_id = find_sub_admin_for_country(db, order.receiver_country, order.super_admin_id)
+    # Aprobar el comprobante no siempre libera el envío: si es el primero de un
+    # cliente nuevo y pasa del límite, queda retenido para una segunda mirada.
+    # El admin acaba de comprobar que el dinero entró, no quién lo mandó.
+    from services import retencion_service
+    retener, motivo = retencion_service.evaluar(db, order)
+
     old_status = order.status
-    order.status = "en_proceso"
-    order.sub_admin_id = sub_admin_id
+    if retener:
+        order.status = "retenido"
+        order.hold_reason = motivo
+        order.sub_admin_id = None
+        sub_admin_id = None
+    else:
+        sub_admin_id = find_sub_admin_for_country(db, order.receiver_country, order.super_admin_id)
+        order.status = "en_proceso"
+        order.sub_admin_id = sub_admin_id
     db.commit()
     db.refresh(order)
 
     try:
         from services.notification_service import notify_status_change, notify_sub_admin
-        notify_status_change(db, order, old_status, "en_proceso")
+        notify_status_change(db, order, old_status, order.status)
         if sub_admin_id:
             notify_sub_admin(db, order, sub_admin_id)
     except Exception as e:
@@ -1310,4 +1323,176 @@ def preview_commission(
             "amount_received": received,
         },
         "message": "",
+    }
+
+
+# ── Retenciones ───────────────────────────────────────────────
+
+class LiberarIn(BaseModel):
+    confiable: bool = False
+
+
+class RechazarRetenidaIn(BaseModel):
+    motivo: str
+
+
+@router.get("/holds", response_model=dict)
+def listar_retenciones(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Envíos detenidos esperando revisión.
+
+    Solo los de los clientes de este super-admin: una retención incluye el
+    nombre del receptor y el monto, y eso no se comparte entre cuentas.
+    """
+    filas = db.query(Order).filter(
+        Order.status == "retenido",
+        Order.deleted_at == None,
+        Order.super_admin_id == admin.id,
+    ).order_by(Order.created_at.desc()).all()
+
+    salida = []
+    for o in filas:
+        cliente = db.query(User).filter(User.id == o.client_id).first()
+        salida.append({
+            "id": o.id,
+            "order_number": o.order_number,
+            "amount_sent": o.amount_sent,
+            "currency_from": o.currency_from,
+            "amount_received": o.amount_received,
+            "currency_to": o.currency_to,
+            "receiver_name": o.receiver_name,
+            "receiver_country": o.receiver_country,
+            "receiver_id_num": o.receiver_id_num,
+            "payment_method": o.payment_method,
+            "hold_reason": o.hold_reason,
+            "paid_at": o.paid_at.isoformat() if o.paid_at else None,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+            "cliente": {
+                "id": cliente.id if cliente else None,
+                "full_name": cliente.full_name if cliente else None,
+                "email": cliente.email if cliente else None,
+                "phone": cliente.phone if cliente else None,
+                "document_type": getattr(cliente, "document_type", None) if cliente else None,
+                "document_number": getattr(cliente, "document_number", None) if cliente else None,
+                "email_verified": bool(getattr(cliente, "email_verified_at", None)) if cliente else False,
+                "is_trusted": bool(getattr(cliente, "is_trusted", False)) if cliente else False,
+            } if cliente else None,
+        })
+
+    return {"success": True, "data": salida, "message": ""}
+
+
+@router.post("/holds/{order_id}/release", response_model=dict)
+def liberar_retencion(
+    order_id: int,
+    data: LiberarIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Deja pasar el envío: se asigna encargado y sigue su curso normal."""
+    from datetime import datetime, timezone
+
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.status == "retenido",
+        Order.deleted_at == None,
+        Order.super_admin_id == admin.id,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Retención no encontrada")
+
+    order.status = "en_proceso"
+    order.sub_admin_id = find_sub_admin_for_country(db, order.receiver_country, order.super_admin_id)
+    order.released_at = datetime.now(timezone.utc)
+    order.released_by_id = admin.id
+
+    # Marcar al cliente como confiable es opcional y va aquí a propósito: es
+    # el momento en que alguien acaba de comprobar quién es. Sus próximos
+    # envíos ya no se retienen.
+    if data.confiable and order.client_id:
+        cliente = db.query(User).filter(User.id == order.client_id).first()
+        if cliente:
+            cliente.is_trusted = True
+
+    db.commit()
+    db.refresh(order)
+
+    try:
+        from services.notification_service import notify_status_change, notify_sub_admin
+        notify_status_change(db, order, "retenido", "en_proceso")
+        if order.sub_admin_id:
+            notify_sub_admin(db, order, order.sub_admin_id)
+    except Exception as e:
+        log.error("[retencion] liberada pero fallaron las notificaciones: %s", e)
+
+    return {"success": True, "data": None, "message": f"{order.order_number} liberada"}
+
+
+@router.post("/holds/{order_id}/reject", response_model=dict)
+def rechazar_retencion(
+    order_id: int,
+    data: RechazarRetenidaIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Rechaza el envío retenido.
+
+    No devuelve el dinero: eso se hace fuera, por el mismo medio por el que
+    entró. Aquí solo se deja constancia de que no se va a entregar.
+    """
+    motivo = (data.motivo or "").strip()
+    if not motivo:
+        raise HTTPException(status_code=400, detail="Escribe el motivo del rechazo")
+
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.status == "retenido",
+        Order.deleted_at == None,
+        Order.super_admin_id == admin.id,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Retención no encontrada")
+
+    order.status = "rechazado"
+    order.rejection_reason = motivo
+    db.commit()
+
+    try:
+        from services.notification_service import notify_status_change
+        notify_status_change(db, order, "retenido", "rechazado")
+    except Exception as e:
+        log.error("[retencion] rechazada pero fallaron las notificaciones: %s", e)
+
+    return {"success": True, "data": None, "message": f"{order.order_number} rechazada"}
+
+
+class ConfiableIn(BaseModel):
+    is_trusted: bool
+
+
+@router.put("/users/{user_id}/trusted", response_model=dict)
+def marcar_confiable(
+    user_id: int,
+    data: ConfiableIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Marca o desmarca a un cliente como confiable."""
+    cliente = db.query(User).filter(
+        User.id == user_id,
+        User.deleted_at == None,
+    ).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    if cliente.role == "client" and cliente.super_admin_id != admin.id:
+        raise HTTPException(status_code=403, detail="Ese cliente no es tuyo")
+
+    cliente.is_trusted = bool(data.is_trusted)
+    db.commit()
+    return {
+        "success": True,
+        "data": {"is_trusted": cliente.is_trusted},
+        "message": "Cliente marcado como confiable" if cliente.is_trusted else "Marca de confianza retirada",
     }

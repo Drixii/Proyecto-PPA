@@ -40,6 +40,11 @@ class Order(Base):
     # rechazado no es final: al subir un comprobante nuevo vuelve a en_aprobacion
     status = Column(String, default="en_aprobacion", index=True)
     rejection_reason = Column(String, nullable=True)
+    # Por qué se retuvo esta orden. Sin el motivo, quien revisa ve una orden
+    # detenida y no sabe qué mirar, y acaba aprobando a ciegas.
+    hold_reason = Column(String, nullable=True)
+    released_at = Column(DateTime(timezone=True), nullable=True)
+    released_by_id = Column(Integer, nullable=True)
 
     # Sub-admin asignado (se asigna al aprobar o al crear con tarjeta)
     sub_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)

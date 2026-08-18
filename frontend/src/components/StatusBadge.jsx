@@ -4,6 +4,7 @@ import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_PIDE_ACCION } from '../utils/orderSt
 // utils/orderStatus para no volver a tener dos listas que se contradigan.
 const FONDO = {
   pendiente_pago: 'bg-red-100 text-red-800',
+  retenido: 'bg-purple-100 text-purple-800',
   en_aprobacion: 'bg-orange-100 text-orange-800',
   en_proceso: 'bg-blue-100 text-blue-800',
   completado: 'bg-green-100 text-green-800',
