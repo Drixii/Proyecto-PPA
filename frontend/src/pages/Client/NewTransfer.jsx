@@ -283,18 +283,6 @@ export default function NewTransfer() {
   })()
 
   // Qué falta de verdad. Solo decide si el botón de pagar está activo.
-  // ¿Este envío pasará por verificación? Solo aplica a clientes sin envíos
-  // completados; el backend decide de verdad, esto solo avisa.
-  const umbralCLP = payCfg?.retencion?.activa ? payCfg?.retencion?.umbral_clp : null
-  const montoActual = rawAmount || parseFloat(calc.amount || '0')
-  const superaUmbral = (() => {
-    if (!umbralCLP || !montoActual) return false
-    if (calc.fromCurrency === 'CLP') return montoActual >= umbralCLP
-    // Fuera de CLP no se estima aquí: sin tasa a mano, un aviso inventado
-    // asusta sin motivo. El backend igual retiene si corresponde.
-    return false
-  })()
-
   // Al entrar al paso de pago (3), una vez por sesión.
   useEffect(() => {
     if (step !== 3) return
@@ -341,6 +329,19 @@ export default function NewTransfer() {
     countries.find(c => c.country === nombre)?.iso2 || COUNTRY_CODE[nombre] || ''
 
   const rawAmount = parseRaw(displayAmount)
+
+  // ¿Este envío pasará por verificación? Solo aplica a clientes sin envíos
+  // completados; el backend decide de verdad, esto solo avisa.
+  const umbralCLP = payCfg?.retencion?.activa ? payCfg?.retencion?.umbral_clp : null
+  const montoActual = rawAmount || parseFloat(calc.amount || '0')
+  const superaUmbral = (() => {
+    if (!umbralCLP || !montoActual) return false
+    if (calc.fromCurrency === 'CLP') return montoActual >= umbralCLP
+    // Fuera de CLP no se estima aquí: sin tasa a mano, un aviso inventado
+    // asusta sin motivo. El backend igual retiene si corresponde.
+    return false
+  })()
+
   const selectedFrom = sendCurrencies.find(c => c.code === calc.fromCurrency)
 
   useEffect(() => {
