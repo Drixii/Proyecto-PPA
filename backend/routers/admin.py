@@ -880,6 +880,7 @@ def restore_order(
 
 class InviteCodeCreate(BaseModel):
     email: str
+    trusted: bool = False
 
 
 @router.post("/invite-codes", response_model=dict)
@@ -893,6 +894,7 @@ def create_invite_code(
         code=code,
         email=data.email.strip().lower(),
         super_admin_id=_admin.id,
+        trusted=bool(data.trusted),
     )
     db.add(invite)
     db.commit()

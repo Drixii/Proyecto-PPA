@@ -162,6 +162,9 @@ export default function AdminUsers() {
   const [createModal, setCreateModal] = useState(false)
   const [inviteModal, setInviteModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
+  // Nace confiable: para clientes que ya se conocen fuera de la web, donde la
+  // retención del primer envío solo estorba.
+  const [inviteTrusted, setInviteTrusted] = useState(false)
   const [inviteResult, setInviteResult] = useState(null)
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
   const [inviteCodeCopied, setInviteCodeCopied] = useState(false)
@@ -209,7 +212,7 @@ export default function AdminUsers() {
   })
 
   const inviteMutation = useMutation({
-    mutationFn: (email) => api.post('/admin/invite-codes', { email }),
+    mutationFn: ({ email, trusted }) => api.post('/admin/invite-codes', { email, trusted }),
     onSuccess: (res) => {
       setInviteResult(res.data.data)
       qc.invalidateQueries({ queryKey: ['admin-users', 'client'] })
@@ -640,20 +643,37 @@ export default function AdminUsers() {
       {inviteModal && (
         <Modal title="Invitar Cliente" onClose={() => setInviteModal(false)}>
           <div className="space-y-4">
-            <form onSubmit={e => { e.preventDefault(); inviteMutation.mutate(inviteEmail) }} className="flex gap-2">
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={e => setInviteEmail(e.target.value)}
-                placeholder="correo@cliente.com"
-                className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
-              />
-              <button type="submit" disabled={inviteMutation.isPending}
-                className="bg-gradient-to-r from-blue-400 to-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-60 shrink-0">
-                {inviteMutation.isPending ? '...' : 'Generar'}
-              </button>
+            <form onSubmit={e => { e.preventDefault(); inviteMutation.mutate({ email: inviteEmail, trusted: inviteTrusted }) }} className="space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  required
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="correo@cliente.com"
+                  className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
+                />
+                <button type="submit" disabled={inviteMutation.isPending}
+                  className="bg-gradient-to-r from-blue-400 to-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-60 shrink-0">
+                  {inviteMutation.isPending ? '...' : 'Generar'}
+                </button>
+              </div>
+
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inviteTrusted}
+                  onChange={e => setInviteTrusted(e.target.checked)}
+                  style={{ marginTop: 2, width: 15, height: 15, accentColor: '#4ade80', cursor: 'pointer' }}
+                />
+                <span className="text-xs" style={{color:'#aebfe2'}}>
+                  <strong>Marcar como cliente confiable</strong>
+                  <span className="block text-[11px]" style={{color:'#64748b'}}>
+                    Sus envíos no pasarán por retención. Solo para gente que ya conoces.
+                  </span>
+                </span>
+              </label>
             </form>
 
             {inviteResult && (

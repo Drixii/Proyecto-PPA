@@ -11,5 +11,9 @@ class InviteCode(Base):
     email = Column(String, nullable=False)
     super_admin_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_used = Column(Boolean, default=False)
+    # Si el cliente nace marcado como confiable. Para gente que ya se conoce
+    # fuera de la web: se le invita sabiendo quién es, así que la retención
+    # del primer envío solo estorbaría.
+    trusted = Column(Boolean, default=False)
     used_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

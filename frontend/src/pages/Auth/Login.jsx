@@ -132,6 +132,10 @@ function initGlobe(canvas) {
 
 const REGISTER_COUNTRIES = ['Chile', 'Colombia', 'Venezuela', 'Perú', 'Argentina', 'Ecuador', 'México', 'Bolivia', 'Brasil', 'Uruguay', 'Paraguay']
 
+import { formateaDocumento, revisaDocumento, ejemploDocumento, formateaTelefono, validaEmail } from '../../utils/documento'
+import { Bandera } from '../../utils/flags'
+import { COUNTRY_CODE } from '../../utils/flags'
+
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -159,6 +163,9 @@ export default function Login() {
   }
   const [regForm, setRegForm] = useState({ email: urlEmail, full_name: '', password: '', confirmPassword: '', phone: '', country: 'Chile', document_type: 'RUT', document_number: '' })
   const docsDisponibles = [...(DOCS_POR_PAIS[regForm.country] || []), ['PP', 'Pasaporte']]
+  const docEstado = revisaDocumento(regForm.document_type, regForm.document_number)
+  const [paisAbierto, setPaisAbierto] = useState(false)
+  const emailMal = regForm.email.length > 3 && !validaEmail(regForm.email)
   const [loginError, setLoginError] = useState('')
   const [regError, setRegError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
@@ -383,7 +390,13 @@ export default function Login() {
                 <input className="login-input" type="text" value={regForm.full_name} onChange={e => setRegForm({ ...regForm, full_name: e.target.value })} required placeholder="Juan García" style={inputStyle} />
               </div>
               <div><label style={labelStyle}>Correo electrónico</label>
-                <input className="login-input" type="email" value={regForm.email} onChange={e => setRegForm({ ...regForm, email: e.target.value })} required placeholder="tu@email.com" style={inputStyle} />
+                <input className="login-input" type="email" value={regForm.email}
+                  onChange={e => setRegForm({ ...regForm, email: e.target.value.trim() })}
+                  required placeholder="tu@email.com"
+                  style={{ ...inputStyle, borderColor: emailMal ? 'rgba(239,68,68,.5)' : undefined }} />
+                {emailMal && (
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>Revisa el correo</p>
+                )}
               </div>
               <div><label style={labelStyle}>Contraseña</label>
                 <input className="login-input" type="password" value={regForm.password} onChange={e => setRegForm({ ...regForm, password: e.target.value })} required placeholder="••••••••" style={inputStyle} />
@@ -395,20 +408,60 @@ export default function Login() {
                 )}
               </div>
               <div><label style={labelStyle}>Teléfono</label>
-                <input className="login-input" type="tel" value={regForm.phone} onChange={e => setRegForm({ ...regForm, phone: e.target.value })} required placeholder="+56 9 1234 5678" style={inputStyle} />
+                <input className="login-input" type="tel" inputMode="tel" value={regForm.phone}
+                  onChange={e => setRegForm({ ...regForm, phone: formateaTelefono(e.target.value) })}
+                  required placeholder="+56 9 1234 5678" style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>País</label>
-                <select value={regForm.country} onChange={e => {
-                  const pais = e.target.value
-                  // El tipo de documento cambia con el país: si el elegido no
-                  // existe en el nuevo, se pone el primero que sí.
-                  const tipos = [...(DOCS_POR_PAIS[pais] || []), ['PP', 'Pasaporte']]
-                  const sigueValiendo = tipos.some(([c]) => c === regForm.document_type)
-                  setRegForm({ ...regForm, country: pais, document_type: sigueValiendo ? regForm.document_type : tipos[0][0] })
-                }} style={{ ...inputStyle, appearance: 'none' }}>
-                  {REGISTER_COUNTRIES.map(c => <option key={c} value={c} style={{ background: '#0f172a', color: '#fff' }}>{c}</option>)}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <button type="button" onClick={() => setPaisAbierto(v => !v)}
+                    style={{ ...inputStyle, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left' }}>
+                    <Bandera iso2={COUNTRY_CODE[regForm.country]} ancho={22} alto={15} />
+                    <span style={{ flex: 1 }}>{regForm.country}</span>
+                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"
+                      style={{ color: '#8aa0cc', transform: paisAbierto ? 'rotate(180deg)' : 'none' }}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {paisAbierto && (
+                    <>
+                      {/* Capa que cierra al pulsar fuera. */}
+                      <div onClick={() => setPaisAbierto(false)}
+                        style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, zIndex: 50,
+                        background: 'rgba(5,11,35,.98)', border: '1px solid rgba(56,189,248,.2)', borderRadius: 12,
+                        maxHeight: 220, overflowY: 'auto', boxShadow: '0 16px 40px rgba(0,0,0,.7)' }}>
+                        {REGISTER_COUNTRIES.map(c => (
+                          <button key={c} type="button"
+                            onClick={() => {
+                              // El tipo de documento cambia con el país: si el
+                              // elegido no existe en el nuevo, se pone el primero
+                              // que sí, y se limpia el número para no dejar un
+                              // RUT metido en una casilla de CPF.
+                              const tipos = [...(DOCS_POR_PAIS[c] || []), ['PP', 'Pasaporte']]
+                              const sigueValiendo = tipos.some(([x]) => x === regForm.document_type)
+                              setRegForm({
+                                ...regForm,
+                                country: c,
+                                document_type: sigueValiendo ? regForm.document_type : tipos[0][0],
+                                document_number: sigueValiendo ? regForm.document_number : '',
+                              })
+                              setPaisAbierto(false)
+                            }}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                              padding: '10px 12px', background: regForm.country === c ? 'rgba(56,189,248,.12)' : 'transparent',
+                              border: 'none', borderBottom: '1px solid rgba(255,255,255,.04)', cursor: 'pointer',
+                              color: '#eaf2ff', fontSize: 14, textAlign: 'left' }}>
+                            <Bandera iso2={COUNTRY_CODE[c]} ancho={20} alto={14} />
+                            <span>{c}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: '0 0 42%' }}>
@@ -422,10 +475,16 @@ export default function Login() {
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Número</label>
                   <input className="login-input" type="text" value={regForm.document_number}
-                    onChange={e => setRegForm({ ...regForm, document_number: e.target.value })}
-                    required placeholder="12.345.678-5" style={inputStyle} />
+                    onChange={e => setRegForm({ ...regForm, document_number: formateaDocumento(regForm.document_type, e.target.value) })}
+                    required placeholder={ejemploDocumento(regForm.document_type)}
+                    style={{ ...inputStyle,
+                      borderColor: docEstado.estado === 'invalido' ? 'rgba(239,68,68,.5)'
+                        : docEstado.estado === 'valido' ? 'rgba(74,222,128,.4)' : undefined }} />
                 </div>
               </div>
+              {docEstado.estado === 'invalido' && (
+                <p style={{ margin: '-8px 0 0', fontSize: 11, color: '#f87171' }}>{docEstado.mensaje}</p>
+              )}
 
               {regError && <div style={{ padding: '11px 14px', borderRadius: 12, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.3)' }}><p style={{ margin: 0, fontSize: 13, color: '#fca5a5' }}>{regError}</p></div>}
               <button type="submit" disabled={regLoading} style={{ width: '100%', padding: 15, fontSize: 15.5, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 14, cursor: 'pointer', boxShadow: '0 10px 30px rgba(56,189,248,.35)', opacity: regLoading ? 0.65 : 1 }}>

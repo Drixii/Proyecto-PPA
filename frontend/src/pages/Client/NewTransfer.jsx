@@ -7,6 +7,7 @@ import api from '../../services/api'
 import { useStore } from '../../store/useStore'
 import { useCountries } from '../../hooks/useCountries'
 import { Bandera } from '../../utils/flags'
+import { formateaEtiquetado, revisaEtiquetado, formateaTelefono } from '../../utils/documento'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -327,6 +328,11 @@ export default function NewTransfer() {
   // país que ya se quitó— se recurre al mapa fijo de este archivo.
   const iso2De = (nombre) =>
     countries.find(c => c.country === nombre)?.iso2 || COUNTRY_CODE[nombre] || ''
+
+  // El documento del destinatario se formatea y se comprueba igual que el del
+  // titular: un RUT mal escrito aquí hace que el banco rechace la entrega, y
+  // eso se descubre cuando el dinero ya salió.
+  const docReceptor = revisaEtiquetado(receiver.receiver_id_type, receiver.receiver_id_num)
 
   const rawAmount = parseRaw(displayAmount)
 
@@ -974,7 +980,7 @@ export default function NewTransfer() {
                     <div className="rounded-xl px-3 py-2.5 text-sm shrink-0" style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc'}}>
                       {COUNTRY_PHONE_PREFIX[calc.toCountry] || '+'}
                     </div>
-                    <input type="tel" value={receiver.receiver_phone} onChange={e => setReceiver({ ...receiver, receiver_phone: e.target.value })}
+                    <input type="tel" inputMode="tel" value={receiver.receiver_phone} onChange={e => setReceiver({ ...receiver, receiver_phone: formateaTelefono(e.target.value) })}
                       className="flex-1 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
                       placeholder="Número sin código de país" />
@@ -1016,7 +1022,7 @@ export default function NewTransfer() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Tipo de ID</label>
-                    <select value={receiver.receiver_id_type} onChange={e => setReceiver({ ...receiver, receiver_id_type: e.target.value })}
+                    <select value={receiver.receiver_id_type} onChange={e => setReceiver({ ...receiver, receiver_id_type: e.target.value, receiver_id_num: '' })}
                       className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
                       {(COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES).map(t => <option key={t} style={{background:'#0f172a', color:'#fff'}}>{t}</option>)}
@@ -1024,9 +1030,16 @@ export default function NewTransfer() {
                   </div>
                   <div>
                     <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Número de ID</label>
-                    <input value={receiver.receiver_id_num} onChange={e => setReceiver({ ...receiver, receiver_id_num: e.target.value })}
+                    <input value={receiver.receiver_id_num}
+                      onChange={e => setReceiver({ ...receiver, receiver_id_num: formateaEtiquetado(receiver.receiver_id_type, e.target.value) })}
                       className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                      style={{background:'rgba(6,13,40,.8)', color:'#eaf2ff',
+                        border: docReceptor.estado === 'invalido' ? '1px solid rgba(239,68,68,.5)'
+                          : docReceptor.estado === 'valido' ? '1px solid rgba(74,222,128,.4)'
+                          : '1px solid rgba(255,255,255,.1)'}} />
+                    {docReceptor.estado === 'invalido' && (
+                      <p className="text-xs mt-1" style={{color:'#f87171'}}>{docReceptor.mensaje}</p>
+                    )}
                   </div>
                 </div>
               </div>

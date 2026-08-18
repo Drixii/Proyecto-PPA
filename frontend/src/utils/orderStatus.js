@@ -10,7 +10,7 @@
 
 export const ESTADO_LABEL = {
   pendiente_pago: 'Pendiente de pago',
-  retenido: 'En verificación',
+  retenido: 'Retención',
   en_aprobacion: 'En Aprobación',
   en_proceso: 'En Proceso',
   completado: 'Completado',
@@ -45,6 +45,17 @@ export const ESTADO_PIDE_ACCION = new Set(['pendiente_pago', 'rechazado'])
 // Estados en los que el envio espera a la casa, no al cliente. Se marcan
 // aparte porque el cliente no tiene nada que hacer: solo esperar.
 export const ESTADO_EN_ESPERA = new Set(['retenido'])
+
+// Al cliente se le dice "Retención/Verificación": "retención" a secas suena
+// a castigo cuando lo que está pasando es una comprobación rutinaria. En el
+// panel de la casa se llama solo "Retención", que es lo que operativamente es.
+export const ESTADO_LABEL_CLIENTE = {
+  ...ESTADO_LABEL,
+  retenido: 'Retención/Verificación',
+}
+
+export const etiquetaEstadoCliente = (estado) =>
+  ESTADO_LABEL_CLIENTE[estado] || (estado || '').replace(/_/g, ' ')
 
 export const etiquetaEstado = (estado) =>
   ESTADO_LABEL[estado] || (estado || '').replace(/_/g, ' ')

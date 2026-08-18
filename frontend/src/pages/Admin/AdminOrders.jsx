@@ -25,6 +25,7 @@ const STATUSES_DEFAULT = [
   // mezcladas en "Todos".
   { key: 'pendiente_pago', label: 'Pendiente de pago', dot: ESTADO_DOT.pendiente_pago },
   { key: 'en_aprobacion', label: 'En Aprobación', dot: ESTADO_DOT.en_aprobacion },
+  { key: 'retenido', label: 'Retención', dot: ESTADO_DOT.retenido },
   { key: 'en_proceso', label: 'En Proceso', dot: ESTADO_DOT.en_proceso },
   { key: 'completado', label: 'Completado', dot: ESTADO_DOT.completado },
   { key: 'rechazado', label: 'Rechazado', dot: ESTADO_DOT.rechazado },
@@ -115,7 +116,10 @@ export default function AdminOrders() {
     //
     // Salvo que se pidan justo esas: un filtro explícito manda sobre el valor
     // por defecto, o el pill "Pendiente de pago" devolvería siempre cero.
-    paid_only: statusFilter !== 'pendiente_pago',
+    // Las retenidas sí están pagadas, pero se piden explícitamente igual que
+     // las pendientes: el filtro debe poder mostrarlas aunque el resto de la
+     // pantalla excluya lo que no ha entrado.
+    paid_only: !['pendiente_pago', 'retenido'].includes(statusFilter),
     ...(dateRange ? {
       date_from: dateRange.from.toISOString(),
       date_to: dateRange.to.toISOString(),

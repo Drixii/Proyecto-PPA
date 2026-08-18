@@ -10,7 +10,7 @@ import api from '../../services/api'
 import { flagUrl } from '../../utils/flags'
 import { useStore } from '../../store/useStore'
 import { fmtDateShort, userTz } from '../../utils/timezone'
-import { ESTADO_COLOR, ESTADO_LABEL, ESTADO_PIDE_ACCION } from '../../utils/orderStatus'
+import { ESTADO_COLOR, ESTADO_LABEL_CLIENTE as ESTADO_LABEL, ESTADO_PIDE_ACCION } from '../../utils/orderStatus'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -164,6 +164,7 @@ export default function ClientHistory() {
               // Sin este filtro, encontrar las que quedaron sin pagar obligaba
               // a recorrer la tabla entera a ojo.
               { key: 'pendiente_pago', label: 'Pendiente de pago' },
+              { key: 'retenido', label: 'Retención/Verificación' },
               { key: 'en_aprobacion', label: 'En Aprobación' },
               { key: 'en_proceso', label: 'En Proceso' },
               { key: 'completado', label: 'Completado' },

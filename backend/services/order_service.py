@@ -128,6 +128,28 @@ def _validar_destino(db: Session, data):
 def create_order(db: Session, data, client: User) -> Order:
     _validar_destino(db, data)
 
+    # El documento del destinatario, formateado y comprobado igual que el del
+    # titular. Un RUT mal escrito aqui hace que el banco rechace la entrega, y
+    # eso se descubre cuando el dinero ya salio.
+    #
+    # Solo se valida lo que se sabe leer: tipos como SSN o INE se dejan pasar
+    # tal cual en vez de estropear un numero cuyo formato no conocemos.
+    from services import documento_service as docs
+
+    ETIQUETAS = {
+        "RUT": "RUT", "Cedula": "CED_CIU", "Cédula": "CED_CIU",
+        "Cedula de Ciudadania": "CED_CIU", "Cédula de Ciudadanía": "CED_CIU",
+        "Cedula de Extranjeria": "CED_EXT", "Cédula de Extranjería": "CED_EXT",
+        "NIT": "NIT", "DNI": "DNI", "CPF": "CPF", "CURP": "CURP", "RFC": "RFC",
+        "CUIL/CUIT": "CUIT", "CUIL": "CUIT", "CUIT": "CUIT", "Pasaporte": "PP",
+    }
+    tipo_rec = ETIQUETAS.get((getattr(data, "receiver_id_type", "") or "").strip())
+    numero_rec = (getattr(data, "receiver_id_num", "") or "").strip()
+    if tipo_rec and numero_rec:
+        ok, motivo = docs.valida(tipo_rec, numero_rec)
+        if not ok:
+            raise ValueError(f"Documento del destinatario: {motivo}")
+
     # Sin correo verificado no se manda dinero.
     #
     # Es lo que impide crear cuentas con correos inventados: registrarse sigue

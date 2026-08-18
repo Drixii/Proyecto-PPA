@@ -95,6 +95,9 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
         timezone=country_to_tz(data.country),
         super_admin_id=super_admin_id,
         invite_code_used=data.invite_code.strip().upper() if data.invite_code else None,
+        # La confianza viene del código con el que se le invitó: si quien
+        # invita ya sabe quién es, su primer envío no se retiene.
+        is_trusted=bool(getattr(code_row, "trusted", False)) if data.invite_code else False,
     )
     db.add(user)
     db.flush()
