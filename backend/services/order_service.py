@@ -132,6 +132,26 @@ def create_order(db: Session, data, client: User) -> Order:
     if not rate:
         raise ValueError(f"Tasa no disponible: {data.currency_from} -> {data.currency_to}")
 
+    # La tasa que vio el cliente manda, si sigue siendo razonable.
+    #
+    # El formulario cotiza al entrar y la orden se crea minutos después, así
+    # que releer la tasa aquí hacía que el cliente aceptara un número y se le
+    # cobrara otro, sin avisar. Con el paralelo actualizándose cada cinco
+    # minutos eso pasa a diario.
+    #
+    # El margen es un límite, no una promesa: si el mercado se movió más de un
+    # 2% mientras rellenaba, la cotización caducó y se rehace con la tasa
+    # nueva. Así una pestaña abierta desde ayer no compra al precio de ayer.
+    TOLERANCIA_TASA = 0.02
+    vista = getattr(data, "quoted_rate", None)
+    if vista:
+        try:
+            vista = float(vista)
+        except (TypeError, ValueError):
+            vista = None
+    if vista and vista > 0 and abs(vista - rate) / rate <= TOLERANCIA_TASA:
+        rate = vista
+
     client_super_admin_id = getattr(client, "super_admin_id", None)
     commission_pct = _get_commission(db, data.currency_from, data.currency_to, client_super_admin_id)
     fee = round(data.amount_sent * commission_pct / 100, 2)

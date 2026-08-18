@@ -4,10 +4,14 @@ from database import get_db
 from models.exchange_rate import ExchangeRate
 from models.country import Country
 from schemas.rate import RateOut, ConvertResult, ManualRateUpdate, CountryInfo
-from services.exchange_service import get_rate, set_manual_rate, fetch_and_store_rates
+from services.exchange_service import (
+    get_rate, set_manual_rate, fetch_and_store_rates,
+    MONEDAS_PARALELO, usa_paralelo, clave_paralelo, comparar_fuentes,
+)
 from auth.dependencies import require_admin
 from config import settings
 from typing import List
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/rates", tags=["rates"])
 
@@ -123,4 +127,59 @@ async def refresh_rates(db: Session = Depends(get_db), _admin=Depends(require_ad
         "success": success,
         "data": None,
         "message": "Tasas actualizadas" if success else "Error al actualizar tasas"
+    }
+
+
+# ── Mercado paralelo ──────────────────────────────────────────
+
+class ParaleloIn(BaseModel):
+    moneda: str
+    activo: bool
+
+
+@router.get("/parallel", response_model=dict)
+async def estado_paralelo(_admin=Depends(require_admin), db: Session = Depends(get_db)):
+    """Qué dice cada fuente ahora mismo, junto a la tasa oficial.
+
+    Existe para poder mirar la diferencia antes de encender una moneda: cotizar
+    al paralelo solo es correcto si la casa también liquida a esa tasa.
+    """
+    salida = []
+    for moneda in MONEDAS_PARALELO:
+        datos = await comparar_fuentes(moneda)
+        datos["activo"] = usa_paralelo(db, moneda)
+        salida.append(datos)
+    return {"success": True, "data": salida, "message": ""}
+
+
+@router.post("/parallel", response_model=dict)
+async def cambiar_paralelo(
+    data: ParaleloIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    """Enciende o apaga el mercado paralelo para una moneda."""
+    from models.setting import Setting
+
+    moneda = data.moneda.upper()
+    if moneda not in MONEDAS_PARALELO:
+        raise HTTPException(status_code=400, detail=f"{moneda} no tiene mercado paralelo configurado")
+
+    clave = clave_paralelo(moneda)
+    row = db.query(Setting).filter(Setting.key == clave).first()
+    valor = "true" if data.activo else "false"
+    if row:
+        row.value = valor
+    else:
+        db.add(Setting(key=clave, value=valor))
+    db.commit()
+
+    # Se recalcula en el momento: si no, la moneda se queda con la tasa del
+    # otro mercado hasta la siguiente pasada del programador.
+    await fetch_and_store_rates(db)
+
+    return {
+        "success": True,
+        "data": {"moneda": moneda, "activo": data.activo},
+        "message": f"{moneda} cotiza al {'mercado paralelo' if data.activo else 'cambio oficial'}",
     }

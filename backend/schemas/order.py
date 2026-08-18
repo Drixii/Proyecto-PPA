@@ -6,6 +6,10 @@ from typing import Optional
 class OrderCreate(BaseModel):
     # Remitente
     sender_name: str
+    # Tasa que el cliente vio al cotizar. Se respeta si no se ha movido mucho
+    # (ver create_order); es una defensa contra que el número cambie entre que
+    # lo acepta y se crea la orden, no un precio que el cliente pueda fijar.
+    quoted_rate: Optional[float] = None
     sender_id_type: Optional[str] = None
     sender_id_num: Optional[str] = None
     sender_phone: Optional[str] = None

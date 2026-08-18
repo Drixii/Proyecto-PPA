@@ -14,7 +14,16 @@ async def _update_job():
 
 
 def start_scheduler():
-    scheduler.add_job(_update_job, "interval", minutes=30, id="update_rates")
+    # Cinco minutos, no treinta.
+    #
+    # El oficial se mueve despacio y treinta minutos le sobraban, pero el
+    # paralelo de Venezuela y Argentina puede correr un 1-2% en media hora. A
+    # media hora de retraso, cada envío en esas monedas se cotiza con una tasa
+    # que ya no existe, y la diferencia la paga la casa o el cliente.
+    #
+    # Cinco minutos son ~288 consultas al día por fuente: nada para las APIs
+    # que se usan, y deja el desfase por debajo de lo que se mueve el mercado.
+    scheduler.add_job(_update_job, "interval", minutes=5, id="update_rates")
     scheduler.start()
 
 

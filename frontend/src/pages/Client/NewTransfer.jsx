@@ -461,6 +461,10 @@ export default function NewTransfer() {
         ...receiver,
         receiver_bank_id: receiver.receiver_bank_id ? parseInt(receiver.receiver_bank_id) : null,
         amount_sent: rawAmount || parseFloat(calc.amount),
+        // La tasa que se le mostró al cotizar. El backend la respeta si el
+        // mercado no se movió mucho, para que no acepte un número y se le
+        // cobre otro. Ver create_order.
+        quoted_rate: (liveResult || calc.result)?.rate,
         currency_from: calc.fromCurrency,
         currency_to: calc.toCurrency,
         ...payment,
