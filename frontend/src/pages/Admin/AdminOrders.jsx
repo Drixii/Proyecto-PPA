@@ -12,6 +12,7 @@ import { fmtDateShort } from '../../utils/timezone'
 import { flagUrl } from '../../utils/flags'
 import { ESTADO_DOT } from '../../utils/orderStatus'
 import EstadoOrden from '../../components/EstadoOrden'
+import FiltroEstado from '../../components/FiltroEstado'
 
 const today = new Date()
 const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0)
@@ -50,7 +51,9 @@ export default function AdminOrders() {
   const location = useLocation()
   const [dateRange, setDateRange] = useState({ from: todayStart, to: todayEnd })
   const [statusFilter, setStatusFilter] = useState('')
-  const [filterMode, setFilterMode] = useState({ type: 'none' })
+  // Arranca mostrando todo: 'none' hacía que la API devolviera solo lo
+  // accionable, así que faltaban países y estados hasta poner el filtro a mano.
+  const [filterMode, setFilterMode] = useState({ type: 'all' })
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [search, setSearch] = useState(searchParams.get('q') || '')
   const [showTrash, setShowTrash] = useState(false)
@@ -207,24 +210,14 @@ export default function AdminOrders() {
             </button>
           )}
 
-          {/* Status filter pills */}
-          <div className="flex items-center gap-1.5 rounded-xl px-2 py-1.5" style={GLASS}>
-            {STATUSES.map(s => (
-              <button
-                key={s.key}
-                onClick={() => setStatusFilter(s.key)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  statusFilter === s.key
-                    ? 'bg-blue-600 text-white'
-                    : ''
-                }`}
-                style={statusFilter !== s.key ? { color:'#8aa0cc' } : {}}
-              >
-                {s.key && <span className={`inline-block w-1.5 h-1.5 rounded-full ${s.dot || STATUS_DOT[s.key]} mr-1.5`} />}
-                {s.label}
-              </button>
-            ))}
-          </div>
+          {/* Estado: píldoras en escritorio, desplegable en móvil — seis
+              estados no caben en el ancho de un teléfono. */}
+          <FiltroEstado
+            opciones={STATUSES}
+            valor={statusFilter}
+            onChange={setStatusFilter}
+            colores={STATUS_DOT}
+          />
 
           {/* Search */}
           <div className="relative flex-1 min-w-48 max-w-xs">

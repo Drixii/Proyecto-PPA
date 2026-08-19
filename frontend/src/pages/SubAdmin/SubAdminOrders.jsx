@@ -5,6 +5,7 @@ import SlidePanel from '../../components/SlidePanel'
 import Portal from '../../components/Portal'
 import StatusBadge from '../../components/StatusBadge'
 import EstadoOrden from '../../components/EstadoOrden'
+import FiltroEstado from '../../components/FiltroEstado'
 import { ESTADO_COLOR } from '../../utils/orderStatus'
 import DateRangePicker from '../../components/DateRangePicker'
 import api from '../../services/api'
@@ -288,16 +289,14 @@ export default function SubAdminOrders() {
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <DateRangePicker value={dateRange || { from: todayStart, to: todayEnd }} onChange={setDateRange} />
 
-          <div className="flex items-center gap-1.5 rounded-xl px-2 py-1.5" style={{background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.07)'}}>
-            {STATUSES.map(s => (
-              <button key={s.key} onClick={() => setStatusFilter(s.key)}
-                className="px-3 py-1 rounded-lg text-xs font-medium transition-colors"
-                style={statusFilter === s.key ? {background:'linear-gradient(135deg,#1e3a6e,#1e40af)', color:'#fff'} : {color:'#8aa0cc'}}>
-                {s.key && <span style={{display:'inline-block', width:'6px', height:'6px', borderRadius:'50%', background:s.dot || STATUS_DOT[s.key], marginRight:'6px'}} />}
-                {s.label}
-              </button>
-            ))}
-          </div>
+          {/* Píldoras en escritorio, desplegable en móvil: no caben en el
+              ancho de un teléfono. */}
+          <FiltroEstado
+            opciones={STATUSES}
+            valor={statusFilter}
+            onChange={setStatusFilter}
+            colores={STATUS_DOT}
+          />
 
           <div className="relative flex-1 min-w-48 max-w-xs">
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2" style={{color:'#8aa0cc'}}>

@@ -117,6 +117,19 @@ export default function DateRangePicker({ value, onChange, className='' }) {
     if(value?.to) setTempTo(value.to)
   },[value])
 
+  // En móvil el panel no cabe: son ~600px entre los atajos y dos calendarios
+  // lado a lado, y quedaba cortado por el borde de la pantalla. Ahí pasa a ser
+  // una hoja inferior a pantalla completa con un solo mes.
+  const [movil, setMovil] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const cambio = (e) => setMovil(e.matches)
+    mq.addEventListener('change', cambio)
+    return () => mq.removeEventListener('change', cambio)
+  }, [])
+
   const label = value?.from&&value?.to
     ? `${fmt(value.from)}  →  ${fmt(value.to)}`
     : 'Hoy'
@@ -124,18 +137,90 @@ export default function DateRangePicker({ value, onChange, className='' }) {
   return (
     <div className={`relative ${className}`} ref={ref}>
       <button onClick={()=>setOpen(!open)}
-        className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors shadow-sm"
+        className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors shadow-sm max-w-full"
         style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
         <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
-        {label}
-        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{color:'#8aa0cc'}}>
+        <span className="truncate">{label}</span>
+        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="shrink-0" style={{color:'#8aa0cc'}}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
         </svg>
       </button>
 
-      {open && (
+      {open && movil && (
+        <div className="fixed inset-0 z-[100] flex items-end" style={{background:'rgba(2,6,23,.7)'}}
+          onClick={()=>setOpen(false)}>
+          <div className="w-full rounded-t-3xl max-h-[88vh] overflow-y-auto"
+            style={{background:'rgba(8,16,44,.99)', borderTop:'1px solid rgba(255,255,255,.12)'}}
+            onClick={e=>e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full" style={{background:'rgba(255,255,255,.22)'}} />
+            </div>
+
+            {/* Atajos en dos columnas: en vertical ocupaban toda la pantalla
+                antes de llegar al calendario. */}
+            <div className="grid grid-cols-2 gap-2 px-4 py-3">
+              {PRESETS.map(p=>(
+                <button key={p.id} onClick={()=>{applyPreset(p); setOpen(false)}}
+                  className="px-3 py-2.5 rounded-xl text-sm text-left"
+                  style={activePreset===p.id
+                    ? {background:'rgba(56,189,248,.15)', color:'#38bdf8', fontWeight:600}
+                    : {background:'rgba(255,255,255,.04)', color:'#aebfe2'}}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="px-4 pb-4">
+              <div className="flex items-center justify-between mb-3">
+                <button onClick={()=>setView(prevMonth(view))}
+                  className="w-9 h-9 rounded-lg flex items-center justify-center text-2xl leading-none"
+                  style={{color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>‹</button>
+                <span className="text-sm font-semibold" style={{color:'#eaf2ff'}}>
+                  {MONTHS[view.getMonth()]} {view.getFullYear()}
+                </span>
+                <button onClick={()=>setView(nextMonth(view))}
+                  className="w-9 h-9 rounded-lg flex items-center justify-center text-2xl leading-none"
+                  style={{color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>›</button>
+              </div>
+
+              {/* Un solo mes: dos no caben y el segundo quedaba cortado. */}
+              <div className="flex justify-center">
+                <MonthGrid base={view} selFrom={tempFrom} selTo={tempTo} hover={hover} onDay={handleDay} onHover={setHover}/>
+              </div>
+
+              <div className="flex items-center gap-2 mt-4">
+                <div className="flex-1 rounded-lg px-3 py-2 text-xs text-center"
+                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#aebfe2', background:'rgba(6,13,40,.6)'}}>
+                  {tempFrom ? fmt(tempFrom) : 'Inicio'}
+                </div>
+                <span className="text-sm" style={{color:'#64748b'}}>→</span>
+                <div className="flex-1 rounded-lg px-3 py-2 text-xs text-center"
+                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#aebfe2', background:'rgba(6,13,40,.6)'}}>
+                  {tempTo ? fmt(tempTo) : 'Fin'}
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-3">
+                <button onClick={()=>setOpen(false)}
+                  className="flex-1 py-3 text-sm rounded-xl"
+                  style={{color:'#8aa0cc', background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.1)'}}>
+                  Cancelar
+                </button>
+                <button onClick={applyCustom} disabled={!tempFrom||!tempTo}
+                  className="flex-1 py-3 text-sm rounded-xl font-semibold disabled:opacity-40"
+                  style={{background:'linear-gradient(135deg,#38bdf8,#818cf8)', color:'#060d22', border:'none'}}>
+                  Aplicar
+                </button>
+              </div>
+            </div>
+            <div className="h-6" />
+          </div>
+        </div>
+      )}
+
+      {open && !movil && (
         <div className="absolute top-full left-0 mt-2 z-50 rounded-2xl flex overflow-hidden"
           style={GLASS}>
           {/* Left: presets */}

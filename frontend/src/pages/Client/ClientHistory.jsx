@@ -6,6 +6,7 @@ import SlidePanel from '../../components/SlidePanel'
 import { ClientOrderPanel } from '../../components/OrderPanel'
 import StatusBadge from '../../components/StatusBadge'
 import DateRangePicker from '../../components/DateRangePicker'
+import FiltroEstado from '../../components/FiltroEstado'
 import api from '../../services/api'
 import { flagUrl } from '../../utils/flags'
 import { useStore } from '../../store/useStore'
@@ -155,12 +156,15 @@ export default function ClientHistory() {
             />
           </div>
 
-          {/* Status pills */}
-          <div className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 shadow-sm"
-            style={{background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.07)'}}>
-            {[
+          {/* Píldoras en escritorio, desplegable en móvil: siete estados no
+              caben en el ancho de un teléfono y se desbordaban. */}
+          <FiltroEstado
+            valor={statusFilter}
+            onChange={setStatusFilter}
+            colores={ESTADO_COLOR}
+            opciones={[
               { key: '', label: 'Todos' },
-              { key: 'active', label: 'Activos', dotColor: '#60a5fa' },
+              { key: 'active', label: 'Activos', dot: '#60a5fa' },
               // Sin este filtro, encontrar las que quedaron sin pagar obligaba
               // a recorrer la tabla entera a ojo.
               { key: 'pendiente_pago', label: 'Pendiente de pago' },
@@ -168,18 +172,8 @@ export default function ClientHistory() {
               { key: 'en_aprobacion', label: 'En Aprobación' },
               { key: 'en_proceso', label: 'En Proceso' },
               { key: 'completado', label: 'Completado' },
-            ].map(s => (
-              <button key={s.key} onClick={() => setStatusFilter(s.key)}
-                className="px-3 py-1 rounded-lg text-xs font-medium transition-colors"
-                style={statusFilter === s.key
-                  ? {background:'linear-gradient(135deg,#1e3a6e,#1e40af)', color:'#fff'}
-                  : {color:'#8aa0cc'}}>
-                {s.key && <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5"
-                  style={{background: s.dotColor || STATUS_COLOR[s.key]}} />}
-                {s.label}
-              </button>
-            ))}
-          </div>
+            ]}
+          />
         </div>
 
         {/* Table */}
