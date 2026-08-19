@@ -128,7 +128,7 @@ export default function ClientHistory() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 mb-6">
           <DateRangePicker
             value={dateRange}
             onChange={setDateRange}
@@ -141,7 +141,7 @@ export default function ClientHistory() {
             </button>
           )}
           {/* Search */}
-          <div className="relative flex-1 min-w-48 max-w-sm">
+          <div className="relative w-full md:w-auto md:flex-1 md:min-w-48 md:max-w-sm">
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
               className="absolute left-3 top-1/2 -translate-y-1/2"
               style={{color:'#8aa0cc'}}>

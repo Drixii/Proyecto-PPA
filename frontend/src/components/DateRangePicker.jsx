@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 const sod = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 const eod = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
@@ -137,7 +138,7 @@ export default function DateRangePicker({ value, onChange, className='' }) {
   return (
     <div className={`relative ${className}`} ref={ref}>
       <button onClick={()=>setOpen(!open)}
-        className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors shadow-sm max-w-full"
+        className="flex items-center gap-2 rounded-xl px-4 py-3 md:py-2 text-sm font-medium transition-colors shadow-sm w-full md:w-auto"
         style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
         <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -148,8 +149,8 @@ export default function DateRangePicker({ value, onChange, className='' }) {
         </svg>
       </button>
 
-      {open && movil && (
-        <div className="fixed inset-0 z-[100] flex items-end" style={{background:'rgba(2,6,23,.7)'}}
+      {open && movil && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-end" style={{background:'rgba(2,6,23,.8)'}}
           onClick={()=>setOpen(false)}>
           <div className="w-full rounded-t-3xl max-h-[88vh] overflow-y-auto"
             style={{background:'rgba(8,16,44,.99)', borderTop:'1px solid rgba(255,255,255,.12)'}}
@@ -215,9 +216,12 @@ export default function DateRangePicker({ value, onChange, className='' }) {
                 </button>
               </div>
             </div>
-            <div className="h-6" />
+            {/* Hueco para que el menú inferior del móvil no tape los
+                botones de Aplicar y Cancelar. */}
+            <div style={{height: 'calc(env(safe-area-inset-bottom, 0px) + 76px)'}} />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {open && !movil && (

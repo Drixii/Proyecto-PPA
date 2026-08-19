@@ -1,20 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
-// Filtro de estado: píldoras en escritorio, desplegable en móvil.
+// Filtro de estado: píldoras en escritorio, popup en móvil.
 //
-// Con seis estados las píldoras no caben en una pantalla de teléfono: se
-// desbordaban fuera del contenedor. Envolverlas en varias líneas tampoco
-// servía — ocupaban media pantalla antes de llegar a la tabla.
+// Con seis o siete estados las píldoras no caben en una pantalla de teléfono y
+// se desbordaban. Un desplegable anclado al botón tampoco servía: quedaba
+// pegado a un lado y sin sitio para abrirse. En móvil es un botón ancho que
+// abre un popup centrado, que es lo único que se ve bien a cualquier ancho.
 //
-// El punto de corte va en 768px y se mide con matchMedia en vez de con clases
-// de Tailwind porque hay que renderizar una cosa u otra, no esconder una de
-// las dos: montar ambas duplicaría el estado y los dos se desincronizarían.
-export default function FiltroEstado({ opciones, valor, onChange, colores = {} }) {
+// El punto de corte se mide con matchMedia y no con clases de Tailwind porque
+// hay que renderizar una cosa u otra, no esconder una de las dos: montar ambas
+// duplicaría el estado y acabarían desincronizadas.
+export default function FiltroEstado({ opciones, valor, onChange, colores = {}, etiqueta = 'Filtrar por categoría' }) {
   const [movil, setMovil] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   )
   const [abierto, setAbierto] = useState(false)
-  const ref = useRef()
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)')
@@ -23,20 +24,19 @@ export default function FiltroEstado({ opciones, valor, onChange, colores = {} }
     return () => mq.removeEventListener('change', cambio)
   }, [])
 
+  // Con el popup abierto no se desplaza lo de detrás.
   useEffect(() => {
     if (!abierto) return
-    const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false) }
-    document.addEventListener('mousedown', fuera)
-    return () => document.removeEventListener('mousedown', fuera)
+    const antes = document.documentElement.style.overflow
+    document.documentElement.style.overflow = 'hidden'
+    return () => { document.documentElement.style.overflow = antes }
   }, [abierto])
 
-  const punto = (o) => o.dot || colores[o.key]
-
-  // El color puede venir como clase de Tailwind ("bg-red-600") o como valor
-  // CSS ("#dc2626"), según la pantalla. Se distingue por el "#".
+  // El color llega como clase de Tailwind ("bg-red-600") o como valor CSS
+  // ("#dc2626") según la pantalla. Se distingue por el "#".
   const Punto = ({ o, tam = 6 }) => {
-    if (!o.key || !punto(o)) return null
-    const c = punto(o)
+    const c = o.dot || colores[o.key]
+    if (!o.key || !c) return null
     return c.startsWith('#')
       ? <span style={{ display: 'inline-block', width: tam, height: tam, borderRadius: '50%', background: c, flexShrink: 0 }} />
       : <span className={`inline-block rounded-full shrink-0 ${c}`} style={{ width: tam, height: tam }} />
@@ -60,38 +60,59 @@ export default function FiltroEstado({ opciones, valor, onChange, colores = {} }
     )
   }
 
-  const actual = opciones.find(o => o.key === valor) || opciones[0]
+  const actual = opciones.find(o => o.key === valor)
+  const activo = actual && actual.key
 
   return (
-    <div ref={ref} className="relative flex-1 min-w-0">
-      <button onClick={() => setAbierto(v => !v)}
-        className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm"
+    <>
+      <button onClick={() => setAbierto(true)}
+        className="w-full flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
         style={{ background: 'rgba(6,13,40,.8)', border: '1px solid rgba(255,255,255,.1)', color: '#eaf2ff' }}>
-        <Punto o={actual} tam={7} />
-        <span className="flex-1 text-left truncate">{actual.label}</span>
-        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"
-          className="shrink-0" style={{ color: '#8aa0cc', transform: abierto ? 'rotate(180deg)' : 'none' }}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"
+          className="shrink-0" style={{ color: '#8aa0cc' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
         </svg>
+        <span className="flex-1 text-left truncate">
+          {activo ? actual.label : etiqueta}
+        </span>
+        {activo && <Punto o={actual} tam={7} />}
       </button>
 
-      {abierto && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 rounded-xl overflow-hidden z-50"
-          style={{ background: 'rgba(5,11,35,.98)', border: '1px solid rgba(56,189,248,.2)', boxShadow: '0 16px 40px rgba(0,0,0,.7)', maxHeight: 260, overflowY: 'auto' }}>
-          {opciones.map(o => (
-            <button key={o.key}
-              onClick={() => { onChange(o.key); setAbierto(false) }}
-              className="w-full flex items-center gap-2.5 px-3 py-3 text-left text-sm"
-              style={{ borderBottom: '1px solid rgba(255,255,255,.04)',
-                background: valor === o.key ? 'rgba(56,189,248,.12)' : 'transparent',
-                color: '#eaf2ff' }}>
-              <Punto o={o} tam={7} />
-              <span className="flex-1">{o.label}</span>
-              {valor === o.key && <span style={{ color: '#38bdf8' }}>✓</span>}
-            </button>
-          ))}
-        </div>
+      {abierto && createPortal(
+        // z-index por encima del menú inferior del móvil, que es z-50 y si no
+        // se queda por delante del popup.
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style={{ background: 'rgba(2,6,23,.8)' }}
+          onClick={() => setAbierto(false)}>
+          <div className="w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{ background: 'rgba(8,16,44,.99)', border: '1px solid rgba(255,255,255,.12)', maxHeight: '80vh' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+              <span className="text-sm font-semibold" style={{ color: '#eaf2ff' }}>{etiqueta}</span>
+              <button onClick={() => setAbierto(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-base"
+                style={{ background: 'rgba(255,255,255,.08)', color: '#bfe4ff' }}>✕</button>
+            </div>
+
+            <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {opciones.map(o => (
+                <button key={o.key}
+                  onClick={() => { onChange(o.key); setAbierto(false) }}
+                  className="w-full flex items-center gap-3 px-5 py-3.5 text-left text-sm"
+                  style={{ borderBottom: '1px solid rgba(255,255,255,.04)',
+                    background: valor === o.key ? 'rgba(56,189,248,.12)' : 'transparent',
+                    color: '#eaf2ff' }}>
+                  <Punto o={o} tam={8} />
+                  <span className="flex-1">{o.label}</span>
+                  {valor === o.key && <span style={{ color: '#38bdf8' }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   )
 }
