@@ -1504,14 +1504,41 @@ function PaymentIntegrations() {
 
 // Correo saliente.
 //
-// La verificación por correo no se puede exigir sin esto: si no hay servidor
+// La verificación por correo no se puede exigir sin esto: si no hay proveedor
 // configurado nadie podría recibir el código, así que el registro y el envío
-// siguen funcionando sin verificar. En cuanto se guarda una cuenta aquí, para
-// mandar dinero hace falta verificar el buzón.
+// siguen funcionando sin verificar. En cuanto se guarda algo aquí, para mandar
+// dinero hace falta verificar el buzón.
 //
-// Con Gmail o Google Workspace la contraseña normal no vale: hay que crear una
-// "contraseña de aplicación" en la cuenta de Google. Se dice en el formulario
-// porque es el fallo con el que se topa todo el mundo la primera vez.
+// El servidor tiene los puertos SMTP (25, 587, 465) cerrados de salida, así
+// que la vía que funciona es la API sobre HTTPS. El SMTP se deja porque sigue
+// valiendo en cualquier otro servidor, pero avisado.
+const PROVEEDORES = [
+  {
+    id: 'resend',
+    nombre: 'Resend',
+    via: 'API',
+    alta: 'resend.com',
+    ayuda: 'Crea la clave en Resend → API Keys. El remitente tiene que ser una dirección de un dominio verificado allí (hashtagcl.com). 3.000 correos al mes gratis.',
+    phClave: 're_...',
+  },
+  {
+    id: 'brevo',
+    nombre: 'Brevo',
+    via: 'API',
+    alta: 'brevo.com',
+    ayuda: 'Crea la clave en Brevo → SMTP & API → API Keys. El remitente tiene que estar dado de alta como Sender verificado. 300 correos al día gratis.',
+    phClave: 'xkeysib-...',
+  },
+  {
+    id: 'smtp',
+    nombre: 'SMTP',
+    via: 'puertos cerrados',
+    alta: null,
+    ayuda: 'Gmail, Workspace o cualquier servidor propio. En este servidor no funciona: DigitalOcean bloquea la salida por los puertos 25, 587 y 465.',
+    phClave: null,
+  },
+]
+
 function SmtpForm() {
   const qc = useQueryClient()
   const [form, setForm] = useState({})
@@ -1522,6 +1549,10 @@ function SmtpForm() {
     queryKey: ['smtp'],
     queryFn: () => api.get('/admin/smtp').then(r => r.data.data),
   })
+
+  // Lo que se está editando: lo tocado en el formulario o, si no, lo guardado.
+  const prov = form.email_provider ?? smtp?.email_provider ?? 'resend'
+  const info = PROVEEDORES.find(p => p.id === prov) || PROVEEDORES[0]
 
   const guardar = useMutation({
     mutationFn: (body) => api.put('/admin/smtp', body),
@@ -1539,21 +1570,28 @@ function SmtpForm() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo conectar'); setMsg('') },
   })
 
-  const campos = [
-    { k: 'smtp_host', label: 'Servidor', ph: 'smtp.gmail.com', publico: true },
-    { k: 'smtp_port', label: 'Puerto', ph: '587', publico: true },
-    { k: 'smtp_user', label: 'Usuario', ph: 'envios@tudominio.com', publico: true },
-    { k: 'smtp_password', label: 'Contraseña', ph: 'contraseña de aplicación' },
-    { k: 'smtp_from', label: 'Remitente', ph: 'igual que el usuario si lo dejas vacío', publico: true },
-  ]
+  const campos = prov === 'smtp'
+    ? [
+        { k: 'smtp_host', label: 'Servidor', ph: 'smtp.gmail.com', publico: true },
+        { k: 'smtp_port', label: 'Puerto', ph: '587', publico: true },
+        { k: 'smtp_user', label: 'Usuario', ph: 'envios@tudominio.com', publico: true },
+        { k: 'smtp_password', label: 'Contraseña', ph: 'contraseña de aplicación' },
+        { k: 'smtp_from', label: 'Remitente', ph: 'igual que el usuario si lo dejas vacío', publico: true },
+      ]
+    : [
+        { k: 'email_api_key', label: 'Clave de API', ph: info.phClave },
+        { k: 'smtp_from', label: 'Remitente', ph: 'envios@hashtagcl.com', publico: true },
+      ]
 
-  const hayAlgo = Object.values(form).some(v => (v || '').trim())
+  // Cambiar de proveedor cuenta como cambio, aunque no se toque ningún campo:
+  // si no, elegir Resend teniendo ya la clave guardada no se podría guardar.
+  const hayAlgo = Object.entries(form).some(([, v]) => (v || '').trim())
   const listo = !!smtp?.listo
 
   return (
     <div style={{ ...GLASS, padding: '22px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Servidor de correo</h3>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Correo saliente</h3>
         <span style={{
           fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
           background: listo ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
@@ -1569,7 +1607,38 @@ function SmtpForm() {
           : 'Mientras esté sin configurar, cualquiera puede registrarse con un correo inventado y enviar dinero. Al guardar unas credenciales, la verificación se activa sola.'}
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 16 }}>
+      {/* Elegir proveedor */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {PROVEEDORES.map(p => (
+          <button
+            key={p.id}
+            onClick={() => setForm(f => ({ ...f, email_provider: p.id }))}
+            style={{
+              padding: '9px 16px', borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start',
+              background: prov === p.id ? 'rgba(56,189,248,.14)' : 'rgba(255,255,255,.04)',
+              border: `1px solid ${prov === p.id ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.08)'}`,
+              color: prov === p.id ? '#38bdf8' : '#8aa0cc',
+            }}
+          >
+            {p.nombre}
+            <span style={{ fontSize: 10.5, fontWeight: 500, opacity: .8 }}>{p.via}</span>
+          </button>
+        ))}
+      </div>
+
+      {prov === 'smtp' && (
+        <div style={{ padding: '12px 14px', borderRadius: 12, marginBottom: 16, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.22)' }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#fca5a5', lineHeight: 1.6 }}>
+            En este servidor el SMTP no sale: DigitalOcean bloquea los puertos 25, 587 y 465.
+            Comprobado contra Gmail, Resend y Brevo — todos agotan el tiempo de espera mientras
+            el resto de internet responde. Se puede pedir el desbloqueo por ticket a DigitalOcean,
+            pero no siempre lo aprueban. Con la API de Resend o Brevo funciona hoy.
+          </p>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 14 }}>
         {campos.map(c => (
           <label key={c.k} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 12, color: '#8aa0cc', fontWeight: 600 }}>{c.label}</span>
@@ -1589,18 +1658,17 @@ function SmtpForm() {
       </div>
 
       <p style={{ margin: '0 0 16px', fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
-        Con Gmail o Google Workspace hace falta una <strong>contraseña de aplicación</strong> (Cuenta de
-        Google → Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones). La contraseña
-        normal la rechaza el servidor. Puerto 587 con casi todos; 465 si tu proveedor pide SSL directo.
-        Para borrar un dato guardado escribe <strong>BORRAR</strong> en su casilla.
+        {info.ayuda}
+        {info.alta && <> Alta en <strong>{info.alta}</strong>.</>}
+        {' '}Para borrar un dato guardado escribe <strong>BORRAR</strong> en su casilla.
       </p>
 
       {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
-      {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
+      {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8, wordBreak: 'break-word' }}>{error}</p>}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button
-          onClick={() => guardar.mutate(form)}
+          onClick={() => guardar.mutate({ ...form, email_provider: prov })}
           disabled={!hayAlgo || guardar.isPending}
           style={{
             fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 10, border: 'none',

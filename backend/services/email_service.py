@@ -38,7 +38,29 @@ CLAVE_USUARIO = "smtp_user"
 CLAVE_PASSWORD = "smtp_password"
 CLAVE_REMITENTE = "smtp_from"
 
-CAMPOS = (CLAVE_HOST, CLAVE_PUERTO, CLAVE_USUARIO, CLAVE_PASSWORD, CLAVE_REMITENTE)
+# Proveedor de envío: "smtp", "resend" o "brevo".
+#
+# DigitalOcean bloquea el tráfico saliente por los puertos 25, 587 y 465 en
+# este droplet — comprobado contra Gmail, Resend y Brevo, todos agotan el
+# tiempo de espera mientras el 443 va bien. Desbloquearlos es un ticket a
+# soporte que puede no aprobarse, así que el envío por API sobre HTTPS es el
+# camino que no depende de eso.
+#
+# El SMTP se deja porque sigue siendo válido en cualquier otro servidor.
+CLAVE_PROVEEDOR = "email_provider"
+CLAVE_API_KEY = "email_api_key"
+
+PROVEEDORES = ("smtp", "resend", "brevo")
+
+CAMPOS = (
+    CLAVE_PROVEEDOR, CLAVE_API_KEY,
+    CLAVE_HOST, CLAVE_PUERTO, CLAVE_USUARIO, CLAVE_PASSWORD, CLAVE_REMITENTE,
+)
+
+# Tiempo de espera de las llamadas a la API. Corto a propósito: esto corre
+# dentro del registro de un cliente y bloquear medio minuto su pantalla porque
+# el proveedor va lento es peor que fallar y dejarle reenviar.
+ESPERA_API_SEG = 15
 
 VIDA_CODIGO_MIN = 15
 MAX_INTENTOS = 5
@@ -70,12 +92,25 @@ _CACHE_CONFIG = {"hasta": 0.0, "valor": False}
 VIDA_CACHE_SEG = 30
 
 
+def proveedor() -> str:
+    v = (_config(CLAVE_PROVEEDOR) or "").strip().lower()
+    return v if v in PROVEEDORES else "smtp"
+
+
 def configurado(forzar: bool = False) -> bool:
     import time
     ahora = time.time()
     if not forzar and ahora < _CACHE_CONFIG["hasta"]:
         return _CACHE_CONFIG["valor"]
-    valor = bool(_config(CLAVE_HOST) and _config(CLAVE_USUARIO) and _config(CLAVE_PASSWORD))
+
+    prov = proveedor()
+    if prov == "smtp":
+        valor = bool(_config(CLAVE_HOST) and _config(CLAVE_USUARIO) and _config(CLAVE_PASSWORD))
+    else:
+        # El remitente no es opcional con la API: los dos proveedores lo exigen
+        # y tiene que ser una dirección verificada en su panel.
+        valor = bool(_config(CLAVE_API_KEY) and _config(CLAVE_REMITENTE))
+
     _CACHE_CONFIG.update(hasta=ahora + VIDA_CACHE_SEG, valor=valor)
     return valor
 
@@ -84,7 +119,54 @@ def _hash(codigo: str) -> str:
     return hashlib.sha256(codigo.encode()).hexdigest()
 
 
+def _enviar_api(destino: str, asunto: str, cuerpo: str) -> bool:
+    """Envío por HTTPS. Es lo que funciona con los puertos SMTP cerrados."""
+    import httpx
+
+    prov = proveedor()
+    clave = _config(CLAVE_API_KEY)
+    remitente = _config(CLAVE_REMITENTE)
+    if not (clave and remitente):
+        return False
+
+    if prov == "resend":
+        url = "https://api.resend.com/emails"
+        cabeceras = {"Authorization": f"Bearer {clave}"}
+        cuerpo_json = {
+            "from": remitente,
+            "to": [destino],
+            "subject": asunto,
+            "text": cuerpo,
+        }
+    else:  # brevo
+        url = "https://api.brevo.com/v3/smtp/email"
+        cabeceras = {"api-key": clave}
+        cuerpo_json = {
+            "sender": {"email": remitente},
+            "to": [{"email": destino}],
+            "subject": asunto,
+            "textContent": cuerpo,
+        }
+
+    try:
+        r = httpx.post(url, json=cuerpo_json, headers=cabeceras, timeout=ESPERA_API_SEG)
+        if r.status_code >= 300:
+            # El cuerpo entero al log: estos proveedores explican el motivo ahí
+            # (dominio sin verificar, clave revocada, remitente ajeno) y sin
+            # verlo el fallo es indistinguible de cualquier otro.
+            log.error("[email] %s rechazó el envío a %s: %s %s",
+                      prov, destino, r.status_code, r.text[:300])
+            return False
+        return True
+    except Exception as e:
+        log.error("[email] %s no respondió al enviar a %s: %s", prov, destino, e)
+        return False
+
+
 def _enviar(destino: str, asunto: str, cuerpo: str) -> bool:
+    if proveedor() != "smtp":
+        return _enviar_api(destino, asunto, cuerpo)
+
     host = _config(CLAVE_HOST)
     usuario = _config(CLAVE_USUARIO)
     password = _config(CLAVE_PASSWORD)
@@ -210,7 +292,32 @@ def verificar_codigo(db, email: str, codigo: str) -> tuple[bool, str]:
 
 
 def probar_conexion() -> tuple[bool, str]:
-    """Comprueba las credenciales SMTP sin mandar nada a nadie."""
+    """Comprueba las credenciales sin mandar nada a nadie."""
+    prov = proveedor()
+    if prov != "smtp":
+        import httpx
+
+        clave = _config(CLAVE_API_KEY)
+        if not clave:
+            return False, "Falta la clave de API"
+
+        if prov == "resend":
+            url, cabeceras = "https://api.resend.com/domains", {"Authorization": f"Bearer {clave}"}
+        else:
+            url, cabeceras = "https://api.brevo.com/v3/account", {"api-key": clave}
+
+        try:
+            r = httpx.get(url, headers=cabeceras, timeout=ESPERA_API_SEG)
+        except Exception as e:
+            return False, f"No se pudo conectar con {prov}: {e}"
+        if r.status_code in (401, 403):
+            return False, "La clave de API no es válida"
+        if r.status_code >= 300:
+            return False, f"{prov} respondió {r.status_code}: {r.text[:200]}"
+        if not _config(CLAVE_REMITENTE):
+            return True, "La clave es válida, pero falta el remitente"
+        return True, f"Clave de {prov} correcta"
+
     host = _config(CLAVE_HOST)
     usuario = _config(CLAVE_USUARIO)
     password = _config(CLAVE_PASSWORD)

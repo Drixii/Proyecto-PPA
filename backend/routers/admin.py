@@ -1512,6 +1512,8 @@ def marcar_confiable(
 
 
 class SmtpIn(BaseModel):
+    email_provider: Optional[str] = None
+    email_api_key: Optional[str] = None
     smtp_host: Optional[str] = None
     smtp_port: Optional[str] = None
     smtp_user: Optional[str] = None
@@ -1532,12 +1534,18 @@ def get_smtp(db: Session = Depends(get_db), _admin: User = Depends(require_super
     return {
         "success": True,
         "data": {
+            "email_provider": em.proveedor(),
+            "email_api_key": ss.mask(leer(em.CLAVE_API_KEY)),
             "smtp_host": leer(em.CLAVE_HOST),
             "smtp_port": leer(em.CLAVE_PUERTO) or "587",
             "smtp_user": leer(em.CLAVE_USUARIO),
             "smtp_password": ss.mask(leer(em.CLAVE_PASSWORD)),
             "smtp_from": leer(em.CLAVE_REMITENTE),
             "listo": em.configurado(),
+            # Los puertos SMTP están cerrados de salida en el droplet. La
+            # pantalla lo avisa para que nadie pierda una tarde peleando con
+            # una contraseña que está bien.
+            "smtp_bloqueado": True,
         },
         "message": "",
     }
@@ -1565,6 +1573,10 @@ def save_smtp(
             ss.set_secret(db, campo, "")
             guardados.append(f"{campo} borrado")
             continue
+        if campo == em.CLAVE_PROVEEDOR:
+            valor = valor.strip().lower()
+            if valor not in em.PROVEEDORES:
+                raise HTTPException(status_code=400, detail=f"Proveedor no válido: {valor}")
         if campo == em.CLAVE_PUERTO:
             try:
                 int(valor)
