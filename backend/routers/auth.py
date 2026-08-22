@@ -18,6 +18,10 @@ def _user_out(user: User, db: Session) -> dict:
     data = UserOut.model_validate(user).model_dump()
     # Se deriva de la fecha: el front solo necesita saber si esta o no.
     data["email_verified"] = bool(getattr(user, "email_verified_at", None))
+    # Si no hay servidor de correo configurado no se puede exigir nada: el
+    # front necesita saberlo para no pedir un código que no va a llegar.
+    from services import email_service
+    data["email_verification_required"] = email_service.configurado()
     if user.role == 'sub_admin':
         from models.sub_admin_country import SubAdminCountry
         rows = db.query(SubAdminCountry).filter(SubAdminCountry.user_id == user.id).all()

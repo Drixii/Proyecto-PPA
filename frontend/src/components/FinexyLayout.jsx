@@ -10,6 +10,7 @@ import Portal from './Portal'
 import { queryClient } from '../queryClient'
 import { ESTADO_DOT, ESTADO_LABEL } from '../utils/orderStatus'
 import AvisoPagosPendientes from './AvisoPagosPendientes'
+import VerificarCorreo from './VerificarCorreo'
 
 const ADMIN_TABS = [
   { label: 'Mi panel', path: '/admin' },
@@ -815,6 +816,9 @@ export default function FinexyLayout({ children, fullHeight = false }) {
           className={`flex-1 min-h-0 finexy-scrollbar ${fullHeight ? 'overflow-hidden flex flex-col' : 'overflow-auto'} pb-16 md:pb-0${isFirstVisit ? ' finexy-page-enter' : ''}`}
           style={isFirstVisit ? { animationDelay: contentDelay } : {}}
         >
+          {/* Decide solo si toca: solo clientes, solo con servidor de correo
+              configurado y el correo aún sin verificar. */}
+          <VerificarCorreo />
           {children}
         </main>
       </div>

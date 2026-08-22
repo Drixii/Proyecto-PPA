@@ -244,6 +244,15 @@ export default function AdminUsers() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
+  // Verificar el correo a mano. Es la salida para el cliente que no recibe el
+  // código —buzón corporativo que filtra, o los que ya estaban registrados
+  // antes de que esto existiera—. No se puede deshacer desde aquí: marcar por
+  // error a alguien no rompe nada, desmarcarlo le bloquea los envíos.
+  const verificarMutation = useMutation({
+    mutationFn: (id) => api.post(`/admin/clients/${id}/verify-email`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+  })
+
   const toggleMutation = useMutation({
     mutationFn: (id) => api.patch(`/admin/users/${id}/toggle-active`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
@@ -502,6 +511,9 @@ export default function AdminUsers() {
                   {roleTab === 'client' && (
                     <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Confianza</th>
                   )}
+                  {roleTab === 'client' && (
+                    <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Correo</th>
+                  )}
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Registro</th>
                   <th className="text-right text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#64748b'}}>Acciones</th>
                 </tr>
@@ -578,6 +590,25 @@ export default function AdminUsers() {
                             : {background:'rgba(255,255,255,.04)', color:'#64748b', border:'1px solid rgba(255,255,255,.08)'}}>
                           {u.is_trusted ? '✓ Confiable' : 'Sin marcar'}
                         </button>
+                      </td>
+                    )}
+                    {roleTab === 'client' && (
+                      <td className="px-4 py-4">
+                        {u.email_verified ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                            style={{background:'rgba(74,222,128,.1)', color:'#4ade80', border:'1px solid rgba(74,222,128,.2)'}}>
+                            ✓ Verificado
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => verificarMutation.mutate(u.id)}
+                            disabled={verificarMutation.isPending}
+                            title="Marca su correo como verificado sin pedirle el código"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
+                            style={{background:'rgba(251,191,36,.1)', color:'#fcd34d', border:'1px solid rgba(251,191,36,.25)'}}>
+                            Sin verificar
+                          </button>
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-4">

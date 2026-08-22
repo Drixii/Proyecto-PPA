@@ -61,8 +61,23 @@ def _config(nombre: str) -> str:
         db.close()
 
 
-def configurado() -> bool:
-    return bool(_config(CLAVE_HOST) and _config(CLAVE_USUARIO) and _config(CLAVE_PASSWORD))
+# Cache corto de "¿hay SMTP?".
+#
+# La pantalla del cliente pregunta por esto en cada carga y cada respuesta
+# significaba tres consultas descifradas. La respuesta solo cambia cuando un
+# admin toca los ajustes, así que medio minuto de retraso no molesta a nadie.
+_CACHE_CONFIG = {"hasta": 0.0, "valor": False}
+VIDA_CACHE_SEG = 30
+
+
+def configurado(forzar: bool = False) -> bool:
+    import time
+    ahora = time.time()
+    if not forzar and ahora < _CACHE_CONFIG["hasta"]:
+        return _CACHE_CONFIG["valor"]
+    valor = bool(_config(CLAVE_HOST) and _config(CLAVE_USUARIO) and _config(CLAVE_PASSWORD))
+    _CACHE_CONFIG.update(hasta=ahora + VIDA_CACHE_SEG, valor=valor)
+    return valor
 
 
 def _hash(codigo: str) -> str:

@@ -590,6 +590,10 @@ def list_users(
             "timezone": u.timezone or 'America/Santiago',
             "is_active": u.is_active,
             "created_at": u.created_at.isoformat() if u.created_at else None,
+            # La lista del panel pinta ambas cosas y sin esto llegában siempre
+            # como "sin marcar", pasara lo que pasara en la base.
+            "is_trusted": bool(getattr(u, "is_trusted", False)),
+            "email_verified": bool(getattr(u, "email_verified_at", None)),
         }
         if u.role == "sub_admin":
             row["managed_countries"] = _sub_admin_countries(db, u.id)
@@ -1498,3 +1502,115 @@ def marcar_confiable(
         "data": {"is_trusted": cliente.is_trusted},
         "message": "Cliente marcado como confiable" if cliente.is_trusted else "Marca de confianza retirada",
     }
+
+
+# ── Correo saliente (SMTP) ────────────────────────────────
+#
+# Sin esto la verificación por correo está escrita pero muerta: no hay por
+# dónde meter las credenciales. Se guardan cifradas, igual que las de Stripe o
+# Koywe, y la contraseña nunca vuelve al navegador.
+
+
+class SmtpIn(BaseModel):
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[str] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+
+
+@router.get("/smtp", response_model=dict)
+def get_smtp(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
+    from services import email_service as em
+    from services import secret_store as ss
+
+    def leer(clave):
+        return (ss.get_secret(db, clave) or "").strip()
+
+    # Host, puerto y remitente van enteros: no son secretos y verlos completos
+    # es lo que permite comprobar que el servidor es el que toca.
+    return {
+        "success": True,
+        "data": {
+            "smtp_host": leer(em.CLAVE_HOST),
+            "smtp_port": leer(em.CLAVE_PUERTO) or "587",
+            "smtp_user": leer(em.CLAVE_USUARIO),
+            "smtp_password": ss.mask(leer(em.CLAVE_PASSWORD)),
+            "smtp_from": leer(em.CLAVE_REMITENTE),
+            "listo": em.configurado(),
+        },
+        "message": "",
+    }
+
+
+@router.put("/smtp", response_model=dict)
+def save_smtp(
+    data: SmtpIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda las credenciales. Un campo vacío no borra: se manda BORRAR."""
+    from services import email_service as em
+    from services import secret_store as ss
+
+    guardados = []
+    for campo in em.CAMPOS:
+        valor = getattr(data, campo, None)
+        if valor is None:
+            continue
+        valor = valor.strip()
+        if not valor:
+            continue
+        if valor == "BORRAR":
+            ss.set_secret(db, campo, "")
+            guardados.append(f"{campo} borrado")
+            continue
+        if campo == em.CLAVE_PUERTO:
+            try:
+                int(valor)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="El puerto tiene que ser un número (587 o 465)")
+        ss.set_secret(db, campo, valor)
+        guardados.append(campo)
+
+    if not guardados:
+        return {"success": True, "data": {}, "message": "No había nada que guardar"}
+    # forzar: el cache de 30 segundos haría que la pantalla siguiera diciendo
+    # "sin configurar" justo después de guardar.
+    return {"success": True, "data": {"listo": em.configurado(forzar=True)}, "message": "Guardado"}
+
+
+@router.post("/smtp/test", response_model=dict)
+def test_smtp(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
+    """Comprueba las credenciales sin escribirle a nadie."""
+    from services import email_service as em
+
+    ok, motivo = em.probar_conexion()
+    if not ok:
+        raise HTTPException(status_code=400, detail=motivo)
+    return {"success": True, "data": {}, "message": motivo}
+
+
+@router.post("/clients/{user_id}/verify-email", response_model=dict)
+def verificar_correo_a_mano(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Marca el correo de un cliente como verificado desde el panel.
+
+    Es la salida para el cliente que no recibe el código —buzón lleno, correo
+    corporativo que filtra, o los que ya estaban registrados antes de que esto
+    existiera—. Queda a criterio del admin, que es quien conoce al cliente.
+    """
+    from datetime import datetime, timezone
+
+    cliente = db.query(User).filter(User.id == user_id, User.deleted_at == None).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    if cliente.role == "client" and cliente.super_admin_id != admin.id:
+        raise HTTPException(status_code=403, detail="Ese cliente no es tuyo")
+
+    cliente.email_verified_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"success": True, "data": {"email_verified": True}, "message": "Correo marcado como verificado"}

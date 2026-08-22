@@ -459,6 +459,12 @@ const SECTIONS = [
     title: 'Integraciones de pago',
     desc: 'Stripe para tarjeta, Koywe para Chile, Global66 para transferencias',
   },
+  {
+    key: 'correo',
+    icon: '✉️',
+    title: 'Correo',
+    desc: 'Servidor de envío y verificación del correo de los clientes',
+  },
 ]
 
 function SectionCard({ icon, title, desc, onClick }) {
@@ -1496,6 +1502,129 @@ function PaymentIntegrations() {
   )
 }
 
+// Correo saliente.
+//
+// La verificación por correo no se puede exigir sin esto: si no hay servidor
+// configurado nadie podría recibir el código, así que el registro y el envío
+// siguen funcionando sin verificar. En cuanto se guarda una cuenta aquí, para
+// mandar dinero hace falta verificar el buzón.
+//
+// Con Gmail o Google Workspace la contraseña normal no vale: hay que crear una
+// "contraseña de aplicación" en la cuenta de Google. Se dice en el formulario
+// porque es el fallo con el que se topa todo el mundo la primera vez.
+function SmtpForm() {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({})
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+
+  const { data: smtp } = useQuery({
+    queryKey: ['smtp'],
+    queryFn: () => api.get('/admin/smtp').then(r => r.data.data),
+  })
+
+  const guardar = useMutation({
+    mutationFn: (body) => api.put('/admin/smtp', body),
+    onSuccess: (r) => {
+      setMsg(r.data.message); setError(''); setForm({})
+      qc.invalidateQueries({ queryKey: ['smtp'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
+  })
+
+  const probar = useMutation({
+    mutationFn: () => api.post('/admin/smtp/test'),
+    onSuccess: (r) => { setMsg(r.data.message); setError('') },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo conectar'); setMsg('') },
+  })
+
+  const campos = [
+    { k: 'smtp_host', label: 'Servidor', ph: 'smtp.gmail.com', publico: true },
+    { k: 'smtp_port', label: 'Puerto', ph: '587', publico: true },
+    { k: 'smtp_user', label: 'Usuario', ph: 'envios@tudominio.com', publico: true },
+    { k: 'smtp_password', label: 'Contraseña', ph: 'contraseña de aplicación' },
+    { k: 'smtp_from', label: 'Remitente', ph: 'igual que el usuario si lo dejas vacío', publico: true },
+  ]
+
+  const hayAlgo = Object.values(form).some(v => (v || '').trim())
+  const listo = !!smtp?.listo
+
+  return (
+    <div style={{ ...GLASS, padding: '22px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Servidor de correo</h3>
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+          background: listo ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+          color: listo ? '#4ade80' : '#fcd34d',
+        }}>
+          {listo ? 'Activo' : 'Sin configurar'}
+        </span>
+      </div>
+
+      <p style={{ margin: '0 0 18px', fontSize: 13, color: '#8aa0cc', lineHeight: 1.6 }}>
+        {listo
+          ? 'Los clientes reciben un código de 6 cifras al registrarse y no pueden enviar dinero hasta verificarlo.'
+          : 'Mientras esté sin configurar, cualquiera puede registrarse con un correo inventado y enviar dinero. Al guardar unas credenciales, la verificación se activa sola.'}
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 16 }}>
+        {campos.map(c => (
+          <label key={c.k} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 12, color: '#8aa0cc', fontWeight: 600 }}>{c.label}</span>
+            <input
+              value={form[c.k] ?? ''}
+              onChange={e => setForm(f => ({ ...f, [c.k]: e.target.value }))}
+              placeholder={smtp?.[c.k] || c.ph}
+              type={c.publico ? 'text' : 'password'}
+              autoComplete="off"
+              style={{
+                padding: '10px 12px', borderRadius: 10, fontSize: 13,
+                background: 'rgba(6,13,40,.7)', border: '1px solid rgba(255,255,255,.1)', color: '#eaf2ff',
+              }}
+            />
+          </label>
+        ))}
+      </div>
+
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+        Con Gmail o Google Workspace hace falta una <strong>contraseña de aplicación</strong> (Cuenta de
+        Google → Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones). La contraseña
+        normal la rechaza el servidor. Puerto 587 con casi todos; 465 si tu proveedor pide SSL directo.
+        Para borrar un dato guardado escribe <strong>BORRAR</strong> en su casilla.
+      </p>
+
+      {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
+      {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => guardar.mutate(form)}
+          disabled={!hayAlgo || guardar.isPending}
+          style={{
+            fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 10, border: 'none',
+            color: '#060d22', cursor: hayAlgo ? 'pointer' : 'not-allowed', opacity: hayAlgo ? 1 : .4,
+            background: 'linear-gradient(135deg,#38bdf8,#818cf8)',
+          }}
+        >
+          {guardar.isPending ? 'Guardando...' : 'Guardar'}
+        </button>
+        <button
+          onClick={() => probar.mutate()}
+          disabled={probar.isPending}
+          style={{
+            fontSize: 13, fontWeight: 600, padding: '10px 18px', borderRadius: 10, cursor: 'pointer',
+            background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', color: '#aebfe2',
+          }}
+        >
+          {probar.isPending ? 'Probando...' : 'Probar conexión'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSettings() {
   const qc = useQueryClient()
   const [section, setSection] = useState(null)
@@ -1571,6 +1700,7 @@ export default function AdminSettings() {
           )
         )}
         {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
+        {section === 'correo' && <SmtpForm />}
       </div>
     </FinexyLayout>
   )
