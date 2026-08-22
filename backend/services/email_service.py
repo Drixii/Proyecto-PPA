@@ -50,12 +50,18 @@ CLAVE_REMITENTE = "smtp_from"
 CLAVE_PROVEEDOR = "email_provider"
 CLAVE_API_KEY = "email_api_key"
 
-PROVEEDORES = ("smtp", "resend", "brevo")
+# Cuenta de servicio de Google, el JSON entero tal cual lo descarga la consola.
+CLAVE_GMAIL_SA = "gmail_service_account"
+
+PROVEEDORES = ("smtp", "gmail", "resend", "brevo")
 
 CAMPOS = (
-    CLAVE_PROVEEDOR, CLAVE_API_KEY,
+    CLAVE_PROVEEDOR, CLAVE_API_KEY, CLAVE_GMAIL_SA,
     CLAVE_HOST, CLAVE_PUERTO, CLAVE_USUARIO, CLAVE_PASSWORD, CLAVE_REMITENTE,
 )
+
+ALCANCE_GMAIL = "https://www.googleapis.com/auth/gmail.send"
+URL_TOKEN_GOOGLE = "https://oauth2.googleapis.com/token"
 
 # Tiempo de espera de las llamadas a la API. Corto a propósito: esto corre
 # dentro del registro de un cliente y bloquear medio minuto su pantalla porque
@@ -106,6 +112,10 @@ def configurado(forzar: bool = False) -> bool:
     prov = proveedor()
     if prov == "smtp":
         valor = bool(_config(CLAVE_HOST) and _config(CLAVE_USUARIO) and _config(CLAVE_PASSWORD))
+    elif prov == "gmail":
+        # El remitente no es decorativo: es la cuenta que la de servicio
+        # suplanta, y sin ella Google no sabe en nombre de quién escribir.
+        valor = bool(_config(CLAVE_GMAIL_SA) and _config(CLAVE_REMITENTE))
     else:
         # El remitente no es opcional con la API: los dos proveedores lo exigen
         # y tiene que ser una dirección verificada en su panel.
@@ -117,6 +127,116 @@ def configurado(forzar: bool = False) -> bool:
 
 def _hash(codigo: str) -> str:
     return hashlib.sha256(codigo.encode()).hexdigest()
+
+
+# ── Gmail (Workspace) ────────────────────────────────────────────────────────
+#
+# Con los puertos SMTP cerrados, la forma de seguir enviando desde el propio
+# dominio es la API de Gmail, que va por 443. Se usa una cuenta de servicio
+# con delegación en todo el dominio: el administrador de Workspace autoriza su
+# id de cliente una vez y a partir de ahí el servidor escribe en nombre de una
+# dirección del dominio sin que nadie tenga que iniciar sesión.
+#
+# Frente al otro camino —OAuth de usuario con refresh token— esto no caduca.
+# Un refresh token de una app en modo prueba muere a los siete días, y el
+# envío de códigos se caería solo un martes cualquiera.
+
+_TOKEN_GMAIL = {"valor": "", "expira": 0.0}
+
+
+def _cuenta_servicio() -> dict:
+    import json
+    crudo = _config(CLAVE_GMAIL_SA)
+    if not crudo:
+        return {}
+    try:
+        return json.loads(crudo)
+    except Exception as e:
+        log.error("[email] la cuenta de servicio de Google no es un JSON válido: %s", e)
+        return {}
+
+
+def _token_gmail(forzar: bool = False) -> str:
+    """Access token de Google. Se pide firmando un JWT con la clave privada."""
+    import time
+    import httpx
+    from jose import jwt
+
+    ahora = time.time()
+    # Margen de 60 s: un token que caduca durante la petición da un 401 que se
+    # parece demasiado a una credencial mal puesta.
+    if not forzar and _TOKEN_GMAIL["valor"] and ahora < _TOKEN_GMAIL["expira"] - 60:
+        return _TOKEN_GMAIL["valor"]
+
+    sa = _cuenta_servicio()
+    remitente = _config(CLAVE_REMITENTE)
+    if not sa.get("client_email") or not sa.get("private_key") or not remitente:
+        return ""
+
+    claims = {
+        "iss": sa["client_email"],
+        "scope": ALCANCE_GMAIL,
+        "aud": URL_TOKEN_GOOGLE,
+        "iat": int(ahora),
+        "exp": int(ahora) + 3600,
+        # sub es la suplantación: sin esto Google devuelve unauthorized_client,
+        # porque una cuenta de servicio no tiene buzón propio.
+        "sub": remitente,
+    }
+    firmado = jwt.encode(claims, sa["private_key"], algorithm="RS256")
+
+    r = httpx.post(
+        URL_TOKEN_GOOGLE,
+        data={"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": firmado},
+        timeout=ESPERA_API_SEG,
+    )
+    if r.status_code >= 300:
+        log.error("[email] Google no dio token: %s %s", r.status_code, r.text[:300])
+        _TOKEN_GMAIL.update(valor="", expira=0.0)
+        return ""
+
+    datos = r.json()
+    _TOKEN_GMAIL.update(
+        valor=datos.get("access_token", ""),
+        expira=ahora + float(datos.get("expires_in", 3600)),
+    )
+    return _TOKEN_GMAIL["valor"]
+
+
+def _enviar_gmail(destino: str, asunto: str, cuerpo: str) -> bool:
+    import base64
+    import httpx
+
+    token = _token_gmail()
+    remitente = _config(CLAVE_REMITENTE)
+    if not token:
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = asunto
+    msg["From"] = remitente
+    msg["To"] = destino
+    msg.set_content(cuerpo)
+
+    # base64 con alfabeto de URL: es lo que pide la API, y el estándar rompe
+    # el mensaje en cuanto aparece un + o un / en el texto codificado.
+    crudo = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+
+    try:
+        r = httpx.post(
+            f"https://gmail.googleapis.com/gmail/v1/users/{remitente}/messages/send",
+            json={"raw": crudo},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=ESPERA_API_SEG,
+        )
+        if r.status_code >= 300:
+            log.error("[email] Gmail rechazó el envío a %s: %s %s",
+                      destino, r.status_code, r.text[:300])
+            return False
+        return True
+    except Exception as e:
+        log.error("[email] Gmail no respondió al enviar a %s: %s", destino, e)
+        return False
 
 
 def _enviar_api(destino: str, asunto: str, cuerpo: str) -> bool:
@@ -164,7 +284,10 @@ def _enviar_api(destino: str, asunto: str, cuerpo: str) -> bool:
 
 
 def _enviar(destino: str, asunto: str, cuerpo: str) -> bool:
-    if proveedor() != "smtp":
+    prov = proveedor()
+    if prov == "gmail":
+        return _enviar_gmail(destino, asunto, cuerpo)
+    if prov != "smtp":
         return _enviar_api(destino, asunto, cuerpo)
 
     host = _config(CLAVE_HOST)
@@ -294,6 +417,41 @@ def verificar_codigo(db, email: str, codigo: str) -> tuple[bool, str]:
 def probar_conexion() -> tuple[bool, str]:
     """Comprueba las credenciales sin mandar nada a nadie."""
     prov = proveedor()
+
+    if prov == "gmail":
+        import httpx
+
+        sa = _cuenta_servicio()
+        if not sa:
+            return False, "Falta el JSON de la cuenta de servicio, o no es válido"
+        for campo in ("client_email", "private_key", "client_id"):
+            if not sa.get(campo):
+                return False, f"Al JSON le falta '{campo}': ¿es la clave de una cuenta de servicio?"
+        remitente = _config(CLAVE_REMITENTE)
+        if not remitente:
+            return False, "Falta el remitente (la dirección desde la que se escribe)"
+
+        token = _token_gmail(forzar=True)
+        if not token:
+            return False, (
+                "Google no autoriza a esta cuenta de servicio. Comprueba en la consola de "
+                f"administración que el id de cliente {sa.get('client_id')} tiene concedido "
+                f"el permiso {ALCANCE_GMAIL} en Delegación de todo el dominio, y que "
+                f"{remitente} existe en el dominio."
+            )
+
+        try:
+            r = httpx.get(
+                f"https://gmail.googleapis.com/gmail/v1/users/{remitente}/profile",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=ESPERA_API_SEG,
+            )
+        except Exception as e:
+            return False, f"No se pudo conectar con Gmail: {e}"
+        if r.status_code >= 300:
+            return False, f"Gmail respondió {r.status_code}: {r.text[:200]}"
+        return True, f"Gmail listo para escribir como {remitente}"
+
     if prov != "smtp":
         import httpx
 

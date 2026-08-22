@@ -1514,11 +1514,28 @@ def marcar_confiable(
 class SmtpIn(BaseModel):
     email_provider: Optional[str] = None
     email_api_key: Optional[str] = None
+    gmail_service_account: Optional[str] = None
     smtp_host: Optional[str] = None
     smtp_port: Optional[str] = None
     smtp_user: Optional[str] = None
     smtp_password: Optional[str] = None
     smtp_from: Optional[str] = None
+
+
+def _gmail_resumen(crudo: str) -> Optional[dict]:
+    """De quién es la cuenta de servicio guardada, sin su clave privada."""
+    if not crudo:
+        return None
+    import json
+    try:
+        sa = json.loads(crudo)
+    except Exception:
+        return {"invalido": True}
+    return {
+        "client_email": sa.get("client_email"),
+        "client_id": sa.get("client_id"),
+        "project_id": sa.get("project_id"),
+    }
 
 
 @router.get("/smtp", response_model=dict)
@@ -1536,6 +1553,10 @@ def get_smtp(db: Session = Depends(get_db), _admin: User = Depends(require_super
         "data": {
             "email_provider": em.proveedor(),
             "email_api_key": ss.mask(leer(em.CLAVE_API_KEY)),
+            # Del JSON solo sale de quién es: la clave privada no vuelve al
+            # navegador, pero el correo de la cuenta y su id de cliente son
+            # justo lo que hay que copiar en la consola de administración.
+            "gmail_service_account": _gmail_resumen(leer(em.CLAVE_GMAIL_SA)),
             "smtp_host": leer(em.CLAVE_HOST),
             "smtp_port": leer(em.CLAVE_PUERTO) or "587",
             "smtp_user": leer(em.CLAVE_USUARIO),
@@ -1573,6 +1594,18 @@ def save_smtp(
             ss.set_secret(db, campo, "")
             guardados.append(f"{campo} borrado")
             continue
+        if campo == em.CLAVE_GMAIL_SA:
+            import json
+            try:
+                sa = json.loads(valor)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Eso no es un JSON válido. Pega el archivo entero que descarga Google.")
+            faltan = [c for c in ("client_email", "private_key", "client_id") if not sa.get(c)]
+            if faltan:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Al JSON le falta {', '.join(faltan)}. Tiene que ser la clave de una cuenta de servicio, no la de un cliente OAuth.",
+                )
         if campo == em.CLAVE_PROVEEDOR:
             valor = valor.strip().lower()
             if valor not in em.PROVEEDORES:

@@ -1514,6 +1514,14 @@ function PaymentIntegrations() {
 // valiendo en cualquier otro servidor, pero avisado.
 const PROVEEDORES = [
   {
+    id: 'gmail',
+    nombre: 'Gmail',
+    via: 'API · Workspace',
+    alta: 'console.cloud.google.com',
+    ayuda: 'Escribe desde tu propio dominio con una cuenta de servicio de Google. El administrador de Workspace tiene que autorizarla una vez en Delegación de todo el dominio; después no caduca ni hay que volver a iniciar sesión.',
+    phClave: null,
+  },
+  {
     id: 'resend',
     nombre: 'Resend',
     via: 'API',
@@ -1551,7 +1559,7 @@ function SmtpForm() {
   })
 
   // Lo que se está editando: lo tocado en el formulario o, si no, lo guardado.
-  const prov = form.email_provider ?? smtp?.email_provider ?? 'resend'
+  const prov = form.email_provider ?? smtp?.email_provider ?? 'gmail'
   const info = PROVEEDORES.find(p => p.id === prov) || PROVEEDORES[0]
 
   const guardar = useMutation({
@@ -1570,7 +1578,12 @@ function SmtpForm() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo conectar'); setMsg('') },
   })
 
-  const campos = prov === 'smtp'
+  const campos = prov === 'gmail'
+    ? [
+        { k: 'gmail_service_account', label: 'JSON de la cuenta de servicio', ph: 'pega aquí el archivo entero que descarga Google', multilinea: true },
+        { k: 'smtp_from', label: 'Escribir como', ph: 'contacto@ksatokio.com', publico: true },
+      ]
+    : prov === 'smtp'
     ? [
         { k: 'smtp_host', label: 'Servidor', ph: 'smtp.gmail.com', publico: true },
         { k: 'smtp_port', label: 'Puerto', ph: '587', publico: true },
@@ -1640,22 +1653,50 @@ function SmtpForm() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 14 }}>
         {campos.map(c => (
-          <label key={c.k} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label key={c.k} style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: c.multilinea ? '1 / -1' : 'auto' }}>
             <span style={{ fontSize: 12, color: '#8aa0cc', fontWeight: 600 }}>{c.label}</span>
-            <input
-              value={form[c.k] ?? ''}
-              onChange={e => setForm(f => ({ ...f, [c.k]: e.target.value }))}
-              placeholder={smtp?.[c.k] || c.ph}
-              type={c.publico ? 'text' : 'password'}
-              autoComplete="off"
-              style={{
-                padding: '10px 12px', borderRadius: 10, fontSize: 13,
-                background: 'rgba(6,13,40,.7)', border: '1px solid rgba(255,255,255,.1)', color: '#eaf2ff',
-              }}
-            />
+            {c.multilinea ? (
+              <textarea
+                value={form[c.k] ?? ''}
+                onChange={e => setForm(f => ({ ...f, [c.k]: e.target.value }))}
+                placeholder={c.ph}
+                rows={5}
+                spellCheck={false}
+                style={{
+                  padding: '10px 12px', borderRadius: 10, fontSize: 11.5, resize: 'vertical',
+                  fontFamily: 'monospace', lineHeight: 1.5,
+                  background: 'rgba(6,13,40,.7)', border: '1px solid rgba(255,255,255,.1)', color: '#eaf2ff',
+                }}
+              />
+            ) : (
+              <input
+                value={form[c.k] ?? ''}
+                onChange={e => setForm(f => ({ ...f, [c.k]: e.target.value }))}
+                placeholder={smtp?.[c.k] || c.ph}
+                type={c.publico ? 'text' : 'password'}
+                autoComplete="off"
+                style={{
+                  padding: '10px 12px', borderRadius: 10, fontSize: 13,
+                  background: 'rgba(6,13,40,.7)', border: '1px solid rgba(255,255,255,.1)', color: '#eaf2ff',
+                }}
+              />
+            )}
           </label>
         ))}
       </div>
+
+      {prov === 'gmail' && smtp?.gmail_service_account && !smtp.gmail_service_account.invalido && (
+        <div style={{ padding: '12px 14px', borderRadius: 12, marginBottom: 14, background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.18)' }}>
+          <p style={{ margin: '0 0 6px', fontSize: 12, color: '#8aa0cc' }}>Cuenta de servicio guardada</p>
+          <p style={{ margin: 0, fontSize: 12, color: '#bfe4ff', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+            {smtp.gmail_service_account.client_email}
+          </p>
+          <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#8aa0cc' }}>
+            Id de cliente para la consola de administración:{' '}
+            <strong style={{ color: '#bfe4ff', fontFamily: 'monospace' }}>{smtp.gmail_service_account.client_id}</strong>
+          </p>
+        </div>
+      )}
 
       <p style={{ margin: '0 0 16px', fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
         {info.ayuda}
