@@ -1512,6 +1512,7 @@ def marcar_confiable(
 
 
 class SmtpIn(BaseModel):
+    email_verificacion_activa: Optional[str] = None
     email_provider: Optional[str] = None
     email_api_key: Optional[str] = None
     gmail_service_account: Optional[str] = None
@@ -1562,6 +1563,8 @@ def get_smtp(db: Session = Depends(get_db), _admin: User = Depends(require_super
             "smtp_user": leer(em.CLAVE_USUARIO),
             "smtp_password": ss.mask(leer(em.CLAVE_PASSWORD)),
             "smtp_from": leer(em.CLAVE_REMITENTE),
+            "activa": em.activa(),
+            "credenciales_listas": em.credenciales_listas(),
             "listo": em.configurado(),
             # Los puertos SMTP están cerrados de salida en el droplet. La
             # pantalla lo avisa para que nadie pierda una tarde peleando con
@@ -1588,6 +1591,11 @@ def save_smtp(
         if valor is None:
             continue
         valor = valor.strip()
+        if campo == em.CLAVE_ACTIVA:
+            # Aquí "0" es una respuesta, no un campo sin rellenar.
+            ss.set_secret(db, campo, "1" if valor == "1" else "0")
+            guardados.append("verificación " + ("activada" if valor == "1" else "desactivada"))
+            continue
         if not valor:
             continue
         if valor == "BORRAR":

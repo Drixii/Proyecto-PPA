@@ -47,6 +47,17 @@ CLAVE_REMITENTE = "smtp_from"
 # camino que no depende de eso.
 #
 # El SMTP se deja porque sigue siendo válido en cualquier otro servidor.
+# Interruptor de la exigencia, separado de las credenciales.
+#
+# Antes bastaba con tener credenciales guardadas para que la verificación
+# pasara a ser obligatoria. Eso dejó la web bloqueada sin que nadie lo pidiera:
+# había unas credenciales SMTP guardadas de una prueba, el envío fallaba
+# siempre porque el puerto está cerrado, y ningún cliente nuevo podía mandar
+# dinero. Configurar y exigir son dos decisiones distintas y ahora se toman por
+# separado: se pueden guardar credenciales, probarlas, y encender el candado
+# solo cuando se ha visto llegar un correo de verdad.
+CLAVE_ACTIVA = "email_verificacion_activa"
+
 CLAVE_PROVEEDOR = "email_provider"
 CLAVE_API_KEY = "email_api_key"
 
@@ -56,6 +67,7 @@ CLAVE_GMAIL_SA = "gmail_service_account"
 PROVEEDORES = ("smtp", "gmail", "resend", "brevo")
 
 CAMPOS = (
+    CLAVE_ACTIVA,
     CLAVE_PROVEEDOR, CLAVE_API_KEY, CLAVE_GMAIL_SA,
     CLAVE_HOST, CLAVE_PUERTO, CLAVE_USUARIO, CLAVE_PASSWORD, CLAVE_REMITENTE,
 )
@@ -103,11 +115,36 @@ def proveedor() -> str:
     return v if v in PROVEEDORES else "smtp"
 
 
+def activa() -> bool:
+    """¿Se exige verificar el correo? Apagado mientras no se diga lo contrario."""
+    return (_config(CLAVE_ACTIVA) or "").strip() == "1"
+
+
+def credenciales_listas() -> bool:
+    """¿Hay con qué mandar? Independiente de si se exige o no."""
+    prov = proveedor()
+    if prov == "smtp":
+        return bool(_config(CLAVE_HOST) and _config(CLAVE_USUARIO) and _config(CLAVE_PASSWORD))
+    if prov == "gmail":
+        return bool(_config(CLAVE_GMAIL_SA) and _config(CLAVE_REMITENTE))
+    return bool(_config(CLAVE_API_KEY) and _config(CLAVE_REMITENTE))
+
+
 def configurado(forzar: bool = False) -> bool:
+    """¿Hay que verificar el correo antes de dejar enviar dinero?
+
+    Exige las dos cosas: el interruptor encendido y credenciales con las que
+    mandar. Falta cualquiera de las dos y no se pide nada a nadie, que es lo
+    único razonable: un candado cuya llave no existe deja fuera a todos.
+    """
     import time
     ahora = time.time()
     if not forzar and ahora < _CACHE_CONFIG["hasta"]:
         return _CACHE_CONFIG["valor"]
+
+    if not activa():
+        _CACHE_CONFIG.update(hasta=ahora + VIDA_CACHE_SEG, valor=False)
+        return False
 
     prov = proveedor()
     if prov == "smtp":

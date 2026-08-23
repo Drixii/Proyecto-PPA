@@ -1578,6 +1578,18 @@ function SmtpForm() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo conectar'); setMsg('') },
   })
 
+  // El interruptor se guarda solo, sin pasar por el botón de Guardar: es lo
+  // que corta el paso a los clientes y tiene que poder apagarse de un toque.
+  const alternar = useMutation({
+    mutationFn: (v) => api.put('/admin/smtp', { email_verificacion_activa: v ? '1' : '0' }),
+    onSuccess: (r) => {
+      setMsg(r.data.message); setError('')
+      qc.invalidateQueries({ queryKey: ['smtp'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
+  })
+
   const campos = prov === 'gmail'
     ? [
         { k: 'gmail_service_account', label: 'JSON de la cuenta de servicio', ph: 'pega aquí el archivo entero que descarga Google', multilinea: true },
@@ -1617,8 +1629,48 @@ function SmtpForm() {
       <p style={{ margin: '0 0 18px', fontSize: 13, color: '#8aa0cc', lineHeight: 1.6 }}>
         {listo
           ? 'Los clientes reciben un código de 6 cifras al registrarse y no pueden enviar dinero hasta verificarlo.'
-          : 'Mientras esté sin configurar, cualquiera puede registrarse con un correo inventado y enviar dinero. Al guardar unas credenciales, la verificación se activa sola.'}
+          : 'Mientras esté apagado, cualquiera puede registrarse con un correo inventado y enviar dinero.'}
       </p>
+
+      {/* El interruptor va aparte de las credenciales: guardar unas claves no
+          debe cortarle el paso a nadie hasta que se haya visto llegar un
+          correo de verdad. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 14, marginBottom: 18,
+        background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.08)',
+      }}>
+        <button
+          onClick={() => alternar.mutate(!smtp?.activa)}
+          disabled={alternar.isPending}
+          style={{
+            width: 46, height: 26, borderRadius: 999, border: 'none', cursor: 'pointer', flexShrink: 0,
+            padding: 3, display: 'flex', justifyContent: smtp?.activa ? 'flex-end' : 'flex-start',
+            background: smtp?.activa ? 'linear-gradient(135deg,#38bdf8,#818cf8)' : 'rgba(255,255,255,.14)',
+            transition: 'background .15s',
+          }}
+        >
+          <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', display: 'block' }} />
+        </button>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
+            Exigir verificación del correo
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.5 }}>
+            {smtp?.activa
+              ? 'Un cliente sin verificar no puede enviar dinero.'
+              : 'Apagado: se puede enviar dinero sin verificar el correo.'}
+          </p>
+        </div>
+      </div>
+
+      {smtp?.activa && !smtp?.credenciales_listas && (
+        <div style={{ padding: '12px 14px', borderRadius: 12, marginBottom: 16, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)' }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#fca5a5', lineHeight: 1.6 }}>
+            Está exigiendo verificación pero no hay con qué mandar el código. Ningún cliente
+            nuevo puede enviar dinero. Apaga el interruptor o termina de configurar el proveedor.
+          </p>
+        </div>
+      )}
 
       {/* Elegir proveedor */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
