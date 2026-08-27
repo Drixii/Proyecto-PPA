@@ -266,6 +266,7 @@ function SelectorPais({ valor, paises, onChange }) {
   }, [abierto])
 
   const etiqueta = valor === TODOS ? 'Todos los países' : valor
+  const total = paises.reduce((a, p) => a + (p.count || 0), 0)
 
   return (
     <div ref={ref} className="relative">
@@ -290,17 +291,42 @@ function SelectorPais({ valor, paises, onChange }) {
           className="absolute left-0 mt-1 z-30 rounded-xl overflow-hidden max-h-72 overflow-y-auto min-w-[200px]"
           style={{ background: 'rgba(8,16,44,.99)', border: '1px solid rgba(255,255,255,.12)' }}
         >
-          {[TODOS, ...paises].map(p => (
+          <button
+            onClick={() => { onChange(TODOS); setAbierto(false) }}
+            className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left text-xs transition-colors hover:bg-white/5"
+            style={{
+              color: valor === TODOS ? '#38bdf8' : '#c8d8f0',
+              borderBottom: '1px solid rgba(255,255,255,.08)',
+            }}
+          >
+            <span>Todos los países</span>
+            <span style={{ color: '#64748b' }}>{total}</span>
+          </button>
+
+          {/* Los países sin movimiento salen igual, en gris. Sirven para
+              comprobar que un destino no dejó nada, que antes era
+              indistinguible de que el país no existiera en el filtro. */}
+          {paises.map(p => (
             <button
-              key={p}
-              onClick={() => { onChange(p); setAbierto(false) }}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-xs transition-colors hover:bg-white/5"
-              style={{ color: p === valor ? '#38bdf8' : '#c8d8f0' }}
+              key={p.name}
+              onClick={() => { onChange(p.name); setAbierto(false) }}
+              className="w-full flex items-center justify-between gap-3 px-4 py-2 text-left text-xs transition-colors hover:bg-white/5"
+              style={{ color: p.name === valor ? '#38bdf8' : (p.count ? '#c8d8f0' : '#64748b') }}
             >
-              {p !== TODOS && flagUrl(p) && (
-                <img src={flagUrl(p)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />
-              )}
-              {p === TODOS ? 'Todos los países' : p}
+              <span className="flex items-center gap-2 min-w-0">
+                {flagUrl(p.name) && (
+                  <img src={flagUrl(p.name)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />
+                )}
+                <span className="flex flex-col min-w-0">
+                  <span className="truncate">{p.name}</span>
+                  {p.sub_admins.length > 0 && (
+                    <span className="text-[10px] truncate" style={{ color: '#64748b' }}>
+                      {p.sub_admins.join(', ')}
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span style={{ color: p.count ? '#8aa0cc' : '#475569' }}>{p.count}</span>
             </button>
           ))}
         </div>

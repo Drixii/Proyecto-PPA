@@ -508,9 +508,51 @@ def get_cartera(
     # Los países del desplegable salen del rango de fechas, no de la consulta
     # ya filtrada: si salieran de ella, elegir un país dejaría ese país como
     # única opción y no habría forma de volver a los demás.
-    paises = sorted({
-        p for (p,) in base.with_entities(Order.receiver_country).distinct().all() if p
-    })
+    #
+    # A los que tienen órdenes se suman los que cubre cada sub-admin, aunque
+    # hoy no hayan movido nada. Sin ellos el desplegable cambiaba de un día
+    # para otro y no se podía comprobar "¿cuánto dejó Venezuela?" sin saber de
+    # antemano que había habido envíos: la respuesta "cero" también es una
+    # respuesta, pero antes ni siquiera se podía preguntar.
+    por_pais = dict(
+        base.with_entities(Order.receiver_country, func.count(Order.id))
+        .group_by(Order.receiver_country)
+        .all()
+    )
+
+    encargados = {}
+    vinculados = {
+        r.sub_admin_id
+        for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == _admin.id).all()
+    }
+    if vinculados:
+        filas_sa = (
+            db.query(SubAdminCountry.country, User.full_name)
+            .join(User, User.id == SubAdminCountry.user_id)
+            .filter(
+                SubAdminCountry.user_id.in_(vinculados),
+                User.role == "sub_admin",
+                User.is_active == True,
+                User.deleted_at == None,
+            )
+            .all()
+        )
+        for pais_sa, nombre in filas_sa:
+            if pais_sa:
+                encargados.setdefault(pais_sa, []).append(nombre)
+
+    paises = [
+        {
+            "name": nombre_pais,
+            "count": por_pais.get(nombre_pais, 0),
+            "sub_admins": sorted(encargados.get(nombre_pais, [])),
+        }
+        for nombre_pais in sorted(set(por_pais) | set(encargados))
+        if nombre_pais
+    ]
+    # Primero los que tienen movimiento: los de cero son para comprobar, no
+    # para el uso diario, y arriba estorbaban.
+    paises.sort(key=lambda p: (-p["count"], p["name"]))
 
     query = base
     if country:
