@@ -9,6 +9,7 @@ import NewTransfer from './pages/Client/NewTransfer'
 import OrderDetail from './pages/Client/OrderDetail'
 import AdminDashboard from './pages/Admin/AdminDashboard'
 import Pipeline from './pages/Admin/Pipeline'
+import Cartera from './pages/Admin/Cartera'
 import OrderAdmin from './pages/Admin/OrderAdmin'
 import AdminSettings from './pages/Admin/AdminSettings'
 import AdminOrders from './pages/Admin/AdminOrders'
@@ -155,6 +156,7 @@ export default function App() {
 
         {/* Super-Admin */}
         <Route path="/admin" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
+        <Route path="/admin/cartera" element={<RequireAuth role="admin"><Cartera /></RequireAuth>} />
         <Route path="/admin/pipeline" element={<RequireAuth role="admin"><Pipeline /></RequireAuth>} />
         <Route path="/admin/orders/:id" element={<RequireAuth role="admin"><OrderAdmin /></RequireAuth>} />
         <Route path="/admin/settings" element={<RequireAuth role="admin"><AdminSettings /></RequireAuth>} />

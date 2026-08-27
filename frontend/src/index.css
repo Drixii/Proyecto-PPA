@@ -31,3 +31,43 @@ body {
   font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Twemoji Mozilla', sans-serif;
   font-style: normal;
 }
+
+/* ── Barras de desplazamiento ──────────────────────────────
+   Por defecto el navegador las pinta en gris claro sobre blanco, y encima de
+   un fondo azul muy oscuro eso deja una franja luminosa cruzando la pantalla
+   (se veía sobre todo en la barra horizontal del pipeline). Aquí se pintan del
+   mismo azul del fondo, con el pulgar en el degradado de la marca.
+
+   Va en `*` y no en una clase para que valga en cualquier contenedor con
+   scroll, presente o futuro, sin acordarse de añadir nada. Las dos listas de
+   puntos ocultan su barra con scrollbar-width:none y siguen ocultándola: esto
+   solo cambia el color de las que se ven. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #38bdf8 rgba(6, 13, 40, 0.85);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(6, 13, 40, 0.85);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #38bdf8, #818cf8);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #7dd3fc, #a5b4fc);
+}
+
+/* La esquina donde se cruzan las dos barras: sin esto queda un cuadrito
+   blanco en las tablas que hacen scroll en los dos ejes. */
+*::-webkit-scrollbar-corner {
+  background: rgba(6, 13, 40, 0.85);
+}

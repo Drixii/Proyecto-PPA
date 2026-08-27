@@ -14,6 +14,7 @@ import VerificarCorreo from './VerificarCorreo'
 
 const ADMIN_TABS = [
   { label: 'Mi panel', path: '/admin' },
+  { label: 'Mi cartera', path: '/admin/cartera' },
   { label: 'Pipeline', path: '/admin/pipeline' },
   { label: 'Órdenes', path: '/admin/orders' },
   { label: 'Retenciones', path: '/admin/retenciones' },
@@ -33,6 +34,7 @@ const CLIENT_TABS = [
 
 const ADMIN_SIDEBAR = [
   { icon: <IcoHome />, path: '/admin', label: 'Inicio', exact: true },
+  { icon: <IcoWallet />, path: '/admin/cartera', label: 'Mi cartera' },
   { icon: <IcoPipeline />, path: '/admin/pipeline', label: 'Pipeline' },
   { icon: <IcoOrders />, path: '/admin/orders', label: 'Órdenes' },
   { icon: <IcoShield />, path: '/admin/retenciones', label: 'Retenciones' },
@@ -644,6 +646,7 @@ export default function FinexyLayout({ children, fullHeight = false }) {
   const mobileBottomNav = isAdmin
     ? [
         { icon: <IcoHome />, path: '/admin', label: 'Inicio', exact: true },
+        { icon: <IcoWallet />, path: '/admin/cartera', label: 'Cartera' },
         { icon: <IcoPipeline />, path: '/admin/pipeline', label: 'Pipeline' },
         { icon: <IcoOrders />, path: '/admin/orders', label: 'Órdenes' },
       ]
@@ -693,9 +696,9 @@ export default function FinexyLayout({ children, fullHeight = false }) {
         @keyframes pageEnter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         @keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
         .slide-panel{animation:slideInRight .26s cubic-bezier(.16,1,.3,1) both;}
-        .finexy-scrollbar::-webkit-scrollbar{width:4px}
-        .finexy-scrollbar::-webkit-scrollbar-track{background:transparent}
-        .finexy-scrollbar::-webkit-scrollbar-thumb{background:rgba(56,189,248,.2);border-radius:4px}
+        .finexy-scrollbar::-webkit-scrollbar{width:8px;height:8px}
+        .finexy-scrollbar::-webkit-scrollbar-track{background:rgba(6,13,40,.85);border-radius:999px}
+        .finexy-scrollbar::-webkit-scrollbar-thumb{background:linear-gradient(135deg,#38bdf8,#818cf8);border-radius:999px}
         .finexy-tab-active{background:linear-gradient(135deg,#1e3a6e,#1e40af)!important;color:#fff!important;box-shadow:0 4px 14px rgba(37,99,235,.35)!important;}
         .finexy-page-enter{animation:pageEnter .65s cubic-bezier(.16,1,.3,1) both;}
         h1,h2,h3,h4,h5,h6{color:#eaf2ff}
@@ -938,6 +941,15 @@ function IcoHome() {
   return (
     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+    </svg>
+  )
+}
+
+function IcoWallet() {
+  return (
+    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.5A2.5 2.5 0 015.5 6H18a2 2 0 012 2v1M3 8.5V17a2 2 0 002 2h14a2 2 0 002-2v-2M3 8.5V7a2 2 0 012-2h11" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 11h-4a2 2 0 000 4h4v-4z" />
     </svg>
   )
 }

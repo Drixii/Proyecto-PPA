@@ -466,6 +466,126 @@ def get_stats(db: Session = Depends(get_db), _admin: User = Depends(require_supe
     }
 
 
+# ── Cartera ────────────────────────────────────────────────
+
+# Órdenes que no dejan comisión. 'pendiente_pago' es una tarjeta creada y sin
+# cobrar, y 'rechazado' es dinero que nunca entró: contarlas llenaría la
+# cartera de ganancias que no existen.
+SIN_COMISION = ("pendiente_pago", "rechazado")
+
+
+@router.get("/cartera", response_model=dict)
+def get_cartera(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    country: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Lo ganado en comisiones, transacción a transacción.
+
+    Separado de /orders a propósito: allí el número que importa es el volumen
+    movido y las comisiones son una columna más. Aquí es al revés, y mezclar
+    ambas lecturas en la misma pantalla hacía que se leyera el volumen como si
+    fuera la ganancia.
+    """
+    from services.exchange_service import get_rate
+
+    base = db.query(Order).filter(
+        Order.deleted_at == None,
+        Order.super_admin_id == _admin.id,
+        Order.status.notin_(SIN_COMISION),
+    )
+    if date_from:
+        dt = _parse_dt(date_from)
+        if dt:
+            base = base.filter(Order.created_at >= dt)
+    if date_to:
+        dt = _parse_dt(date_to)
+        if dt:
+            base = base.filter(Order.created_at <= dt)
+
+    # Los países del desplegable salen del rango de fechas, no de la consulta
+    # ya filtrada: si salieran de ella, elegir un país dejaría ese país como
+    # única opción y no habría forma de volver a los demás.
+    paises = sorted({
+        p for (p,) in base.with_entities(Order.receiver_country).distinct().all() if p
+    })
+
+    query = base
+    if country:
+        query = query.filter(Order.receiver_country == country)
+
+    # La comisión está en la moneda de origen, que elige el cliente, así que
+    # sumarlas todas en un número no significa nada. Se agrupa por moneda y,
+    # además, se convierte a pesos: sin el equivalente hay que sumar de cabeza
+    # "12.000 CLP + 40 USD" para saber cuánto se ganó.
+    tasas = {}
+
+    def a_clp(moneda: str, monto: float):
+        if moneda not in tasas:
+            tasas[moneda] = 1.0 if moneda == "CLP" else (get_rate(db, moneda, "CLP") or 0)
+        tasa = tasas[moneda]
+        return monto * tasa if tasa else None
+
+    filas = (
+        query.with_entities(Order.currency_from, func.count(Order.id), func.sum(Order.fee))
+        .group_by(Order.currency_from)
+        .all()
+    )
+    totals = []
+    total_clp = 0.0
+    total_ordenes = 0
+    for moneda, cuenta, comision in filas:
+        comision = float(comision or 0)
+        equivalente = a_clp(moneda, comision)
+        if equivalente:
+            total_clp += equivalente
+        total_ordenes += cuenta
+        totals.append({
+            "currency": moneda,
+            "count": cuenta,
+            "fee": comision,
+            "fee_clp": equivalente,
+        })
+    totals.sort(key=lambda t: t["fee_clp"] or t["fee"], reverse=True)
+
+    # Tope alto y sin paginar: la cartera se lee por rango de fechas, y partir
+    # un día en páginas rompe los subtotales por día que se muestran arriba de
+    # cada grupo.
+    ordenes = query.order_by(Order.created_at.desc()).limit(1000).all()
+    items = [
+        {
+            "id": o.id,
+            "order_number": o.order_number,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+            "sender_name": o.sender_name,
+            "receiver_name": o.receiver_name,
+            "receiver_country": o.receiver_country,
+            "status": o.status,
+            "amount_sent": float(o.amount_sent or 0),
+            "currency_from": o.currency_from,
+            "currency_to": o.currency_to,
+            "fee": float(o.fee or 0),
+            "fee_clp": a_clp(o.currency_from, float(o.fee or 0)),
+        }
+        for o in ordenes
+    ]
+
+    return {
+        "success": True,
+        "data": {
+            "items": items,
+            "totals": totals,
+            "total_clp": total_clp,
+            "total_orders": total_ordenes,
+            "countries": paises,
+            "truncated": len(ordenes) >= 1000,
+        },
+        "message": "",
+    }
+
+
 # ── Notifications ──────────────────────────────────────────
 
 @router.get("/notifications", response_model=dict)

@@ -51,6 +51,21 @@ export default function AdminDashboard() {
     refetchInterval: 30000,
   })
 
+  // Las comisiones de hoy salen de /admin/cartera y no de /admin/stats a
+  // propósito: así la tarjeta y la pantalla de cartera cuentan exactamente lo
+  // mismo. /admin/stats corta el día en UTC, que en Chile empieza a las nueve
+  // de la noche anterior, y las dos cifras no cuadraban.
+  const hoyDesde = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())
+  const hoyHasta = new Date(hoyDesde.getFullYear(), hoyDesde.getMonth(), hoyDesde.getDate(), 23, 59, 59, 999)
+  const { data: cartera, isLoading: cargandoCartera } = useQuery({
+    queryKey: ['cartera-hoy'],
+    queryFn: () => api.get('/admin/cartera', {
+      params: { date_from: hoyDesde.toISOString(), date_to: hoyHasta.toISOString() },
+    }).then(r => r.data.data),
+    refetchInterval: 30000,
+  })
+  const comisiones = cartera?.totals || []
+
   const stats = data || {}
   const byStatus = stats.by_status || {}
   const recent = stats.recent_orders || []
@@ -88,25 +103,43 @@ export default function AdminDashboard() {
           <div className="space-y-4 self-start">
             {/* Volume card */}
             <div className="rounded-2xl p-5" style={CARD_STYLE}>
-              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: '#8aa0cc' }}>Volumen hoy</p>
+              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: '#8aa0cc' }}>Comisiones hoy</p>
               <div className="flex items-end justify-between">
                 <div>
                   <p className="text-2xl font-bold" style={{ color: '#eaf2ff' }}>
-                    {isLoading ? '—' : (stats.volume_today || 0).toLocaleString('es-CL')}
+                    {cargandoCartera ? '—' : Math.round(cartera?.total_clp || 0).toLocaleString('es-CL')}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#8aa0cc' }}>CLP procesados</p>
+                  <p className="text-xs mt-0.5" style={{ color: '#8aa0cc' }}>CLP ganados</p>
                 </div>
                 <div className="flex items-center gap-1 text-xs text-blue-300 font-medium px-2 py-0.5 rounded-full" style={{ background: 'rgba(56,189,248,.15)' }}>
                   ↑ activo
                 </div>
               </div>
 
+              {/* El desglose solo cuando hay más de una moneda: la comisión se
+                  cobra en la divisa de origen, así que con envíos desde varios
+                  países el total en pesos es una conversión y conviene ver de
+                  dónde sale. Con una sola moneda repetiría la cifra de arriba. */}
+              {comisiones.length > 1 && (
+                <div className="flex gap-1.5 flex-wrap mt-2">
+                  {comisiones.map(c => (
+                    <span
+                      key={c.currency}
+                      className="text-[11px] px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(56,189,248,.08)', color: '#7dd3fc' }}
+                    >
+                      {Math.round(c.fee).toLocaleString('es-CL')} {c.currency}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="flex gap-2 mt-4">
                 <button
-                  onClick={() => navigate('/admin/pipeline')}
+                  onClick={() => navigate('/admin/cartera')}
                   className="flex-1 bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 text-white text-xs font-semibold py-2 rounded-xl transition-all shadow-sm shadow-blue-200"
                 >
-                  Pipeline
+                  Ver mi Cartera
                 </button>
                 <button
                   onClick={() => navigate('/admin/settings')}
