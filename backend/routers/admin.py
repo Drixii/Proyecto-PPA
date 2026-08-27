@@ -740,6 +740,20 @@ def list_users(
         )
     users = q.order_by(User.created_at.desc()).all()
 
+    # El código con el que se registró cada cliente. Es lo único que lo
+    # identifica de forma corta y estable — el correo cambia, el nombre se
+    # repite — y hasta ahora solo se veía en la lista de códigos generados,
+    # donde había que buscarlo a ojo entre todos los invitados.
+    #
+    # Una consulta para todos y no una por fila: la lista trae cientos de
+    # clientes. Los creados a mano desde el panel no tienen código y se quedan
+    # sin él, que es la verdad.
+    codigos = {}
+    ids_clientes = [u.id for u in users if u.role == "client"]
+    if ids_clientes:
+        for fila in db.query(InviteCode).filter(InviteCode.used_by_id.in_(ids_clientes)).all():
+            codigos[fila.used_by_id] = fila.code
+
     result = []
     for u in users:
         row = {
@@ -757,6 +771,8 @@ def list_users(
             "is_trusted": bool(getattr(u, "is_trusted", False)),
             "email_verified": bool(getattr(u, "email_verified_at", None)),
         }
+        if u.role == "client":
+            row["invite_code"] = codigos.get(u.id)
         if u.role == "sub_admin":
             row["managed_countries"] = _sub_admin_countries(db, u.id)
         result.append(row)

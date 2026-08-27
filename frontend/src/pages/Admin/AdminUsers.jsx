@@ -67,6 +67,78 @@ function PointsModal({ userId, userName, onClose }) {
   )
 }
 
+// Ficha del cliente.
+//
+// El código de invitación con el que se registró es lo único corto y estable
+// que lo identifica: el correo lo cambia él y el nombre se repite. Antes solo
+// estaba en la lista de códigos generados, dentro del modal de invitar, donde
+// había que reconocerlo a ojo entre todos los invitados de la casa. Aquí sale
+// al abrir al cliente, que es donde se busca.
+function FichaCliente({ cliente, onClose, onToast }) {
+  const [copiado, setCopiado] = useState(false)
+  const codigo = cliente.invite_code
+
+  const copiar = () => {
+    navigator.clipboard.writeText(codigo)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+    onToast?.('Código copiado')
+  }
+
+  const datos = [
+    ['Correo', cliente.email],
+    ['Teléfono', cliente.phone || '—'],
+    ['País', cliente.country || '—'],
+    ['Registro', cliente.created_at ? new Date(cliente.created_at).toLocaleDateString('es-CL') : '—'],
+    ['Cuenta', cliente.is_active ? 'Activa' : 'Bloqueada'],
+    ['Confianza', cliente.is_trusted ? 'Confiable' : 'Normal'],
+    ['Correo verificado', cliente.email_verified ? 'Sí' : 'No'],
+  ]
+
+  return (
+    <Modal title={cliente.full_name} onClose={onClose}>
+      <div className="space-y-4">
+        <div>
+          <p className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{color:'#64748b'}}>
+            Código de cliente
+          </p>
+          {codigo ? (
+            <div className="flex items-center gap-2 rounded-xl px-4 py-3" style={{background:'rgba(252,211,77,.06)', border:'1px solid rgba(252,211,77,.2)'}}>
+              <code className="flex-1 text-lg font-mono font-bold tracking-widest" style={{color:'#fcd34d'}}>{codigo}</code>
+              <button
+                onClick={copiar}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                style={copiado
+                  ? {background:'rgba(74,222,128,.15)', color:'#4ade80', border:'1px solid rgba(74,222,128,.3)'}
+                  : {background:'rgba(255,255,255,.06)', color:'#8aa0cc', border:'1px solid rgba(255,255,255,.1)'}}>
+                {copiado ? '✓ Copiado' : 'Copiar'}
+              </button>
+            </div>
+          ) : (
+            /* Los clientes creados a mano desde el panel nunca pasaron por una
+               invitación, así que no tienen código. Se dice, en vez de dejar
+               un hueco que parece un fallo de carga. */
+            <div className="rounded-xl px-4 py-3" style={{background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.06)'}}>
+              <p className="text-xs" style={{color:'#64748b'}}>
+                Sin código: esta cuenta se creó a mano desde el panel, no con una invitación.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          {datos.map(([etiqueta, valor]) => (
+            <div key={etiqueta} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg" style={{background:'rgba(255,255,255,.03)'}}>
+              <span className="text-xs" style={{color:'#8aa0cc'}}>{etiqueta}</span>
+              <span className="text-xs font-medium text-right truncate" style={{color:'#eaf2ff'}}>{valor}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 const ROLE_LABEL = { client: 'Cliente', admin: 'Super-admin', sub_admin: 'Sub-admin' }
 const ROLE_COLOR = {
   client: 'text-blue-600 bg-blue-50',
@@ -172,6 +244,7 @@ export default function AdminUsers() {
   const [pwdModal, setPwdModal] = useState(null)
   const [countriesModal, setCountriesModal] = useState(null)
   const [pointsModal, setPointsModal] = useState(null)
+  const [ficha, setFicha] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null) // user to delete
   const [trashView, setTrashView] = useState(false)
   const [toast, setToast] = useState(null)
@@ -218,13 +291,6 @@ export default function AdminUsers() {
       qc.invalidateQueries({ queryKey: ['admin-users', 'client'] })
     },
     onError: (err) => showToast(err.response?.data?.detail || 'Error al generar código', false),
-  })
-
-  const { data: inviteCodes = [] } = useQuery({
-    queryKey: ['admin-invite-codes'],
-    queryFn: () => api.get('/admin/invite-codes').then(r => r.data.data),
-    enabled: inviteModal,
-    staleTime: 0,
   })
 
   const pwdMutation = useMutation({
@@ -543,7 +609,17 @@ export default function AdminUsers() {
                         <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-700 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
                           {u.full_name?.[0]?.toUpperCase()}
                         </div>
-                        <span className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{u.full_name}</span>
+                        {u.role === 'client' ? (
+                          <button
+                            onClick={() => setFicha(u)}
+                            className="text-sm font-semibold text-left hover:underline"
+                            style={{color:'#eaf2ff', background:'none', border:'none', padding:0, cursor:'pointer'}}
+                          >
+                            {u.full_name}
+                          </button>
+                        ) : (
+                          <span className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{u.full_name}</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-4">
@@ -670,6 +746,10 @@ export default function AdminUsers() {
         </div>}
       </div>
 
+      {ficha && (
+        <FichaCliente cliente={ficha} onClose={() => setFicha(null)} onToast={showToast} />
+      )}
+
       {/* Invite client modal */}
       {inviteModal && (
         <Modal title="Invitar Cliente" onClose={() => setInviteModal(false)}>
@@ -730,26 +810,6 @@ export default function AdminUsers() {
               </div>
             )}
 
-            {inviteCodes.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold mb-2" style={{color:'#64748b'}}>CÓDIGOS ANTERIORES</p>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                  {inviteCodes.map(c => (
-                    <div key={c.id} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.06)'}}>
-                      <code className="text-xs font-mono font-semibold" style={{color: c.is_used ? '#475569' : '#fcd34d'}}>{c.code}</code>
-                      <span className="text-xs flex-1 truncate" style={{color:'#64748b'}}>{c.email}</span>
-                      {c.is_used
-                        ? <span className="text-[10px] px-2 py-0.5 rounded-full" style={{background:'rgba(71,85,105,.2)', color:'#475569'}}>Usado · {c.used_by_name}</span>
-                        : <button onClick={() => { navigator.clipboard.writeText(c.registration_url) }}
-                            className="text-[10px] px-2 py-0.5 rounded-full" style={{background:'rgba(252,211,77,.1)', color:'#fcd34d', border:'1px solid rgba(252,211,77,.2)', cursor:'pointer'}}>
-                            Copiar
-                          </button>
-                      }
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </Modal>
       )}
