@@ -555,13 +555,30 @@ function StripeKeysForm() {
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
       >
         <div style={{ textAlign: 'left' }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Claves de Stripe</h3>
+          {/* El modo va en la cabecera, no solo dentro: el interruptor vive tras
+              un acordeon cerrado y con dos tarjetas llamadas "Stripe" y "Claves
+              de Stripe" nadie encontraba donde se cambia de prueba a real. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Claves de Stripe</h3>
+            {claves?.modo && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+                background: claves.modo === 'test' ? 'rgba(251,191,36,.12)' : 'rgba(74,222,128,.12)',
+                color: claves.modo === 'test' ? '#fcd34d' : '#4ade80',
+              }}>
+                {claves.modo === 'test' ? 'Modo prueba' : 'Modo real'}
+              </span>
+            )}
+          </div>
           <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
             {claves?.listo
               ? 'Cobrando con las claves de este modo'
               : claves?.secret_key
                 ? 'Falta el secreto del webhook — el pago con tarjeta sigue oculto'
                 : 'Sin configurar — el pago con tarjeta está oculto para los clientes'}
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: 11.5, color: '#64748b' }}>
+            {abierto ? 'Aquí dentro se cambia entre prueba y real' : 'Abre para pegar las claves o cambiar de modo'}
           </p>
         </div>
         <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
@@ -585,10 +602,13 @@ function StripeKeysForm() {
                   disabled={cambiarModo.isPending || activo}
                   title={hint}
                   style={{
-                    flex: 1, padding: '9px 12px', borderRadius: 9, border: 'none', cursor: activo ? 'default' : 'pointer',
+                    flex: 1, padding: '9px 12px', borderRadius: 9, cursor: activo ? 'default' : 'pointer',
+                    // El inactivo llevaba border:none y fondo transparente: se leia
+                    // como deshabilitado y no se pulsaba. Con borde parece un boton.
+                    border: activo ? '1px solid transparent' : '1px solid rgba(255,255,255,.14)',
                     fontSize: 12.5, fontWeight: 700,
                     background: activo ? (v === 'test' ? 'rgba(251,191,36,.16)' : 'rgba(74,222,128,.16)') : 'transparent',
-                    color: activo ? (v === 'test' ? '#fcd34d' : '#4ade80') : '#8aa0cc',
+                    color: activo ? (v === 'test' ? '#fcd34d' : '#4ade80') : '#c3d2ee',
                   }}
                 >
                   {txt}
@@ -733,6 +753,15 @@ function KoyweKeysForm() {
             }}>
               {listo ? 'Configurado' : 'Sin credenciales'}
             </span>
+            {koywe?.modo && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+                background: koywe.modo === 'test' ? 'rgba(251,191,36,.12)' : 'rgba(74,222,128,.12)',
+                color: koywe.modo === 'test' ? '#fcd34d' : '#4ade80',
+              }}>
+                {koywe.modo === 'test' ? 'Modo prueba' : 'Modo real'}
+              </span>
+            )}
           </div>
           <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
             M\u00e9todos locales por pa\u00eds \u2014 los que ofrezca tu comercio
@@ -758,10 +787,11 @@ function KoyweKeysForm() {
                 disabled={cambiarModo.isPending || activo}
                 title={hint}
                 style={{
-                  flex: 1, padding: '9px 12px', borderRadius: 9, border: 'none', cursor: activo ? 'default' : 'pointer',
+                  flex: 1, padding: '9px 12px', borderRadius: 9, cursor: activo ? 'default' : 'pointer',
+                  border: activo ? '1px solid transparent' : '1px solid rgba(255,255,255,.14)',
                   fontSize: 12.5, fontWeight: 700,
                   background: activo ? (v === 'test' ? 'rgba(251,191,36,.16)' : 'rgba(74,222,128,.16)') : 'transparent',
-                  color: activo ? (v === 'test' ? '#fcd34d' : '#4ade80') : '#8aa0cc',
+                  color: activo ? (v === 'test' ? '#fcd34d' : '#4ade80') : '#c3d2ee',
                 }}
               >
                 {txt}
@@ -1416,7 +1446,10 @@ function PaymentIntegrations() {
   return (
     <div style={{ ...GLASS, padding: '22px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Stripe</h3>
+        {/* "Cuenta de Stripe", no "Stripe" a secas: arriba hay otra tarjeta
+            llamada "Claves de Stripe" y el mismo nombre para las dos hacia que
+            se buscara el interruptor de modo en esta, que no lo tiene. */}
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Cuenta de Stripe</h3>
         <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: estado.bg, color: estado.color }}>
           {estado.txt}
         </span>
