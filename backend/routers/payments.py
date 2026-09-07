@@ -27,6 +27,19 @@ from services.order_service import find_sub_admin_for_country
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 log = logging.getLogger("ppa")
 
+
+def frontend_base() -> str:
+    """Dominio al que vuelve el cliente despues de pagar.
+
+    FRONTEND_URL puede llevar varios origenes separados por coma mientras se
+    cambia de dominio (ver main.py). Aqui hace falta UNO: el primero, que es el
+    canonico. Sin esto la lista entera acababa pegada dentro de la URL de vuelta
+    y el cliente terminaba en una direccion que no existe.
+    """
+    valor = os.environ.get("FRONTEND_URL", "")
+    primero = valor.split(",")[0].strip().rstrip("/")
+    return primero or "https://cambios.ksatokio.com"
+
 # Los errores de Stripe se devuelven como 400, no como 502/503. El sitio está
 # detrás de Cloudflare, que reemplaza cualquier 5xx del origen por su propia
 # pantalla ("The origin web server returned an invalid or incomplete
@@ -315,7 +328,7 @@ def get_koywe_keys(
     modo = koywe_service.get_mode()
     creds = koywe_service.credenciales(modo)
     publicos = (koywe_service.CLAVE_ORG, koywe_service.CLAVE_MERCHANT)
-    base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+    base = frontend_base()
 
     # El catálogo aquí va entero, incluidos los métodos que aún no se ofrecen,
     # para que el admin vea qué tiene contratado y por qué falta alguno. Si
@@ -529,7 +542,7 @@ def crear_checkout_koywe(
     if order.paid_at:
         raise HTTPException(status_code=400, detail="Esta orden ya está pagada")
 
-    base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+    base = frontend_base()
 
     try:
         cobro = koywe_service.crear_cobro(
@@ -974,7 +987,7 @@ def get_global66_keys(
     modo = stripe_service.get_mode()
     creds = global66_service.credenciales(modo)
 
-    base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+    base = frontend_base()
 
     return {
         "success": True,
@@ -1254,7 +1267,7 @@ def start_onboarding(
             db.commit()
             db.refresh(acc)
 
-        base = os.environ.get("FRONTEND_URL", "").rstrip("/") or "https://cambios.ksatokio.com"
+        base = frontend_base()
         url = stripe_service.onboarding_link(
             acc.account_id,
             return_url=f"{base}/admin/settings",

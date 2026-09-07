@@ -178,9 +178,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# FRONTEND_URL admite varios origenes separados por coma. Al cambiar de dominio
+# hay dias en que los dos tienen que responder: el DNS tarda en propagarse y hay
+# clientes con el enlace viejo abierto. Con un solo valor, mover la variable
+# dejaba al dominio anterior fuera de CORS de golpe.
+#
+# El PRIMERO es el canonico: es el que se usa para construir las URLs de vuelta
+# de los pagos (ver routers/payments.py). Los demas solo se admiten en CORS.
 _cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-if os.environ.get("FRONTEND_URL"):
-    _cors_origins.append(os.environ["FRONTEND_URL"])
+_cors_origins += [
+    o.strip().rstrip("/")
+    for o in os.environ.get("FRONTEND_URL", "").split(",")
+    if o.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
