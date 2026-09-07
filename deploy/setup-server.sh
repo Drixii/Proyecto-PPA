@@ -22,8 +22,11 @@ REPO_URL="https://github.com/Drixii/Proyecto-PPA.git"
 
 # Dominio principal de la app. El resto siguen respondiendo por compatibilidad:
 # api. es un resto del plan viejo (frontend en Vercel) y la raiz quedo libre.
-SITE_NAME="${SITE_NAME:-cambios.ksatokio.com}"
-SITE_NAMES="${SITE_NAMES:-cambios.ksatokio.com ksatokio.com www.ksatokio.com api.ksatokio.com}"
+# ksaglobal-evolution.com pasa a ser el dominio principal. cambios.ksatokio.com
+# se mantiene: hay clientes con ese enlace guardado y nginx responde a los dos
+# sin coste. Quitarlo el dia que deje de recibir visitas.
+SITE_NAME="${SITE_NAME:-ksaglobal-evolution.com}"
+SITE_NAMES="${SITE_NAMES:-ksaglobal-evolution.com www.ksaglobal-evolution.com cambios.ksatokio.com ksatokio.com www.ksatokio.com api.ksatokio.com}"
 
 say() { echo -e "\n=== $1 ===\n"; }
 
