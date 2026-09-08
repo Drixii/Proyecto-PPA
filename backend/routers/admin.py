@@ -468,10 +468,20 @@ def get_stats(db: Session = Depends(get_db), _admin: User = Depends(require_supe
 
 # ── Cartera ────────────────────────────────────────────────
 
-# Órdenes que no dejan comisión. 'pendiente_pago' es una tarjeta creada y sin
-# cobrar, y 'rechazado' es dinero que nunca entró: contarlas llenaría la
-# cartera de ganancias que no existen.
-SIN_COMISION = ("pendiente_pago", "rechazado")
+# Órdenes que no dejan comisión todavía. Contarlas llenaría la cartera de
+# ganancias que no existen:
+#
+#   pendiente_pago  tarjeta creada y sin cobrar, el dinero nunca salió
+#   rechazado       el comprobante no valía, ese dinero no entró
+#   en_aprobacion   el cliente subió comprobante y nadie lo ha comprobado aún
+#
+# 'en_aprobacion' es el caso delicado: hay un comprobante, pero un comprobante
+# no es un ingreso hasta que alguien mira el banco y escribe COMPROBADO. Una
+# transferencia falsa o de menos importe contaba como ganada.
+#
+# 'retenido' SÍ cuenta: ahí el admin ya verificó que el dinero entró y lo que
+# se detiene es el pago al destinatario, no el cobro.
+SIN_COMISION = ("pendiente_pago", "rechazado", "en_aprobacion")
 
 
 @router.get("/cartera", response_model=dict)
