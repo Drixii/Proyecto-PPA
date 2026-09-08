@@ -787,13 +787,21 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
             <div className="space-y-3">
               {cuenta ? (
                 <div className="rounded-xl p-4 space-y-2" style={{background:'rgba(56,189,248,.06)', border:'1px solid rgba(56,189,248,.2)'}}>
-                  {[
-                    ['Número de cuenta', cuenta.numero],
-                    ['Titular', cuenta.titular],
-                    ['Banco', cuenta.banco],
-                    ['Documento', cuenta.documento],
-                    ['Tipo de cuenta', cuenta.tipo_cuenta],
-                  ].filter(([, v]) => v).map(([label, v]) => (
+                  {/* Dos formas de cuenta: la de Koywe viene plana con cinco
+                      claves fijas; la que carga el super-admin trae `campos`
+                      con su etiqueta, porque cada país pide datos distintos
+                      (IBAN en España, clave PIX en Brasil, routing en EEUU) y
+                      una lista fija los dejaría fuera. */}
+                  {(cuenta.campos
+                    ? cuenta.campos.map(c => [c.etiqueta, c.valor])
+                    : [
+                      ['Número de cuenta', cuenta.numero],
+                      ['Titular', cuenta.titular],
+                      ['Banco', cuenta.banco],
+                      ['Documento', cuenta.documento],
+                      ['Tipo de cuenta', cuenta.tipo_cuenta],
+                    ]
+                  ).filter(([, v]) => v).map(([label, v]) => (
                     <div key={label}>
                       <p className="text-[10px] font-semibold uppercase tracking-wider" style={{color:'#475569'}}>{label}</p>
                       <p className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{v}</p>

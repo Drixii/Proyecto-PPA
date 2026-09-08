@@ -1012,6 +1012,67 @@ def list_sub_admins(
     return {"success": True, "data": result, "message": ""}
 
 
+# ── Cuentas propias de cobro ──────────────────────────────
+
+
+class CuentaPropiaIn(BaseModel):
+    datos: dict
+    activa: bool = True
+
+
+@router.get("/cuentas-propias", response_model=dict)
+def listar_cuentas_propias(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Las cuentas de cobro de ESTE super-admin, y que campos pide cada pais.
+
+    El catalogo va en la misma respuesta para que el panel pinte el formulario
+    sin una segunda llamada, y para que no pueda quedarse desfasado respecto a
+    lo que valida el backend.
+    """
+    from services import cuentas_propias
+
+    return {
+        "success": True,
+        "data": {
+            "catalogo": cuentas_propias.catalogo(),
+            "cuentas": cuentas_propias.listar(db, _admin.id),
+            "cubiertas_por_koywe": list(cuentas_propias.CUBIERTAS_POR_KOYWE),
+        },
+        "message": "",
+    }
+
+
+@router.put("/cuentas-propias/{moneda}", response_model=dict)
+def guardar_cuenta_propia(
+    moneda: str,
+    data: CuentaPropiaIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    from services import cuentas_propias
+
+    try:
+        cuenta = cuentas_propias.guardar(db, _admin.id, moneda, data.datos, data.activa)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"success": True, "data": cuenta, "message": "Cuenta guardada"}
+
+
+@router.delete("/cuentas-propias/{moneda}", response_model=dict)
+def borrar_cuenta_propia(
+    moneda: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    from services import cuentas_propias
+
+    if not cuentas_propias.borrar(db, _admin.id, moneda):
+        raise HTTPException(status_code=404, detail="No tienes cuenta en esa moneda")
+    return {"success": True, "data": None, "message": "Cuenta eliminada"}
+
+
 # ── Banks ─────────────────────────────────────────────────
 
 @router.get("/banks", response_model=dict)

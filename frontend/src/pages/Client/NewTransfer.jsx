@@ -310,7 +310,13 @@ export default function NewTransfer() {
   // el dinero cae directo en el saldo de ese país en vez de en una cuenta
   // nuestra. No hay lista de países aquí a propósito: la manda el backend, así
   // que el día que Koywe habilite una moneda nueva aparece sola.
-  const cuentaTransfer = (payCfg?.koywe?.transfer_accounts || {})[calc.fromCurrency] || null
+  // Donde Koywe no emite cuenta (todo salvo MXN, ARS y CLP) se usa la que haya
+  // cargado el super-admin dueño de este cliente, que el backend ya filtra por
+  // dueño: nadie ve la cuenta de otro.
+  const cuentaTransfer =
+    (payCfg?.koywe?.transfer_accounts || {})[calc.fromCurrency] ||
+    (payCfg?.cuentas_propias || {})[calc.fromCurrency] ||
+    null
 
   const [displayAmount, setDisplayAmount] = useState(
     calc.amount ? formatDisplay(parseRaw(String(calc.amount)), calc.fromCurrency) : ''
@@ -1117,13 +1123,23 @@ export default function NewTransfer() {
                       </div>
 
                       <div className="space-y-2">
-                        {[
-                          { label: 'Número de cuenta', value: cuentaTransfer.numero, copiable: true },
-                          { label: 'Titular', value: cuentaTransfer.titular },
-                          { label: 'Banco', value: cuentaTransfer.banco },
-                          { label: 'Documento', value: cuentaTransfer.documento },
-                          { label: 'Tipo de cuenta', value: cuentaTransfer.tipo_cuenta },
-                        ].filter(f => f.value).map(({ label, value, copiable }) => (
+                        {/* La cuenta de Koywe viene plana con claves fijas; la
+                            que carga el super-admin trae `campos` etiquetados,
+                            porque cada país pide datos distintos. El primero se
+                            marca copiable: es el dato que hay que pegar en el
+                            banco (número, IBAN o clave PIX según el país). */}
+                        {(cuentaTransfer.campos
+                          ? cuentaTransfer.campos.map(c => ({
+                              label: c.etiqueta, value: c.valor, copiable: c.principal,
+                            }))
+                          : [
+                            { label: 'Número de cuenta', value: cuentaTransfer.numero, copiable: true },
+                            { label: 'Titular', value: cuentaTransfer.titular },
+                            { label: 'Banco', value: cuentaTransfer.banco },
+                            { label: 'Documento', value: cuentaTransfer.documento },
+                            { label: 'Tipo de cuenta', value: cuentaTransfer.tipo_cuenta },
+                          ]
+                        ).filter(f => f.value).map(({ label, value, copiable }) => (
                           <div key={label} className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{color:'#475569'}}>{label}</p>

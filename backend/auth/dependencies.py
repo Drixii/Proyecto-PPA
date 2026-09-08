@@ -45,6 +45,29 @@ def get_current_user(
     return user
 
 
+_bearer_opcional = HTTPBearer(auto_error=False)
+
+
+def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_opcional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Quien llama, si viene identificado; None si no.
+
+    Para endpoints publicos que ademas ensenan algo propio de cada usuario:
+    /payments/config lo usan tanto la web sin sesion como un cliente dentro, y
+    a este ultimo hay que mostrarle las cuentas de cobro de SU super-admin.
+    Cualquier fallo del token se trata como "sin sesion" en vez de 401: es un
+    endpoint que tiene que seguir respondiendo aunque la sesion haya caducado.
+    """
+    if not credentials:
+        return None
+    try:
+        return get_current_user(credentials, db)
+    except HTTPException:
+        return None
+
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso solo para administradores")

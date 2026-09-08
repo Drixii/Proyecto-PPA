@@ -20,7 +20,7 @@ from database import SessionLocal, get_db
 from models.order import Order
 from models.user import User
 from models.stripe_account import StripeAccount
-from auth.dependencies import get_current_user, require_super_admin
+from auth.dependencies import get_current_user, get_current_user_optional, require_super_admin
 from services import stripe_service, koywe_service, global66_service
 from services.order_service import find_sub_admin_for_country
 
@@ -48,8 +48,13 @@ def frontend_base() -> str:
 
 
 @router.get("/config", response_model=dict)
-def payment_config():
-    """Lo que el navegador necesita saber para pintar el formulario."""
+def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
+    """Lo que el navegador necesita saber para pintar el formulario.
+
+    `quien` es opcional: la web sin sesion tambien pide esto. Sirve para anadir
+    las cuentas de cobro del super-admin de quien pregunta, que son distintas
+    para cada uno y no pueden ir en una respuesta comun.
+    """
     # El catálogo entero de una vez: el selector cambia de moneda sin volver a
     # preguntar. Sale de la API de Koywe (cacheado), no de una lista nuestra,
     # y viene vacío si no está configurado o si no responde — así nadie elige
@@ -68,14 +73,26 @@ def payment_config():
     # Umbral de retencion, para poder avisar ANTES de que pague. Retener sin
     # haberlo advertido es peor: el cliente ya puso el dinero.
     from database import SessionLocal
-    from services import retencion_service
+    from services import retencion_service, cuentas_propias
     _db = SessionLocal()
+    cuentas_admin = {}
     try:
         retencion = {
             "activa": retencion_service.activa(_db),
             "umbral_clp": retencion_service.umbral_clp(_db),
         }
-    except Exception:
+        # Las cuentas del super-admin de quien pregunta, en las monedas que
+        # Koywe no cubre. Sin sesion no hay dueno y va vacio: el selector de
+        # moneda de la pantalla de envio solo ofrece transferencia donde
+        # realmente hay a donde transferir.
+        if quien is not None:
+            dueno = quien.id if quien.role == "admin" else quien.super_admin_id
+            for moneda in cuentas_propias.MONEDAS:
+                cuenta = cuentas_propias.para_cliente(_db, dueno, moneda)
+                if cuenta:
+                    cuentas_admin[moneda] = cuenta
+    except Exception as e:
+        log.warning("[config] no se pudieron leer ajustes del cliente: %s", e)
         retencion = {"activa": False, "umbral_clp": None}
     finally:
         _db.close()
@@ -84,6 +101,9 @@ def payment_config():
         "success": True,
         "data": {
             "retencion": retencion,
+            # Cuentas de cobro propias del super-admin, por moneda. Se suman a
+            # las de Koywe, que solo existen en MXN, ARS y CLP.
+            "cuentas_propias": cuentas_admin,
             "enabled": stripe_service.is_configured(),
             "publishable_key": stripe_service.publishable_key(),
             "currencies": list(stripe_service.CARD_CURRENCIES),
@@ -684,6 +704,19 @@ def metodos_de_orden(
         cuenta = koywe_service.cuentas_completas().get(moneda)
     except Exception:
         cuenta = None
+
+    # Donde Koywe no emite cuenta (todo salvo MXN, ARS y CLP) se usa la que
+    # haya cargado el dueno de este cliente. Es por super-admin: la orden ya
+    # sabe de quien es, asi que nadie ve la cuenta de otro.
+    if not cuenta:
+        from services import cuentas_propias
+        cuenta = cuentas_propias.para_cliente(db, order.super_admin_id, moneda)
+
+    # Sin cuenta no hay a donde transferir. Ofrecer el metodo igual dejaba al
+    # cliente con "sube tu comprobante" y ningun dato bancario: pagaba a ciegas
+    # o abandonaba. Se retira, igual que la tarjeta cuando falta Stripe.
+    if not cuenta:
+        metodos = [m for m in metodos if m["codigo"] != "transferencia"]
 
     return {
         "success": True,

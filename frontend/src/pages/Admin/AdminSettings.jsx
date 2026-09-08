@@ -1893,9 +1893,217 @@ export default function AdminSettings() {
             </>
           )
         )}
-        {section === 'pagos' && <><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
+        {section === 'pagos' && <><CuentasPropiasForm /><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
         {section === 'correo' && <SmtpForm />}
       </div>
     </FinexyLayout>
+  )
+}
+
+// ── Cuentas propias de cobro ─────────────────────────────────────────────────
+//
+// Koywe solo emite cuenta en MXN, ARS y CLP. En las otras seis monedas de
+// origen el cliente veía "Transferencia / sube tu comprobante" sin datos
+// bancarios: se le pedía transferir sin decirle a dónde. Aquí cada super-admin
+// carga la suya, y son suyas: sus clientes ven estas y ningún otro admin las ve.
+//
+// Los campos los manda el backend por moneda, no están escritos aquí. Un IBAN
+// español y una clave PIX brasileña no se parecen, y duplicar esa lista en el
+// navegador garantiza que un día deje de coincidir con lo que valida el
+// servidor.
+function CuentasPropiasForm() {
+  const qc = useQueryClient()
+  const [abierto, setAbierto] = useState(false)
+  const [editando, setEditando] = useState(null)   // moneda en edición
+  const [form, setForm] = useState({})
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+
+  const { data } = useQuery({
+    queryKey: ['cuentas-propias'],
+    queryFn: () => api.get('/admin/cuentas-propias').then(r => r.data.data),
+  })
+
+  const catalogo = data?.catalogo || {}
+  const cuentas = data?.cuentas || []
+  const porMoneda = Object.fromEntries(cuentas.map(c => [c.moneda, c]))
+  const listas = cuentas.filter(c => c.activa && Object.keys(c.datos || {}).length).length
+
+  const guardar = useMutation({
+    mutationFn: ({ moneda, datos, activa }) =>
+      api.put(`/admin/cuentas-propias/${moneda}`, { datos, activa }),
+    onSuccess: (r) => {
+      setMsg(r.data.message); setError(''); setEditando(null); setForm({})
+      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
+  })
+
+  const borrar = useMutation({
+    mutationFn: (moneda) => api.delete(`/admin/cuentas-propias/${moneda}`),
+    onSuccess: () => {
+      setMsg('Cuenta eliminada'); setError(''); setEditando(null); setForm({})
+      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo eliminar'); setMsg('') },
+  })
+
+  const abrirEdicion = (moneda) => {
+    setEditando(moneda)
+    setForm({ ...(porMoneda[moneda]?.datos || {}) })
+    setError(''); setMsg('')
+  }
+
+  const ENTRADA = {
+    width: '100%', padding: '9px 11px', borderRadius: 9, fontSize: 13,
+    background: 'rgba(2,6,23,.7)', color: '#eaf2ff',
+    border: '1px solid rgba(255,255,255,.12)',
+  }
+
+  return (
+    <div style={{ ...GLASS, padding: '20px 24px' }}>
+      <button
+        onClick={() => setAbierto(a => !a)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Mis cuentas de cobro</h3>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+              background: listas ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+              color: listas ? '#4ade80' : '#fcd34d',
+            }}>
+              {listas ? `${listas} de ${Object.keys(catalogo).length}` : 'Sin cuentas'}
+            </span>
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
+            Dónde te transfieren en los países que Koywe no cubre
+          </p>
+        </div>
+        <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
+      </button>
+
+      {abierto && (
+        <div style={{ marginTop: 18 }}>
+          <p style={{ margin: '0 0 16px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+            Koywe emite cuenta automáticamente en {(data?.cubiertas_por_koywe || []).join(', ')}.
+            En el resto, tus clientes no ven a dónde transferir hasta que cargues una cuenta aquí.
+            Son tuyas: las ven solo tus clientes.
+          </p>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            {Object.entries(catalogo).map(([moneda, info]) => {
+              const cuenta = porMoneda[moneda]
+              const cargada = cuenta && Object.keys(cuenta.datos || {}).length > 0
+              const enEdicion = editando === moneda
+
+              return (
+                <div key={moneda} style={{
+                  borderRadius: 12, padding: '12px 14px',
+                  background: 'rgba(4,10,30,.5)',
+                  border: `1px solid ${enEdicion ? 'rgba(56,189,248,.3)' : 'rgba(255,255,255,.07)'}`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <img src={`https://flagcdn.com/w40/${info.bandera}.png`} alt="" width={22}
+                      style={{ borderRadius: 3, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
+                        {info.pais} <span style={{ color: '#64748b', fontWeight: 600 }}>· {moneda}</span>
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: cargada && cuenta.activa ? '#4ade80' : '#64748b' }}>
+                        {cargada
+                          ? (cuenta.activa ? 'Visible para tus clientes' : 'Cargada, pero apagada')
+                          : 'Sin cuenta — no se ofrece transferencia'}
+                      </p>
+                    </div>
+                    <button onClick={() => (enEdicion ? setEditando(null) : abrirEdicion(moneda))}
+                      style={{
+                        padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                        border: '1px solid rgba(255,255,255,.14)', background: 'transparent',
+                        color: '#c3d2ee', cursor: 'pointer', flexShrink: 0,
+                      }}>
+                      {enEdicion ? 'Cancelar' : (cargada ? 'Editar' : 'Añadir')}
+                    </button>
+                  </div>
+
+                  {enEdicion && (
+                    <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
+                      {info.campos.map(c => (
+                        <div key={c.clave}>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
+                            {c.etiqueta}{c.requerido && <span style={{ color: '#f87171' }}> *</span>}
+                          </label>
+                          {c.tipo === 'select' ? (
+                            <select
+                              value={form[c.clave] || ''}
+                              onChange={e => setForm(f => ({ ...f, [c.clave]: e.target.value }))}
+                              style={ENTRADA}>
+                              <option value="">Elegir…</option>
+                              {c.opciones.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          ) : (
+                            <input
+                              value={form[c.clave] || ''}
+                              onChange={e => setForm(f => ({ ...f, [c.clave]: e.target.value }))}
+                              placeholder={c.ayuda}
+                              style={ENTRADA} />
+                          )}
+                          {c.ayuda && c.tipo !== 'select' && (
+                            <p style={{ margin: '3px 0 0', fontSize: 10.5, color: '#475569' }}>{c.ayuda}</p>
+                          )}
+                        </div>
+                      ))}
+
+                      <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => guardar.mutate({ moneda, datos: form, activa: true })}
+                          disabled={guardar.isPending}
+                          style={{
+                            padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 12.5,
+                            fontWeight: 700, background: 'rgba(56,189,248,.16)', color: '#38bdf8',
+                            cursor: 'pointer',
+                          }}>
+                          {guardar.isPending ? 'Guardando…' : 'Guardar y mostrar'}
+                        </button>
+                        {cargada && (
+                          <>
+                            <button
+                              onClick={() => guardar.mutate({ moneda, datos: form, activa: !cuenta.activa })}
+                              style={{
+                                padding: '9px 16px', borderRadius: 9, fontSize: 12.5, fontWeight: 700,
+                                border: '1px solid rgba(255,255,255,.14)', background: 'transparent',
+                                color: '#c3d2ee', cursor: 'pointer',
+                              }}>
+                              {cuenta.activa ? 'Guardar y ocultar' : 'Guardar y mostrar'}
+                            </button>
+                            <button
+                              onClick={() => borrar.mutate(moneda)}
+                              style={{
+                                padding: '9px 16px', borderRadius: 9, fontSize: 12.5, fontWeight: 700,
+                                border: '1px solid rgba(248,113,113,.25)', background: 'transparent',
+                                color: '#f87171', cursor: 'pointer',
+                              }}>
+                              Eliminar
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {msg && <p style={{ marginTop: 14, fontSize: 12.5, color: '#4ade80' }}>{msg}</p>}
+          {error && <p style={{ marginTop: 14, fontSize: 12.5, color: '#f87171' }}>{error}</p>}
+        </div>
+      )}
+    </div>
   )
 }
