@@ -596,6 +596,22 @@ def get_cartera(
     # un día en páginas rompe los subtotales por día que se muestran arriba de
     # cada grupo.
     ordenes = query.order_by(Order.created_at.desc()).limit(1000).all()
+
+    # Quién atendió cada envío. En una sola consulta y no una por fila: son
+    # hasta mil órdenes y el encargado se repite muchísimo.
+    #
+    # Queda vacío cuando nadie lo atendió todavía, que es lo normal mientras la
+    # orden no se ha pagado, pero también pasa si el país no tiene encargado
+    # asignado. Se muestra tal cual en vez de inventar un nombre: un hueco aquí
+    # es justo lo que hay que ver.
+    encargados = {}
+    ids_encargados = {o.sub_admin_id for o in ordenes if o.sub_admin_id}
+    if ids_encargados:
+        encargados = {
+            u.id: u.full_name
+            for u in db.query(User).filter(User.id.in_(ids_encargados)).all()
+        }
+
     items = [
         {
             "id": o.id,
@@ -610,6 +626,8 @@ def get_cartera(
             "currency_to": o.currency_to,
             "fee": float(o.fee or 0),
             "fee_clp": a_clp(o.currency_from, float(o.fee or 0)),
+            "sub_admin": encargados.get(o.sub_admin_id),
+            "sub_admin_id": o.sub_admin_id,
         }
         for o in ordenes
     ]

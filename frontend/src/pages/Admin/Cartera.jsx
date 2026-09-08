@@ -230,6 +230,12 @@ function Fila({ it, onClick }) {
           )}
           {it.receiver_country}
         </span>
+        {/* Quién atendió el envío. Va bajo el país porque es su encargado, y
+            el hueco importa: sin nombre, ese país no tiene a nadie asignado y
+            la orden se quedó sin quien la entregue. */}
+        <span className="block text-[11px] mt-0.5" style={{ color: it.sub_admin ? '#64748b' : '#fbbf24' }}>
+          {it.sub_admin || 'Sin encargado'}
+        </span>
       </td>
       <td className="px-4 py-3 whitespace-nowrap">
         <span className="text-xs" style={{ color: '#64748b' }}>
