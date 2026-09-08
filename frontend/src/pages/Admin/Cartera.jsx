@@ -158,31 +158,74 @@ export default function Cartera() {
             </p>
           )}
 
-          {!isLoading && dias.map(d => (
-            <div key={d.dia}>
-              <div
-                className="flex items-center justify-between px-6 py-3 flex-wrap gap-2"
-                style={{ background: 'rgba(4,10,30,.6)', borderBottom: '1px solid rgba(255,255,255,.06)' }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>
-                  {d.dia}
-                </p>
-                <p className="text-sm font-bold" style={{ color: '#4ade80' }}>
-                  + {Object.entries(d.porMoneda).map(([m, v]) => money(v, m)).join(' · ')}
-                </p>
-              </div>
+          {/* Una sola tabla para todos los días, no una por día: con tablas
+              separadas cada una calculaba sus anchos y las columnas no
+              coincidían entre un día y otro. Los días van como fila
+              separadora dentro de la misma tabla, así todo queda a plomo. */}
+          {!isLoading && dias.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" style={{ minWidth: 860 }}>
+                <colgroup>
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '19%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '8%' }} />
+                </colgroup>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                    {[
+                      ['Orden', 'left'],
+                      ['Cliente', 'left'],
+                      ['Destino', 'left'],
+                      ['Encargado', 'left'],
+                      ['Envió', 'left'],
+                      ['Comisión', 'right'],
+                      ['Hora', 'right'],
+                    ].map(([t, al]) => (
+                      <th
+                        key={t}
+                        className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap"
+                        style={{ color: '#475569', textAlign: al }}
+                      >
+                        {t}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <tbody>
+                {dias.map(d => (
+                  <tbody key={d.dia}>
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-4 py-2.5"
+                        style={{
+                          background: 'rgba(4,10,30,.6)',
+                          borderTop: '1px solid rgba(255,255,255,.06)',
+                          borderBottom: '1px solid rgba(255,255,255,.06)',
+                        }}
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>
+                            {d.dia}
+                          </span>
+                          <span className="text-sm font-bold" style={{ color: '#4ade80' }}>
+                            + {Object.entries(d.porMoneda).map(([m, v]) => money(v, m)).join(' · ')}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
                     {d.filas.map(it => (
                       <Fila key={it.id} it={it} onClick={() => abrirOrden(it.id)} />
                     ))}
                   </tbody>
-                </table>
-              </div>
+                ))}
+              </table>
             </div>
-          ))}
+          )}
 
           {data?.truncated && (
             <p className="text-center text-xs py-4" style={{ color: '#fcd34d' }}>
@@ -217,29 +260,31 @@ function Fila({ it, onClick }) {
         background: hover ? 'rgba(56,189,248,.05)' : 'transparent',
       }}
     >
-      <td className="px-6 py-3 whitespace-nowrap">
+      <td className="px-4 py-3 whitespace-nowrap">
         <span className="font-mono text-xs" style={{ color: '#8aa0cc' }}>{it.order_number}</span>
       </td>
       <td className="px-4 py-3">
-        <span className="text-sm font-medium" style={{ color: '#c8d8f0' }}>{it.sender_name}</span>
+        <span className="text-sm font-medium truncate block" style={{ color: '#c8d8f0' }}>{it.sender_name}</span>
       </td>
       <td className="px-4 py-3">
         <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: '#8aa0cc' }}>
           {flagUrl(it.receiver_country) && (
             <img src={flagUrl(it.receiver_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />
           )}
-          {it.receiver_country}
+          <span className="truncate">{it.receiver_country}</span>
         </span>
-        {/* Quién atendió el envío. Va bajo el país porque es su encargado, y
-            el hueco importa: sin nombre, ese país no tiene a nadie asignado y
-            la orden se quedó sin quien la entregue. */}
-        <span className="block text-[11px] mt-0.5" style={{ color: it.sub_admin ? '#64748b' : '#fbbf24' }}>
+      </td>
+      {/* Quién atendió el envío. Sin nombre, en ámbar: o la orden aún no se
+          pagó, o ese país no tiene a nadie asignado y nadie la va a entregar.
+          Ese hueco es justo lo que hay que ver. */}
+      <td className="px-4 py-3">
+        <span className="text-xs truncate block" style={{ color: it.sub_admin ? '#8aa0cc' : '#fbbf24' }}>
           {it.sub_admin || 'Sin encargado'}
         </span>
       </td>
       <td className="px-4 py-3 whitespace-nowrap">
         <span className="text-xs" style={{ color: '#64748b' }}>
-          envió {money(it.amount_sent, it.currency_from)}
+          {money(it.amount_sent, it.currency_from)}
         </span>
       </td>
       <td className="px-4 py-3 text-right whitespace-nowrap">
