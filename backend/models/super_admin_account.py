@@ -36,5 +36,11 @@ class SuperAdminAccount(Base):
     # todo otra vez. Una cuenta inactiva no se le muestra a nadie.
     active = Column(Boolean, nullable=False, default=True)
 
+    # Si en este pais se ofrece pagar con tarjeta. Se apaga por pais porque
+    # Stripe no cobra igual en todos: donde no hay integracion real, el boton
+    # llevaba a un cobro que fallaba y el cliente creia que la culpa era suya.
+    # Por defecto encendido, que es como se comportaba antes de existir esto.
+    card_enabled = Column(Boolean, nullable=False, default=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

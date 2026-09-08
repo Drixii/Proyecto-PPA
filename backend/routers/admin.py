@@ -1061,12 +1061,18 @@ def listar_cuentas_propias(
     """
     from services import cuentas_propias
 
+    from services import stripe_service
+
     return {
         "success": True,
         "data": {
             "catalogo": cuentas_propias.catalogo(),
             "cuentas": cuentas_propias.listar(db, _admin.id),
             "cubiertas_por_koywe": list(cuentas_propias.CUBIERTAS_POR_KOYWE),
+            # Monedas en las que Stripe puede cobrar. En el resto el interruptor
+            # de tarjeta no pinta nada, y el panel lo dice en vez de ofrecer un
+            # control que no cambia nada.
+            "monedas_tarjeta": list(stripe_service.CARD_CURRENCIES),
         },
         "message": "",
     }
@@ -1086,6 +1092,35 @@ def guardar_cuenta_propia(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"success": True, "data": cuenta, "message": "Cuenta guardada"}
+
+
+class TarjetaIn(BaseModel):
+    activa: bool
+
+
+@router.patch("/cuentas-propias/{moneda}/tarjeta", response_model=dict)
+def cambiar_tarjeta_pais(
+    moneda: str,
+    data: TarjetaIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Enciende o apaga el pago con tarjeta en un país.
+
+    Aparte de guardar la cuenta: se puede querer quitar el botón de tarjeta en
+    un país sin haber cargado datos bancarios todavía.
+    """
+    from services import cuentas_propias
+
+    try:
+        cuenta = cuentas_propias.set_tarjeta(db, _admin.id, moneda, data.activa)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "success": True,
+        "data": cuenta,
+        "message": "Pago con tarjeta activado" if data.activa else "Pago con tarjeta desactivado",
+    }
 
 
 @router.delete("/cuentas-propias/{moneda}", response_model=dict)

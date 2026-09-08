@@ -1941,6 +1941,18 @@ function CuentasPropiasForm() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
   })
 
+  const cambiarTarjeta = useMutation({
+    mutationFn: ({ moneda, activa }) =>
+      api.patch(`/admin/cuentas-propias/${moneda}/tarjeta`, { activa }),
+    onSuccess: (r) => {
+      setMsg(r.data.message); setError('')
+      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
+  })
+
   const borrar = useMutation({
     mutationFn: (moneda) => api.delete(`/admin/cuentas-propias/${moneda}`),
     onSuccess: () => {
@@ -2001,6 +2013,8 @@ function CuentasPropiasForm() {
               const cuenta = porMoneda[moneda]
               const cargada = cuenta && Object.keys(cuenta.datos || {}).length > 0
               const enEdicion = editando === moneda
+              // Sin fila todavia, encendido: es como se comporta el backend.
+              const tarjetaOn = cuenta ? cuenta.tarjeta !== false : true
 
               return (
                 <div key={moneda} style={{
@@ -2030,6 +2044,48 @@ function CuentasPropiasForm() {
                       {enEdicion ? 'Cancelar' : (cargada ? 'Editar' : 'Añadir')}
                     </button>
                   </div>
+
+                  {/* Interruptor de tarjeta. Solo donde Stripe puede cobrar
+                      de verdad: en el resto de monedas el boton no aparece
+                      nunca, y ofrecer un control que no cambia nada confunde
+                      mas que ayuda. */}
+                  {(data?.monedas_tarjeta || []).includes(moneda) ? (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      gap: 10, marginTop: 10, paddingTop: 10,
+                      borderTop: '1px solid rgba(255,255,255,.06)',
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#c3d2ee' }}>
+                          Pago con tarjeta
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b' }}>
+                          {tarjetaOn
+                            ? 'Tus clientes pueden pagar con tarjeta desde este pais'
+                            : 'Solo transferencia — el boton de tarjeta no aparece'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => cambiarTarjeta.mutate({ moneda, activa: !tarjetaOn })}
+                        disabled={cambiarTarjeta.isPending}
+                        title={tarjetaOn ? 'Desactivar tarjeta aqui' : 'Activar tarjeta aqui'}
+                        style={{
+                          width: 42, height: 24, borderRadius: 999, border: 'none', padding: 3,
+                          cursor: 'pointer', flexShrink: 0,
+                          background: tarjetaOn ? 'rgba(74,222,128,.28)' : 'rgba(255,255,255,.12)',
+                          display: 'flex', justifyContent: tarjetaOn ? 'flex-end' : 'flex-start',
+                        }}>
+                        <span style={{
+                          width: 18, height: 18, borderRadius: 999,
+                          background: tarjetaOn ? '#4ade80' : '#64748b',
+                        }} />
+                      </button>
+                    </div>
+                  ) : (
+                    <p style={{ margin: '8px 0 0', fontSize: 11, color: '#475569' }}>
+                      Stripe no cobra con tarjeta en {moneda} — aqui solo hay transferencia.
+                    </p>
+                  )}
 
                   {enEdicion && (
                     <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>

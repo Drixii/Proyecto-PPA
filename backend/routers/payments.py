@@ -76,6 +76,7 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
     from services import retencion_service, cuentas_propias
     _db = SessionLocal()
     cuentas_admin = {}
+    monedas_tarjeta = list(stripe_service.CARD_CURRENCIES)
     try:
         retencion = {
             "activa": retencion_service.activa(_db),
@@ -91,6 +92,14 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
                 cuenta = cuentas_propias.para_cliente(_db, dueno, moneda)
                 if cuenta:
                     cuentas_admin[moneda] = cuenta
+            # Y se quitan las monedas donde su super-admin apago la tarjeta.
+            # Esta pantalla decide el metodo ANTES de que exista la orden, asi
+            # que sin filtrar aqui el boton seguia saliendo al crear el envio y
+            # solo desaparecia despues.
+            monedas_tarjeta = [
+                m for m in monedas_tarjeta
+                if cuentas_propias.tarjeta_activa(_db, dueno, m)
+            ]
     except Exception as e:
         log.warning("[config] no se pudieron leer ajustes del cliente: %s", e)
         retencion = {"activa": False, "umbral_clp": None}
@@ -106,7 +115,7 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
             "cuentas_propias": cuentas_admin,
             "enabled": stripe_service.is_configured(),
             "publishable_key": stripe_service.publishable_key(),
-            "currencies": list(stripe_service.CARD_CURRENCIES),
+            "currencies": monedas_tarjeta,
             "koywe": {
                 "enabled": bool(koywe_metodos),
                 "currencies": sorted(koywe_metodos.keys()),
@@ -146,6 +155,15 @@ def create_intent(
         raise HTTPException(
             status_code=400,
             detail=f"El pago con tarjeta solo está disponible en {' y '.join(stripe_service.CARD_CURRENCIES)}",
+        )
+    # El interruptor por país se comprueba también aquí, no solo al pintar el
+    # menú: esconder un botón no es cerrar una puerta, y esta es la llamada que
+    # de verdad crea el cobro.
+    from services import cuentas_propias
+    if not cuentas_propias.tarjeta_activa(db, order.super_admin_id, (order.currency_from or "").upper()):
+        raise HTTPException(
+            status_code=400,
+            detail="El pago con tarjeta no está disponible para este país",
         )
 
     try:
@@ -634,8 +652,14 @@ def cambiar_metodo(
     metodo = (data.payment_method or "").strip().lower()
     moneda = (order.currency_from or "").upper()
 
+    from services import cuentas_propias
+
     permitidos = {"transferencia"}
-    if stripe_service.is_configured() and moneda in stripe_service.CARD_CURRENCIES:
+    if (
+        stripe_service.is_configured()
+        and moneda in stripe_service.CARD_CURRENCIES
+        and cuentas_propias.tarjeta_activa(db, order.super_admin_id, moneda)
+    ):
         permitidos.add("tarjeta")
     permitidos |= {m["codigo"].lower() for m in koywe_service.metodos_de(moneda)}
 
@@ -685,7 +709,15 @@ def metodos_de_orden(
         "desc": "Sube tu comprobante",
         "icono": "🏦",
     }]
-    if stripe_service.is_configured() and moneda in stripe_service.CARD_CURRENCIES:
+    # El super-admin puede apagar la tarjeta pais por pais: donde no tiene
+    # integracion real, el boton llevaba a un cobro que fallaba y el cliente
+    # creia que el problema era su tarjeta.
+    from services import cuentas_propias
+    if (
+        stripe_service.is_configured()
+        and moneda in stripe_service.CARD_CURRENCIES
+        and cuentas_propias.tarjeta_activa(db, order.super_admin_id, moneda)
+    ):
         metodos.append({
             "codigo": "tarjeta", "nombre": "Pago con tarjeta",
             "desc": "Portal de pago", "icono": "💳",

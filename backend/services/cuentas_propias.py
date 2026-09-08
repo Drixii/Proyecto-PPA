@@ -198,6 +198,7 @@ def _a_dict(fila: SuperAdminAccount) -> dict:
         "bandera": info.get("bandera", ""),
         "datos": datos,
         "activa": bool(fila.active),
+        "tarjeta": bool(fila.card_enabled),
         "actualizada": fila.updated_at.isoformat() if fila.updated_at else None,
     }
 
@@ -232,6 +233,55 @@ def guardar(db: Session, super_admin_id: int, moneda: str, datos: dict, activa: 
     db.commit()
     db.refresh(fila)
     return _a_dict(fila)
+
+
+def set_tarjeta(db: Session, super_admin_id: int, moneda: str, activa: bool) -> dict:
+    """Enciende o apaga el pago con tarjeta en un pais.
+
+    No valida los datos bancarios ni los exige: apagar la tarjeta en un pais
+    donde todavia no has cargado cuenta es un caso legitimo, y obligar a
+    rellenar un IBAN para poder quitar un boton no tiene sentido.
+    """
+    moneda = (moneda or "").upper()
+    if moneda not in PAISES:
+        raise ValueError(f"No se puede configurar {moneda or 'esa moneda'}")
+
+    fila = (
+        db.query(SuperAdminAccount)
+        .filter(
+            SuperAdminAccount.super_admin_id == super_admin_id,
+            SuperAdminAccount.currency == moneda,
+        )
+        .first()
+    )
+    if not fila:
+        fila = SuperAdminAccount(super_admin_id=super_admin_id, currency=moneda, datos="{}")
+        db.add(fila)
+
+    fila.card_enabled = bool(activa)
+    db.commit()
+    db.refresh(fila)
+    return _a_dict(fila)
+
+
+def tarjeta_activa(db: Session, super_admin_id: Optional[int], moneda: str) -> bool:
+    """Si a los clientes de este super-admin se les ofrece tarjeta aqui.
+
+    Sin fila, encendido: es como se comportaba antes de que el interruptor
+    existiera, y apagar por omision dejaria sin tarjeta a quien nunca entro a
+    esta pantalla.
+    """
+    if not super_admin_id:
+        return True
+    fila = (
+        db.query(SuperAdminAccount)
+        .filter(
+            SuperAdminAccount.super_admin_id == super_admin_id,
+            SuperAdminAccount.currency == (moneda or "").upper(),
+        )
+        .first()
+    )
+    return True if fila is None else bool(fila.card_enabled)
 
 
 def borrar(db: Session, super_admin_id: int, moneda: str) -> bool:
