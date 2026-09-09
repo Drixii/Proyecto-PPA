@@ -395,6 +395,17 @@ def metodos_publicos(modo: str | None = None) -> dict:
     return salida
 
 
+# Metodos de Koywe que son un cobro con tarjeta. Se marcan para que el
+# interruptor por pais del super-admin pueda quitarlos: en Chile, Koywe ofrece
+# CARD_PAYMENT y salia un boton "Tarjeta / Credito o debito" aunque no hubiera
+# integracion real detras, que es exactamente lo que habia que poder apagar.
+CODIGOS_TARJETA = ("CARD_PAYMENT",)
+
+
+def es_tarjeta(codigo: str | None) -> bool:
+    return (codigo or "").upper() in CODIGOS_TARJETA
+
+
 def metodos_de(moneda: str | None, modo: str | None = None) -> list:
     """Métodos ofrecibles para esa moneda. Vacío si Koywe no la cubre."""
     try:

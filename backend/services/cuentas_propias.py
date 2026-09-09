@@ -20,9 +20,18 @@ from sqlalchemy.orm import Session
 
 from models.super_admin_account import SuperAdminAccount
 
-# Monedas que Koywe ya cubre con cuenta virtual propia. No se ofrecen aqui:
-# tener dos cuentas para la misma moneda solo genera dudas sobre cual usar.
+# Monedas que Koywe ya cubre con cuenta virtual propia. No se pide cuenta
+# bancaria para ellas: tener dos cuentas para la misma moneda solo genera dudas
+# sobre cual usar. Si aparecen en el panel, es solo por el interruptor de
+# tarjeta, que tambien les aplica.
 CUBIERTAS_POR_KOYWE = ("MXN", "ARS", "CLP")
+
+# Como se llaman esos tres, para poder pintarlos junto a los demas.
+INFO_KOYWE = {
+    "CLP": {"pais": "Chile", "bandera": "cl"},
+    "MXN": {"pais": "Mexico", "bandera": "mx"},
+    "ARS": {"pais": "Argentina", "bandera": "ar"},
+}
 
 
 def _campo(clave, etiqueta, requerido=True, tipo="text", ayuda="", opciones=None):
@@ -191,11 +200,11 @@ def _a_dict(fila: SuperAdminAccount) -> dict:
         datos = json.loads(fila.datos or "{}")
     except ValueError:
         datos = {}
-    info = PAISES.get(fila.currency, {})
+    info = info_de(fila.currency)
     return {
         "moneda": fila.currency,
-        "pais": info.get("pais", fila.currency),
-        "bandera": info.get("bandera", ""),
+        "pais": info["pais"],
+        "bandera": info["bandera"],
         "datos": datos,
         "activa": bool(fila.active),
         "tarjeta": bool(fila.card_enabled),
@@ -235,6 +244,19 @@ def guardar(db: Session, super_admin_id: int, moneda: str, datos: dict, activa: 
     return _a_dict(fila)
 
 
+# Toda moneda desde la que se puede enviar. El interruptor de tarjeta aplica a
+# todas; la ficha bancaria, solo a las que no cubre Koywe.
+MONEDAS_ORIGEN = tuple(PAISES.keys()) + CUBIERTAS_POR_KOYWE
+
+
+def info_de(moneda: str) -> dict:
+    """Nombre y bandera de una moneda de origen, tenga ficha bancaria o no."""
+    moneda = (moneda or "").upper()
+    if moneda in PAISES:
+        return {"pais": PAISES[moneda]["pais"], "bandera": PAISES[moneda]["bandera"]}
+    return INFO_KOYWE.get(moneda, {"pais": moneda, "bandera": ""})
+
+
 def set_tarjeta(db: Session, super_admin_id: int, moneda: str, activa: bool) -> dict:
     """Enciende o apaga el pago con tarjeta en un pais.
 
@@ -243,7 +265,7 @@ def set_tarjeta(db: Session, super_admin_id: int, moneda: str, activa: bool) -> 
     rellenar un IBAN para poder quitar un boton no tiene sentido.
     """
     moneda = (moneda or "").upper()
-    if moneda not in PAISES:
+    if moneda not in MONEDAS_ORIGEN:
         raise ValueError(f"No se puede configurar {moneda or 'esa moneda'}")
 
     fila = (

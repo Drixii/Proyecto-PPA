@@ -100,6 +100,14 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
                 m for m in monedas_tarjeta
                 if cuentas_propias.tarjeta_activa(_db, dueno, m)
             ]
+            # Lo mismo con la tarjeta que sirve Koywe (CARD_PAYMENT en CLP):
+            # es otro boton "Tarjeta" y el interruptor tiene que quitarlo
+            # tambien, o apagarlo en Chile no hacia nada.
+            koywe_metodos = {
+                mon: [x for x in lista if not koywe_service.es_tarjeta(x.get("codigo"))]
+                     if not cuentas_propias.tarjeta_activa(_db, dueno, mon) else lista
+                for mon, lista in koywe_metodos.items()
+            }
     except Exception as e:
         log.warning("[config] no se pudieron leer ajustes del cliente: %s", e)
         retencion = {"activa": False, "umbral_clp": None}
@@ -654,14 +662,19 @@ def cambiar_metodo(
 
     from services import cuentas_propias
 
+    tarjeta_permitida = cuentas_propias.tarjeta_activa(db, order.super_admin_id, moneda)
     permitidos = {"transferencia"}
     if (
         stripe_service.is_configured()
         and moneda in stripe_service.CARD_CURRENCIES
-        and cuentas_propias.tarjeta_activa(db, order.super_admin_id, moneda)
+        and tarjeta_permitida
     ):
         permitidos.add("tarjeta")
-    permitidos |= {m["codigo"].lower() for m in koywe_service.metodos_de(moneda)}
+    permitidos |= {
+        m["codigo"].lower()
+        for m in koywe_service.metodos_de(moneda)
+        if not (koywe_service.es_tarjeta(m["codigo"]) and not tarjeta_permitida)
+    }
 
     if metodo not in permitidos:
         raise HTTPException(
@@ -713,15 +726,19 @@ def metodos_de_orden(
     # integracion real, el boton llevaba a un cobro que fallaba y el cliente
     # creia que el problema era su tarjeta.
     from services import cuentas_propias
+    tarjeta_ok = cuentas_propias.tarjeta_activa(db, order.super_admin_id, moneda)
     if (
         stripe_service.is_configured()
         and moneda in stripe_service.CARD_CURRENCIES
-        and cuentas_propias.tarjeta_activa(db, order.super_admin_id, moneda)
+        and tarjeta_ok
     ):
         metodos.append({
             "codigo": "tarjeta", "nombre": "Pago con tarjeta",
             "desc": "Portal de pago", "icono": "💳",
         })
+    # Koywe también sirve tarjeta en algunas monedas (CARD_PAYMENT en CLP). El
+    # interruptor del super-admin tiene que quitar ESE botón igual que el de
+    # Stripe: al cliente le da lo mismo quién lo cobra, ve "Tarjeta".
     metodos += [
         {"codigo": m["codigo"].lower(), "nombre": m["nombre"],
          "desc": m["desc"], "icono": m.get("icono") or "💸",
@@ -729,6 +746,7 @@ def metodos_de_orden(
          # intentar el cobro, en vez de que Koywe lo rechace después.
          "requiere": m.get("requiere") or []}
         for m in koywe_service.metodos_de(moneda)
+        if not (koywe_service.es_tarjeta(m["codigo"]) and not tarjeta_ok)
     ]
 
     cuenta = None

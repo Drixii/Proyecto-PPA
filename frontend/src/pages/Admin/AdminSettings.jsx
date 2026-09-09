@@ -1928,6 +1928,7 @@ function CuentasPropiasForm() {
   const cuentas = data?.cuentas || []
   const porMoneda = Object.fromEntries(cuentas.map(c => [c.moneda, c]))
   const listas = cuentas.filter(c => c.activa && Object.keys(c.datos || {}).length).length
+  const conFicha = Object.values(catalogo).filter(i => !i.koywe).length
 
   const guardar = useMutation({
     mutationFn: ({ moneda, datos, activa }) =>
@@ -1990,7 +1991,7 @@ function CuentasPropiasForm() {
               background: listas ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
               color: listas ? '#4ade80' : '#fcd34d',
             }}>
-              {listas ? `${listas} de ${Object.keys(catalogo).length}` : 'Sin cuentas'}
+              {listas ? `${listas} de ${conFicha}` : 'Sin cuentas'}
             </span>
           </div>
           <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
@@ -2003,9 +2004,10 @@ function CuentasPropiasForm() {
       {abierto && (
         <div style={{ marginTop: 18 }}>
           <p style={{ margin: '0 0 16px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
-            Koywe emite cuenta automáticamente en {(data?.cubiertas_por_koywe || []).join(', ')}.
-            En el resto, tus clientes no ven a dónde transferir hasta que cargues una cuenta aquí.
-            Son tuyas: las ven solo tus clientes.
+            Los nueve países desde los que se puede enviar. Koywe emite cuenta sola en
+            {' '}{(data?.cubiertas_por_koywe || []).join(', ')}; en el resto, tus clientes no ven a
+            dónde transferir hasta que cargues una cuenta aquí — y son tuyas, las ven solo
+            tus clientes. El interruptor de tarjeta va aparte y aplica a todos.
           </p>
 
           <div style={{ display: 'grid', gap: 10 }}>
@@ -2029,27 +2031,31 @@ function CuentasPropiasForm() {
                       <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
                         {info.pais} <span style={{ color: '#64748b', fontWeight: 600 }}>· {moneda}</span>
                       </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: cargada && cuenta.activa ? '#4ade80' : '#64748b' }}>
-                        {cargada
-                          ? (cuenta.activa ? 'Visible para tus clientes' : 'Cargada, pero apagada')
-                          : 'Sin cuenta — no se ofrece transferencia'}
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: info.koywe ? '#8aa0cc' : (cargada && cuenta.activa ? '#4ade80' : '#64748b') }}>
+                        {info.koywe
+                          ? 'Cuenta emitida por Koywe automáticamente'
+                          : cargada
+                            ? (cuenta.activa ? 'Visible para tus clientes' : 'Cargada, pero apagada')
+                            : 'Sin cuenta — no se ofrece transferencia'}
                       </p>
                     </div>
-                    <button onClick={() => (enEdicion ? setEditando(null) : abrirEdicion(moneda))}
-                      style={{
-                        padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                        border: '1px solid rgba(255,255,255,.14)', background: 'transparent',
-                        color: '#c3d2ee', cursor: 'pointer', flexShrink: 0,
-                      }}>
-                      {enEdicion ? 'Cancelar' : (cargada ? 'Editar' : 'Añadir')}
-                    </button>
+                    {!info.koywe && (
+                      <button onClick={() => (enEdicion ? setEditando(null) : abrirEdicion(moneda))}
+                        style={{
+                          padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                          border: '1px solid rgba(255,255,255,.14)', background: 'transparent',
+                          color: '#c3d2ee', cursor: 'pointer', flexShrink: 0,
+                        }}>
+                        {enEdicion ? 'Cancelar' : (cargada ? 'Editar' : 'Añadir')}
+                      </button>
+                    )}
                   </div>
 
                   {/* Interruptor de tarjeta. Solo donde Stripe puede cobrar
                       de verdad: en el resto de monedas el boton no aparece
                       nunca, y ofrecer un control que no cambia nada confunde
                       mas que ayuda. */}
-                  {(data?.monedas_tarjeta || []).includes(moneda) ? (
+                  {info.tiene_tarjeta ? (
                     <div style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       gap: 10, marginTop: 10, paddingTop: 10,
@@ -2083,11 +2089,11 @@ function CuentasPropiasForm() {
                     </div>
                   ) : (
                     <p style={{ margin: '8px 0 0', fontSize: 11, color: '#475569' }}>
-                      Stripe no cobra con tarjeta en {moneda} — aqui solo hay transferencia.
+                      En {moneda} no hay ninguna pasarela de tarjeta — aquí nunca sale ese botón.
                     </p>
                   )}
 
-                  {enEdicion && (
+                  {enEdicion && !info.koywe && (
                     <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
                       {info.campos.map(c => (
                         <div key={c.clave}>

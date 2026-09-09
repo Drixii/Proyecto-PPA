@@ -1061,18 +1061,41 @@ def listar_cuentas_propias(
     """
     from services import cuentas_propias
 
-    from services import stripe_service
+    from services import stripe_service, koywe_service
+
+    # Dónde hay un botón de tarjeta que se pueda quitar. Son dos fuentes y al
+    # cliente le da lo mismo cuál sea: Stripe en USD y EUR, y Koywe con su
+    # CARD_PAYMENT en CLP. Sin mirar las dos, el interruptor no aparecía en
+    # Chile, que era justo donde sobraba el botón.
+    con_tarjeta = set()
+    if stripe_service.is_configured():
+        con_tarjeta |= set(stripe_service.CARD_CURRENCIES)
+    for moneda in cuentas_propias.MONEDAS_ORIGEN:
+        try:
+            if any(koywe_service.es_tarjeta(m["codigo"]) for m in koywe_service.metodos_de(moneda)):
+                con_tarjeta.add(moneda)
+        except Exception:
+            pass
+
+    # Los nueve países desde los que se puede enviar. Los tres de Koywe no
+    # piden datos bancarios, pero sí llevan interruptor de tarjeta.
+    paises = {}
+    for moneda in cuentas_propias.MONEDAS_ORIGEN:
+        info = cuentas_propias.info_de(moneda)
+        paises[moneda] = {
+            **info,
+            "campos": cuentas_propias.PAISES.get(moneda, {}).get("campos", []),
+            "koywe": moneda in cuentas_propias.CUBIERTAS_POR_KOYWE,
+            "tiene_tarjeta": moneda in con_tarjeta,
+        }
 
     return {
         "success": True,
         "data": {
-            "catalogo": cuentas_propias.catalogo(),
+            "catalogo": paises,
             "cuentas": cuentas_propias.listar(db, _admin.id),
             "cubiertas_por_koywe": list(cuentas_propias.CUBIERTAS_POR_KOYWE),
-            # Monedas en las que Stripe puede cobrar. En el resto el interruptor
-            # de tarjeta no pinta nada, y el panel lo dice en vez de ofrecer un
-            # control que no cambia nada.
-            "monedas_tarjeta": list(stripe_service.CARD_CURRENCIES),
+            "monedas_tarjeta": sorted(con_tarjeta),
         },
         "message": "",
     }
