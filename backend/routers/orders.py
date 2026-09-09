@@ -131,10 +131,16 @@ def upload_proof(
     if order.payment_method != "transferencia":
         raise HTTPException(status_code=400, detail="Solo órdenes de transferencia requieren comprobante")
 
-    allowed = {".jpg", ".jpeg", ".png", ".pdf", ".webp"}
+    # .heic/.heif son las fotos de iPhone sin convertir. El mensaje nombra
+    # todos los formatos: el anterior decia "usa JPG, PNG o PDF" y dejaba fuera
+    # webp, que si se aceptaba.
+    allowed = {".jpg", ".jpeg", ".png", ".pdf", ".webp", ".heic", ".heif"}
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in allowed:
-        raise HTTPException(status_code=400, detail="Tipo de archivo no permitido. Usa JPG, PNG o PDF.")
+        raise HTTPException(
+            status_code=400,
+            detail="Ese tipo de archivo no se puede usar. Acepta JPG, PNG, WEBP, HEIC o PDF.",
+        )
 
     content = file.file.read()
     if ext != ".pdf":

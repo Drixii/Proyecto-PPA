@@ -181,6 +181,10 @@ export default function NewTransfer() {
   const [fromOpen, setFromOpen] = useState(false)
   const [toOpen, setToOpen] = useState(false)
   const [proofFile, setProofFile] = useState(null)
+  const [proofError, setProofError] = useState('')
+  // Orden ya creada en este envio. En una ref y no en estado: no repinta,
+  // y sobrevive a los reintentos dentro del mismo submit.
+  const ordenCreadaRef = useRef(null)
   const [proofPreview, setProofPreview] = useState(null)
   const [editingContact, setEditingContact] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -229,8 +233,25 @@ export default function NewTransfer() {
     'Itaú', 'Scotiabank', 'Security', 'Falabella', 'Ripley',
   ]
 
+  // Formatos que acepta el backend. Se comprueba aqui para que un archivo malo
+  // se rechace ANTES de crear la orden: antes se creaba, fallaba la subida, y
+  // quedaba una orden huerfana por cada intento.
+  const FORMATOS_OK = ['.jpg', '.jpeg', '.png', '.webp', '.pdf', '.heic', '.heif']
+
   const handleProofChange = (file) => {
-    if (!file) { setProofFile(null); setProofPreview(null); return }
+    if (!file) { setProofFile(null); setProofPreview(null); setProofError(''); return }
+    const ext = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase()
+    if (!FORMATOS_OK.includes(ext)) {
+      setProofFile(null); setProofPreview(null)
+      setProofError(`No se puede usar un archivo ${ext || 'sin extensión'}. Acepta JPG, PNG, WEBP, HEIC o PDF.`)
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setProofFile(null); setProofPreview(null)
+      setProofError('La imagen no puede pesar más de 10 MB.')
+      return
+    }
+    setProofError('')
     setProofFile(file)
     if (file.type.startsWith('image/')) {
       const reader = new FileReader()
@@ -513,6 +534,12 @@ export default function NewTransfer() {
     })
   }
 
+  // Cambiar importe, monedas o receptor invalida la orden ya creada: reutilizarla
+  // enviaria un dinero distinto al que dice la orden.
+  useEffect(() => {
+    ordenCreadaRef.current = null
+  }, [calc.amount, calc.fromCurrency, calc.toCurrency, receiver.receiver_name, receiver.receiver_account])
+
   const submit = async () => {
     setLoading(true)
     setError('')
@@ -534,9 +561,20 @@ export default function NewTransfer() {
         currency_to: calc.toCurrency,
         ...payment,
       }
-      const res = await api.post('/orders', payload)
-      const orderId = res.data.data.id
-      let orderData = res.data.data
+      // Si un intento anterior ya creo la orden, se reutiliza. Sin esto, un
+      // fallo POSTERIOR a crearla —la subida del comprobante, por ejemplo—
+      // dejaba la orden hecha, y al reintentar se creaba otra: el cliente veia
+      // dos envios identicos por el mismo dinero.
+      let orderId, orderData
+      if (ordenCreadaRef.current) {
+        orderId = ordenCreadaRef.current.id
+        orderData = ordenCreadaRef.current.data
+      } else {
+        const res = await api.post('/orders', payload)
+        orderId = res.data.data.id
+        orderData = res.data.data
+        ordenCreadaRef.current = { id: orderId, data: orderData }
+      }
 
       // Tarjeta: la orden ya existe pero NO está pagada. Se abre el
       // formulario de Stripe y solo cuando el cobro pasa, su webhook la mueve
@@ -1251,10 +1289,16 @@ export default function NewTransfer() {
                           </svg>
                         </div>
                         <p className="text-sm font-semibold" style={{color:'#aebfe2'}}>Adjuntar comprobante</p>
-                        <p className="text-xs" style={{color:'#8aa0cc'}}>JPG, PNG o PDF — requerido</p>
+                        <p className="text-xs" style={{color:'#8aa0cc'}}>JPG, PNG, HEIC o PDF — requerido</p>
                       </>
                     )}
                   </label>
+
+                  {proofError && (
+                    <div className="rounded-xl px-3 py-2.5" style={{background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.25)'}}>
+                      <p className="text-xs leading-relaxed" style={{color:'#fca5a5'}}>{proofError}</p>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => setStep(4)}
