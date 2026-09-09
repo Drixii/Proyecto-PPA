@@ -266,16 +266,16 @@ export default function ClientPoints() {
                 Canjea tus puntos por beneficios exclusivos en cada transferencia
               </p>
             </div>
-            <div className="flex flex-col gap-2 shrink-0">
-              <div className="rounded-2xl px-5 py-3 text-center min-w-[140px]" style={{ background: 'rgba(253,211,77,.08)', border: '1px solid rgba(253,211,77,.2)' }}>
+            <div className="flex flex-row sm:flex-col gap-2 sm:shrink-0">
+              <div className="flex-1 sm:flex-none rounded-2xl px-4 sm:px-5 py-3 text-center sm:min-w-[140px]" style={{ background: 'rgba(253,211,77,.08)', border: '1px solid rgba(253,211,77,.2)' }}>
                 <p className="text-xs mb-0.5" style={{ color: 'rgba(253,211,77,.6)' }}>Canjeables disponibles</p>
-                <p className="text-3xl font-black" style={{ color: '#fcd34d' }}>
+                <p className="text-2xl sm:text-3xl font-black" style={{ color: '#fcd34d' }}>
                   {rewards.filter(r => totalPoints >= r.points_cost).length}
                 </p>
               </div>
-              <div className="rounded-2xl px-5 py-3 text-center min-w-[140px]" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)' }}>
+              <div className="flex-1 sm:flex-none rounded-2xl px-4 sm:px-5 py-3 text-center sm:min-w-[140px]" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)' }}>
                 <p className="text-xs mb-0.5" style={{ color: '#8aa0cc' }}>Canjes realizados</p>
-                <p className="text-3xl font-black" style={{ color: '#eaf2ff' }}>{redemptions.length}</p>
+                <p className="text-2xl sm:text-3xl font-black" style={{ color: '#eaf2ff' }}>{redemptions.length}</p>
               </div>
             </div>
           </div>

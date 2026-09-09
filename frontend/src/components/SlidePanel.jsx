@@ -54,7 +54,7 @@ export default function SlidePanel({ open, onClose, title, subtitle, children, w
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {children}
         </div>
       </div>

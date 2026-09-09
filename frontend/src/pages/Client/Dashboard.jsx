@@ -217,35 +217,23 @@ export default function Dashboard() {
           />
 
           {/* Los puntos, al lado de transferir: se ganan enviando. */}
-          <button
+          <TarjetaPuntos
+            className="hidden sm:flex"
+            puntos={pointsData?.total_points || 0}
             onClick={() => navigate('/mis-puntos')}
-            className="rounded-2xl p-5 text-left transition-all flex flex-col justify-between"
-            style={{ ...GLASS, border: '1px solid rgba(253,211,77,.2)' }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(253,211,77,.45)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(253,211,77,.2)'}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Tus puntos</p>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(253,211,77,.1)' }}>
-                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="#fcd34d" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-                </svg>
-              </div>
-            </div>
-            <div>
-              <p className="text-4xl font-bold" style={{ color: '#fcd34d' }}>{(pointsData?.total_points || 0).toLocaleString()}</p>
-              <p className="text-xs mt-1 leading-relaxed" style={{ color: '#8aa0cc' }}>
-                Ganas puntos con cada envío. Cánjealos cuando quieras →
-              </p>
-            </div>
-          </button>
+          />
         </div>
 
         {/* ── Cómo van tus envíos ─────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div className="flex sm:grid sm:grid-cols-2 gap-3 sm:gap-4 mb-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory -mx-1 px-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TarjetaPuntos
+            className="flex w-[78%] shrink-0 snap-start sm:hidden"
+            puntos={pointsData?.total_points || 0}
+            onClick={() => navigate('/mis-puntos')}
+          />
           <button
             onClick={() => navigate('/historial', { state: { filter: 'en_proceso' } })}
-            className="rounded-2xl p-5 flex items-center justify-between text-left transition-all"
+            className="w-[78%] shrink-0 snap-start sm:w-auto sm:shrink rounded-2xl p-5 flex items-center justify-between text-left transition-all"
             style={{ ...GLASS, border: '1px solid rgba(96,165,250,.22)' }}>
             <div>
               <p className="text-sm font-semibold" style={{color:'#aebfe2'}}>Envíos en proceso</p>
@@ -259,7 +247,7 @@ export default function Dashboard() {
 
           <button
             onClick={() => navigate('/historial', { state: { filter: 'completado' } })}
-            className="rounded-2xl p-5 flex items-center justify-between text-left transition-all"
+            className="w-[78%] shrink-0 snap-start sm:w-auto sm:shrink rounded-2xl p-5 flex items-center justify-between text-left transition-all"
             style={{ ...GLASS, border: '1px solid rgba(74,222,128,.18)' }}>
             <div>
               <p className="text-sm font-semibold" style={{color:'#aebfe2'}}>Completados</p>
@@ -276,13 +264,13 @@ export default function Dashboard() {
 
         {/* ── Detalle de lo que está en camino ────────────── */}
         <div className="rounded-2xl overflow-hidden mb-4" style={GLASS}>
-          <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid rgba(255,255,255,.06)'}}>
-            <div>
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4" style={{borderBottom:'1px solid rgba(255,255,255,.06)'}}>
+            <div className="min-w-0">
               <h2 className="text-sm font-bold" style={{color:'#eaf2ff'}}>Envíos en proceso</h2>
               <p className="text-xs mt-0.5" style={{color:'#8aa0cc'}}>Dónde va cada uno, paso a paso</p>
             </div>
             {enProceso.length > 0 && (
-              <span className="text-xs px-2.5 py-1 rounded-full" style={{background:'rgba(96,165,250,.1)', color:'#60a5fa'}}>
+              <span className="text-xs px-2.5 py-1 rounded-full whitespace-nowrap shrink-0" style={{background:'rgba(96,165,250,.1)', color:'#60a5fa'}}>
                 {enProceso.length} en camino
               </span>
             )}
@@ -300,7 +288,7 @@ export default function Dashboard() {
 
           {enProceso.map(order => (
             <button key={order.id} onClick={() => setSelectedOrder(order)}
-              className="w-full flex items-center gap-4 px-6 py-4 text-left transition-colors"
+              className="w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4 text-left transition-colors"
               style={{borderBottom:'1px solid rgba(255,255,255,.06)'}}>
               <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-700 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0">
                 {order.receiver_name?.[0]?.toUpperCase()}
@@ -308,11 +296,11 @@ export default function Dashboard() {
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate" style={{color:'#eaf2ff'}}>{order.receiver_name}</p>
-                <span className="inline-flex items-center gap-1.5 text-xs" style={{color:'#8aa0cc'}}>
+                <span className="flex items-center gap-1.5 text-xs min-w-0" style={{color:'#8aa0cc'}}>
                   {flagUrl(order.receiver_country) && <img src={flagUrl(order.receiver_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />}
-                  {order.receiver_country}
-                  <span style={{color:'#334155'}}>·</span>
-                  <span className="font-mono">{order.order_number}</span>
+                  <span className="truncate">{order.receiver_country}</span>
+                  <span className="shrink-0" style={{color:'#334155'}}>·</span>
+                  <span className="font-mono truncate">{order.order_number}</span>
                 </span>
                 {/* Qué está pasando, en palabras. El nombre del estado por sí
                     solo no dice si toca esperar o hacer algo. */}
@@ -321,7 +309,9 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              <div className="text-right shrink-0">
+              <span className="shrink-0 sm:hidden" style={{color:'#38bdf8'}}>›</span>
+
+              <div className="text-right shrink-0 hidden sm:block">
                 <p className="text-sm font-bold" style={{color:'#eaf2ff'}}>
                   {order.amount_sent?.toLocaleString('es-CL')} <span className="text-xs font-normal" style={{color:'#8aa0cc'}}>{order.currency_from}</span>
                 </p>
@@ -334,96 +324,6 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* ── Bottom: orders table ──────────────────── */}
-        <div className="rounded-2xl overflow-hidden" style={GLASS}>
-          <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid rgba(255,255,255,.06)'}}>
-            <h2 className="text-sm font-bold" style={{color:'#eaf2ff'}}>Historial de transferencias</h2>
-            <button
-              onClick={() => navigate('/new-transfer')}
-              className="bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 text-white text-xs font-semibold px-4 py-1.5 rounded-lg shadow-sm shadow-blue-200 transition-all"
-            >
-              + Nuevo envío
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{background:'rgba(4,10,30,.6)'}}>
-                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-6 py-3" style={{color:'#8aa0cc'}}>Order ID</th>
-                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#8aa0cc'}}>Receptor</th>
-                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#8aa0cc'}}>Monto enviado</th>
-                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#8aa0cc'}}>Recibe</th>
-                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#8aa0cc'}}>Estado</th>
-                  <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-3" style={{color:'#8aa0cc'}}>Fecha</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading && Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i} style={{borderBottom:'1px solid rgba(255,255,255,.06)'}}>
-                    {Array.from({ length: 6 }).map((__, j) => (
-                      <td key={j} className="px-6 py-4">
-                        <div className="h-3 rounded animate-pulse w-20" style={{background:'rgba(255,255,255,.06)'}} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {!isLoading && orders.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-sm" style={{color:'#475569'}}>Sin transferencias</td>
-                  </tr>
-                )}
-                {!isLoading && orders.map(order => (
-                  <tr
-                    key={order.id}
-                    onClick={() => setSelectedOrder(order)}
-                    className="cursor-pointer transition-colors"
-                    style={{borderBottom:'1px solid rgba(255,255,255,.06)'}}
-                  >
-                    <td className="px-6 py-4">
-                      <span className="font-mono text-xs" style={{color:'#8aa0cc'}}>{order.order_number}</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 bg-gradient-to-br from-blue-400 to-blue-700 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                          {order.receiver_name?.[0]?.toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold" style={{color:'#eaf2ff'}}>{order.receiver_name}</p>
-                          <span className="inline-flex items-center gap-1 text-[11px]" style={{color:'#8aa0cc'}}>
-                            {flagUrl(order.receiver_country) && <img src={flagUrl(order.receiver_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />}
-                            {order.receiver_country}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm font-semibold" style={{color:'#eaf2ff'}}>
-                        {order.amount_sent?.toLocaleString()} <span className="font-normal text-xs" style={{color:'#8aa0cc'}}>{order.currency_from}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm font-semibold" style={{color:'#4ade80'}}>
-                        {order.amount_received?.toLocaleString()} <span className="font-normal text-xs" style={{color:'#4ade80'}}>{order.currency_to}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <EstadoOrden status={order.status} />
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-xs" style={{color:'#8aa0cc'}}>
-                        {fmtDateShort(order.created_at, tz)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <button className="text-lg leading-none" style={{color:'#8aa0cc'}}>···</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
 
       {/* Slide panel */}
@@ -625,5 +525,35 @@ function TasaYAcciones({ countries, rateCountry, rateCurrency, rateData, actuali
         </div>
       </div>
     </div>
+  )
+}
+
+// La tarjeta de puntos sale en dos sitios: junto a la tasa en escritorio, y
+// como primera del carrusel en móvil. Un componente en vez de copiar el
+// marcado, que es como se acaban desincronizando.
+function TarjetaPuntos({ puntos, onClick, className = '' }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-2xl p-5 text-left transition-all flex-col justify-between ${className}`}
+      style={{ ...GLASS, border: '1px solid rgba(253,211,77,.2)' }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(253,211,77,.45)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(253,211,77,.2)'}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Tus puntos</p>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(253,211,77,.1)' }}>
+          <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="#fcd34d" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+          </svg>
+        </div>
+      </div>
+      <div>
+        <p className="text-4xl font-bold" style={{ color: '#fcd34d' }}>{puntos.toLocaleString()}</p>
+        <p className="text-xs mt-1 leading-relaxed" style={{ color: '#8aa0cc' }}>
+          Ganas puntos con cada envío. Cánjealos cuando quieras →
+        </p>
+      </div>
+    </button>
   )
 }

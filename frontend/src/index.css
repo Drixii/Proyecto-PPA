@@ -145,3 +145,18 @@ body {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* ─── Flexbox: que el scroll no se quede bloqueado ─────────────────────────
+   Un elemento con flex-1 y overflow-y-auto NO se desplaza si no puede
+   encogerse: min-height vale auto por defecto, así que crece hasta el alto de
+   su contenido, el padre lo recorta, y el final queda inalcanzable. Es lo que
+   escondía el bloque de Pago al abrir una orden en el móvil.
+
+   Se corrige aquí para cualquier combinación de esas dos clases, presente o
+   futura; el min-h-0 explícito de los componentes sigue estando por claridad. */
+.flex-1.overflow-y-auto,
+.flex-1.overflow-auto,
+.flex-1.overflow-hidden {
+  min-height: 0;
+}

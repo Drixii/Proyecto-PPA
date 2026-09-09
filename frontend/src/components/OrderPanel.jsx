@@ -108,7 +108,7 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
   const subAdminName = order.sub_admin_name
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Status bar */}
       <div className="px-6 py-3 border-b flex items-center justify-between shrink-0" style={{background:'rgba(6,13,40,.7)', borderColor:'rgba(255,255,255,.08)'}}>
         <StatusBadge status={order.status} />
@@ -192,7 +192,7 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'resumen' && (
           <div className="p-6 space-y-6">
             <div className="rounded-2xl p-6" style={GLASS}>
@@ -914,7 +914,7 @@ export function ClientOrderPanel({ order }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Status bar */}
       <div className="px-6 py-3 border-b flex items-center justify-between shrink-0" style={{background:'rgba(6,13,40,.7)', borderColor:'rgba(255,255,255,.08)'}}>
         <StatusBadge status={order.status} />
@@ -1013,7 +1013,7 @@ export function ClientOrderPanel({ order }) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'estado' && (
           <div className="p-6 space-y-6">
             {/* Progress */}
