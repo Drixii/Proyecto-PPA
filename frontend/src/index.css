@@ -93,13 +93,14 @@ body {
 }
 
 @media (max-width: 640px) {
-  /* Las tablas no caben en un móvil por muchas columnas que se oculten, así
-     que ahí sí se deslizan; pero dentro de su caja y con inercia táctil. */
-  table {
-    display: block;
-    overflow-x: auto;
+  /* Las tablas que no caben se deslizan dentro de su caja, con inercia táctil.
+     Se hace sobre el CONTENEDOR y no sobre la tabla: poner display:block en un
+     <table> desmonta la alineación de columnas, que es justo lo que hacía que
+     el historial se viera partido en mil líneas. Donde la tabla no se puede
+     leer en un teléfono —el historial del cliente— hay una vista de tarjetas
+     aparte, que es mejor solución que deslizar. */
+  .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
   }
 
   /* Un botón nunca se sale de su sitio ni parte el texto a media palabra. */

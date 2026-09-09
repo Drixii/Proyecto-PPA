@@ -176,8 +176,55 @@ export default function ClientHistory() {
           />
         </div>
 
-        {/* Table */}
-        <div className="rounded-2xl overflow-hidden"
+        {/* En móvil, tarjetas en vez de tabla. Ocho columnas en una pantalla
+            de teléfono se parten en mil líneas y no se lee nada: aquí sale lo
+            que de verdad importa —a quién y en qué estado— y el resto se ve al
+            abrir el pedido. */}
+        <div className="sm:hidden space-y-2.5">
+          {isLoading && [...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-2xl h-24 animate-pulse" style={{ background: 'rgba(255,255,255,.04)' }} />
+          ))}
+
+          {!isLoading && orders.length === 0 && (
+            <div className="rounded-2xl py-14 text-center" style={GLASS}>
+              <p className="text-sm" style={{ color: '#475569' }}>Sin envíos todavía.</p>
+            </div>
+          )}
+
+          {!isLoading && orders.map(order => (
+            <button key={order.id} onClick={() => setSelectedOrder(order)}
+              className="w-full rounded-2xl p-4 text-left" style={GLASS}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-700 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0">
+                  {order.receiver_name?.[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: '#eaf2ff' }}>{order.receiver_name}</p>
+                  <span className="inline-flex items-center gap-1 text-xs" style={{ color: '#8aa0cc' }}>
+                    {flagUrl(order.receiver_country) && (
+                      <img src={flagUrl(order.receiver_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />
+                    )}
+                    <span className="truncate">{order.receiver_country}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_COLOR[order.status] || '#64748b' }} />
+                  <span className="text-xs whitespace-nowrap"
+                    style={{ color: ESTADO_PIDE_ACCION.has(order.status) ? '#f87171' : '#aebfe2', fontWeight: ESTADO_PIDE_ACCION.has(order.status) ? 600 : 400 }}>
+                    {ESTADO_LABEL[order.status] || order.status?.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-center mt-3 pt-2.5" style={{ color: '#38bdf8', borderTop: '1px solid rgba(255,255,255,.06)' }}>
+                Toca para ver más sobre este pedido
+              </p>
+            </button>
+          ))}
+        </div>
+
+        {/* Tabla completa, solo de tablet en adelante. */}
+        <div className="rounded-2xl overflow-hidden hidden sm:block"
           style={GLASS}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -503,7 +503,7 @@ export default function AdminUsers() {
               <p className="text-sm font-semibold" style={{color:'#f87171'}}>Papelera — usuarios eliminados</p>
               <p className="text-xs mt-0.5" style={{color:'#8aa0cc'}}>Se eliminan automáticamente después de 30 días. No se puede forzar la eliminación desde aquí.</p>
             </div>
-            <div>
+            <div className="overflow-x-auto sm:overflow-visible">
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{background:'rgba(4,10,30,.6)', borderBottom:'1px solid rgba(255,255,255,.06)'}}>
@@ -570,7 +570,7 @@ export default function AdminUsers() {
 
         {/* Users table */}
         {!trashView && <div className="rounded-2xl shadow-sm overflow-hidden" style={GLASS}>
-          <div>
+          <div className="overflow-x-auto sm:overflow-visible">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{background:'rgba(4,10,30,.6)', borderBottom:'1px solid rgba(255,255,255,.06)'}}>
