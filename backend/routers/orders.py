@@ -27,6 +27,19 @@ def new_order(data: OrderCreate, db: Session = Depends(get_db), current_user: Us
     return {"success": True, "data": OrderOut.model_validate(order).model_dump(), "message": "Orden creada"}
 
 
+def _sin_comision(data: dict) -> dict:
+    """Quita la comision antes de mandarle la orden al cliente.
+
+    `fee` es lo que gana la casa, no algo que el cliente tenga que ver: el
+    precio que le importa ya esta en la tasa y en cuanto recibe el destinatario.
+
+    Se borra aqui y no solo en la pantalla: ocultarlo con CSS lo deja igual de
+    visible para quien mire la respuesta de la API.
+    """
+    data.pop("fee", None)
+    return data
+
+
 @router.get("", response_model=dict)
 def list_orders(
     page: int = Query(1, ge=1),
@@ -46,7 +59,7 @@ def list_orders(
         ).all()
         for t in txns:
             points_map[t.order_id] = t.points
-    items = [{**OrderOut.model_validate(o).model_dump(), "points_earned": points_map.get(o.id, 0)} for o in orders]
+    items = [_sin_comision({**OrderOut.model_validate(o).model_dump(), "points_earned": points_map.get(o.id, 0)}) for o in orders]
     return {
         "success": True,
         "data": {
@@ -98,7 +111,7 @@ def get_order(order_id: int, db: Session = Depends(get_db), current_user: User =
     order = db.query(Order).filter(Order.id == order_id, Order.client_id == current_user.id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    return {"success": True, "data": OrderOut.model_validate(order).model_dump(), "message": ""}
+    return {"success": True, "data": _sin_comision(OrderOut.model_validate(order).model_dump()), "message": ""}
 
 
 # def (no async): el endpoint lee el archivo, lo convierte con Pillow y escribe

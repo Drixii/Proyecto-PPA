@@ -929,13 +929,33 @@ def editar_usuario(
 
     cambios = []
 
+    ordenes_renombradas = 0
+
     if data.full_name is not None:
         nombre = data.full_name.strip()
         if not nombre:
             raise HTTPException(status_code=400, detail="El nombre no puede quedar vacío")
         if nombre != user.full_name:
+            anterior = user.full_name
             user.full_name = nombre
             cambios.append("nombre")
+
+            # El nombre del sub-admin se lee en vivo en todas partes, asi que
+            # ese caso se propaga solo. El del cliente no: `Order.sender_name`
+            # es una columna copiada al crear la orden, porque es "a nombre de
+            # quien viene el dinero" y el cliente puede escribir otro distinto
+            # al pagar.
+            #
+            # Se renombran las ordenes en las que figuraba el nombre ANTERIOR, y
+            # solo esas. Si en alguna escribio un pagador distinto —una empresa,
+            # un familiar— esa se deja como esta: ahi el nombre no es el suyo y
+            # cambiarlo separaria la orden del comprobante bancario que se subio.
+            if user.role == "client" and anterior:
+                ordenes_renombradas = (
+                    db.query(Order)
+                    .filter(Order.client_id == user.id, Order.sender_name == anterior)
+                    .update({Order.sender_name: nombre}, synchronize_session=False)
+                )
 
     if data.email is not None:
         correo = data.email.strip().lower()
@@ -964,11 +984,27 @@ def editar_usuario(
         return {"success": True, "data": None, "message": "No había nada que cambiar"}
 
     db.commit()
-    log.info("[admin %s] editó a %s (%s): %s", admin.id, user.id, user.role, ", ".join(cambios))
+    log.info(
+        "[admin %s] editó a %s (%s): %s%s",
+        admin.id, user.id, user.role, ", ".join(cambios),
+        f" — {ordenes_renombradas} órdenes renombradas" if ordenes_renombradas else "",
+    )
+
+    mensaje = "Se actualizó " + ", ".join(cambios)
+    if ordenes_renombradas:
+        mensaje += f". {ordenes_renombradas} " + (
+            "orden pasó a ese nombre" if ordenes_renombradas == 1 else "órdenes pasaron a ese nombre"
+        )
+
     return {
         "success": True,
-        "data": {"id": user.id, "full_name": user.full_name, "email": user.email},
-        "message": "Se actualizó " + ", ".join(cambios),
+        "data": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "ordenes_renombradas": ordenes_renombradas,
+        },
+        "message": mensaje,
     }
 
 

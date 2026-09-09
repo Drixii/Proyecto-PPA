@@ -1053,7 +1053,10 @@ export default function AdminUsers() {
             // enseñarla en "Copiar datos": es la única ventana en que existe
             // en claro. Al recargar la página desaparece, como debe ser.
             if (credenciales) setClaveRecien(credenciales)
-            qc.invalidateQueries({ queryKey: ['admin-users'] })
+            // Se vacía la caché entera y no solo la lista de usuarios: al
+            // renombrar a un cliente cambian también sus órdenes, y el pipeline
+            // y la cartera seguirían mostrando el nombre viejo hasta recargar.
+            qc.invalidateQueries()
           }}
         />
       )}

@@ -207,9 +207,18 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
                   <p className="text-2xl font-bold" style={{color:'#4ade80'}}>{order.amount_received?.toLocaleString()} <span className="text-base" style={{color:'#4ade80'}}>{order.currency_to}</span></p>
                 </div>
               </div>
-              <div className={`grid gap-3 text-center pt-3 border-t ${order.points_earned > 0 ? 'grid-cols-4' : 'grid-cols-3'}`} style={{borderColor:'rgba(255,255,255,.06)'}}>
+              {/* La comisión solo se pinta si el backend la mandó. Al cliente
+                  no se la manda: es lo que gana la casa, no un dato suyo. Así
+                  no hay que repetir aquí la comprobación de rol. */}
+              <div className={`grid gap-3 text-center pt-3 border-t ${
+                (order.points_earned > 0 ? 1 : 0) + (order.fee != null ? 1 : 0) + 2 === 4 ? 'grid-cols-4'
+                  : (order.points_earned > 0 ? 1 : 0) + (order.fee != null ? 1 : 0) + 2 === 3 ? 'grid-cols-3'
+                  : 'grid-cols-2'
+              }`} style={{borderColor:'rgba(255,255,255,.06)'}}>
                 <div><p className="text-xs" style={{color:'#8aa0cc'}}>Tasa</p><p className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{order.exchange_rate?.toFixed(4)}</p></div>
-                <div><p className="text-xs" style={{color:'#8aa0cc'}}>Comisión</p><p className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{order.fee} {order.currency_from}</p></div>
+                {order.fee != null && (
+                  <div><p className="text-xs" style={{color:'#8aa0cc'}}>Comisión</p><p className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{order.fee} {order.currency_from}</p></div>
+                )}
                 <div><p className="text-xs" style={{color:'#8aa0cc'}}>Creado</p><p className="text-sm font-semibold" style={{color:'#eaf2ff'}}>{new Date(order.created_at).toLocaleDateString('es-CL')}</p></div>
                 {order.points_earned > 0 && (
                   <div>
@@ -1057,9 +1066,11 @@ export function ClientOrderPanel({ order }) {
                   <p className="text-xl font-bold" style={{color:'#4ade80'}}>{order.amount_received?.toLocaleString()} <span className="text-sm" style={{color:'#4ade80'}}>{order.currency_to}</span></p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-center pt-3 text-xs" style={{borderTop:'1px solid rgba(255,255,255,.06)', color:'#8aa0cc'}}>
+              <div className={`grid ${order.fee != null ? 'grid-cols-2' : 'grid-cols-1'} gap-2 text-center pt-3 text-xs`} style={{borderTop:'1px solid rgba(255,255,255,.06)', color:'#8aa0cc'}}>
                 <div>Tasa: <span className="font-semibold" style={{color:'#eaf2ff'}}>{order.exchange_rate?.toFixed(4)}</span></div>
-                <div>Comisión: <span className="font-semibold" style={{color:'#eaf2ff'}}>{order.fee} {order.currency_from}</span></div>
+                {order.fee != null && (
+                  <div>Comisión: <span className="font-semibold" style={{color:'#eaf2ff'}}>{order.fee} {order.currency_from}</span></div>
+                )}
               </div>
             </div>
 
