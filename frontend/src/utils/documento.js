@@ -30,7 +30,11 @@ export function dvRut(numero) {
 // escribe K. Un RUT terminado en K es tan válido como cualquier otro, y
 // cambiarlo por 0 lo rompe — 0 corresponde al resto 11, que es otro caso.
 export function formateaRut(valor) {
-  let limpio = (valor || '').replace(/[^0-9kK]/g, '').toUpperCase()
+  // Tope de 9: 8 dígitos de cuerpo más el verificador, que es el RUT más largo
+  // que existe. Sin este corte se podían teclear veinte dígitos y el campo los
+  // seguía formateando tan tranquilo; el error solo salía al validar, cuando
+  // ya no se veía por dónde sobraba.
+  let limpio = (valor || '').replace(/[^0-9kK]/g, '').toUpperCase().slice(0, 9)
   if (!limpio) return ''
   if (limpio.length === 1) return limpio
 

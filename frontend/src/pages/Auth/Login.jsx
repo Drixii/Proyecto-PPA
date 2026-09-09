@@ -132,7 +132,7 @@ function initGlobe(canvas) {
 
 const REGISTER_COUNTRIES = ['Chile', 'Colombia', 'Venezuela', 'Perú', 'Argentina', 'Ecuador', 'México', 'Bolivia', 'Brasil', 'Uruguay', 'Paraguay']
 
-import { formateaDocumento, revisaDocumento, ejemploDocumento, formateaTelefono, validaEmail } from '../../utils/documento'
+import { formateaDocumento, revisaDocumento, ejemploDocumento, formateaTelefono, validaEmail, validaTelefono } from '../../utils/documento'
 import { Bandera } from '../../utils/flags'
 import { COUNTRY_CODE } from '../../utils/flags'
 
@@ -166,6 +166,11 @@ export default function Login() {
   const docEstado = revisaDocumento(regForm.document_type, regForm.document_number)
   const [paisAbierto, setPaisAbierto] = useState(false)
   const emailMal = regForm.email.length > 3 && !validaEmail(regForm.email)
+  const telMal = regForm.phone.length > 3 && !validaTelefono(regForm.phone)
+  // El boton se apaga con cualquiera de los dos mal. Marcar en rojo y dejar
+  // enviar igual solo traslada el error al servidor, o peor: deja entrar un
+  // correo al que luego no se le puede escribir.
+  const registroBloqueado = emailMal || telMal
   const [loginError, setLoginError] = useState('')
   const [regError, setRegError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
@@ -410,7 +415,13 @@ export default function Login() {
               <div><label style={labelStyle}>Teléfono</label>
                 <input className="login-input" type="tel" inputMode="tel" value={regForm.phone}
                   onChange={e => setRegForm({ ...regForm, phone: formateaTelefono(e.target.value) })}
-                  required placeholder="+56 9 1234 5678" style={inputStyle} />
+                  required placeholder="+56 9 1234 5678"
+                  style={{ ...inputStyle, borderColor: telMal ? 'rgba(239,68,68,.5)' : undefined }} />
+                {telMal && (
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>
+                    Faltan dígitos — escribe el número completo
+                  </p>
+                )}
               </div>
               <div>
                 <label style={labelStyle}>País</label>
@@ -487,7 +498,7 @@ export default function Login() {
               )}
 
               {regError && <div style={{ padding: '11px 14px', borderRadius: 12, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.3)' }}><p style={{ margin: 0, fontSize: 13, color: '#fca5a5' }}>{regError}</p></div>}
-              <button type="submit" disabled={regLoading} style={{ width: '100%', padding: 15, fontSize: 15.5, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 14, cursor: 'pointer', boxShadow: '0 10px 30px rgba(56,189,248,.35)', opacity: regLoading ? 0.65 : 1 }}>
+              <button type="submit" disabled={regLoading || registroBloqueado} style={{ width: '100%', padding: 15, fontSize: 15.5, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 14, cursor: (regLoading || registroBloqueado) ? 'not-allowed' : 'pointer', boxShadow: '0 10px 30px rgba(56,189,248,.35)', opacity: (regLoading || registroBloqueado) ? 0.5 : 1 }}>
                 {regLoading ? 'Creando cuenta...' : 'Crear cuenta gratis →'}
               </button>
             </form>

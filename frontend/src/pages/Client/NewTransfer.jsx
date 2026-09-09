@@ -7,7 +7,8 @@ import api from '../../services/api'
 import { useStore } from '../../store/useStore'
 import { useCountries } from '../../hooks/useCountries'
 import { Bandera } from '../../utils/flags'
-import { formateaEtiquetado, revisaEtiquetado, formateaTelefono } from '../../utils/documento'
+import { formateaEtiquetado, revisaEtiquetado, formateaTelefono, validaTelefono } from '../../utils/documento'
+import Portal from '../../components/Portal'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -339,6 +340,28 @@ export default function NewTransfer() {
   // titular: un RUT mal escrito aquí hace que el banco rechace la entrega, y
   // eso se descubre cuando el dinero ya salió.
   const docReceptor = revisaEtiquetado(receiver.receiver_id_type, receiver.receiver_id_num)
+  // El telefono es opcional, pero si se escribe algo tiene que ser un numero
+  // usable: un "no tiene" en el campo llegaba tal cual al encargado del pais.
+  const telReceptorMal = !!receiver.receiver_phone.trim() && !validaTelefono(receiver.receiver_phone)
+  // Continuar exige nombre y, si se rellenaron, documento y telefono correctos.
+  // Antes solo pedia el nombre: el documento se pintaba en rojo y se pasaba de
+  // pantalla igual, y el error aparecia al final o directamente en el banco.
+  const receptorOk = !!receiver.receiver_name.trim()
+    && docReceptor.estado !== 'invalido'
+    && docReceptor.estado !== 'incompleto'
+    && !telReceptorMal
+
+  // Aviso de que el pago debe salir de la cuenta del propio titular. Se abre al
+  // entrar al paso de pago, una sola vez: repetirlo en cada vuelta atras
+  // convierte la advertencia en un estorbo que se cierra sin leer.
+  const [avisoPagador, setAvisoPagador] = useState(false)
+  const avisoMostrado = useRef(false)
+  useEffect(() => {
+    if (step === 3 && !avisoMostrado.current) {
+      avisoMostrado.current = true
+      setAvisoPagador(true)
+    }
+  }, [step])
 
   const rawAmount = parseRaw(displayAmount)
 
@@ -991,6 +1014,11 @@ export default function NewTransfer() {
                       style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
                       placeholder="Número sin código de país" />
                   </div>
+                  {telReceptorMal && (
+                    <p className="text-xs mt-1" style={{color:'#f87171'}}>
+                      Faltan dígitos — escribe el número completo o déjalo vacío
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1050,7 +1078,7 @@ export default function NewTransfer() {
                 </div>
               </div>
 
-              <button onClick={() => { if (receiver.receiver_name) setStep(3) }} disabled={!receiver.receiver_name}
+              <button onClick={() => { if (receptorOk) setStep(3) }} disabled={!receptorOk}
                 className="w-full bg-gradient-to-r from-blue-400 to-blue-700 disabled:opacity-40 text-white font-semibold py-3 rounded-xl">
                 Continuar →
               </button>
@@ -1067,25 +1095,6 @@ export default function NewTransfer() {
                   ←
                 </button>
                 <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Método de pago</h2>
-              </div>
-
-              {/* Advertencia antes de elegir método, no después de pagar. El
-                  dinero tiene que salir de una cuenta del propio titular: si
-                  paga un tercero, el banco lo marca y la orden se retiene o se
-                  devuelve. Avisarlo cuando ya transfirió no sirve de nada. */}
-              <div className="rounded-2xl p-4 flex gap-3"
-                style={{ background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.25)' }}>
-                <span className="text-lg leading-none shrink-0">⚠️</span>
-                <div>
-                  <p className="text-sm font-semibold" style={{ color: '#fcd34d' }}>
-                    El pago debe salir de tu propia cuenta
-                  </p>
-                  <p className="text-xs mt-1 leading-relaxed" style={{ color: '#c8d8f0' }}>
-                    La cuenta desde la que pagues tiene que estar a tu nombre, el mismo con el
-                    que te registraste. Si el dinero llega desde la cuenta de otra persona, el
-                    envío queda retenido y hay que devolverlo.
-                  </p>
-                </div>
               </div>
 
               {/* Method selector — cada método solo aparece si se puede cobrar
@@ -1608,6 +1617,38 @@ export default function NewTransfer() {
           }}
         />
       )}
+
+      {avisoPagador && (
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(2,6,23,.8)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setAvisoPagador(false)}>
+            <div className="w-full max-w-sm rounded-3xl p-6 text-center" style={GLASS}
+              onClick={e => e.stopPropagation()}>
+              <div className="mx-auto mb-4 flex items-center justify-center rounded-2xl"
+                style={{ width: 56, height: 56, background: 'rgba(251,191,36,.12)', fontSize: 28 }}>
+                ⚠️
+              </div>
+              <h3 className="text-lg font-bold mb-2" style={{ color: '#eaf2ff' }}>
+                El pago debe salir de tu propia cuenta
+              </h3>
+              <p className="text-sm leading-relaxed mb-1" style={{ color: '#c8d8f0' }}>
+                La cuenta desde la que pagues tiene que estar <strong>a tu nombre</strong>, el
+                mismo con el que te registraste.
+              </p>
+              <p className="text-xs leading-relaxed mb-5" style={{ color: '#8aa0cc' }}>
+                Si el dinero llega desde la cuenta de otra persona, el envío queda retenido y
+                hay que devolverlo.
+              </p>
+              <button onClick={() => setAvisoPagador(false)}
+                className="w-full bg-gradient-to-r from-blue-400 to-blue-700 text-white font-semibold py-3 rounded-xl">
+                Entendido
+              </button>
+            </div>
+          </div>
+        </Portal>
+      )}
+
     </FinexyLayout>
   )
 }
