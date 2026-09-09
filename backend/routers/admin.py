@@ -16,7 +16,7 @@ from models.admin_sub_admin import AdminSubAdmin
 from models.commission_rule import CommissionRule
 from models.country import Country
 from schemas.order import OrderOut, OrderStatusUpdate
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from services.order_service import advance_order_status, find_sub_admin_for_country
 from auth.dependencies import require_admin, require_super_admin
 from passlib.context import CryptContext
@@ -868,6 +868,110 @@ def create_user_admin(
     }
 
 
+def _usuario_gestionable(db: Session, user_id: int, admin: User) -> User:
+    """El usuario, si este super-admin puede tocarlo. Si no, 404.
+
+    Faltaba: /users/{id}/password no miraba de quién era el usuario, así que un
+    super-admin podía cambiarle la contraseña a los clientes del otro, o al otro
+    super-admin, y quedarse con sus cuentas. La lista de usuarios sí filtraba
+    bien, y esa diferencia hacía invisible el agujero desde el panel.
+
+    Se puede gestionar: los clientes propios y los sub-admins vinculados. Nunca
+    otro admin, nunca uno mismo — para eso está el perfil.
+    """
+    user = db.query(User).filter(User.id == user_id, User.deleted_at == None).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Usa tu perfil para cambiar tus propios datos")
+
+    if user.role == "client" and user.super_admin_id == admin.id:
+        return user
+    if user.role == "sub_admin":
+        vinculado = db.query(AdminSubAdmin).filter(
+            AdminSubAdmin.admin_id == admin.id,
+            AdminSubAdmin.sub_admin_id == user.id,
+        ).first()
+        if vinculado:
+            return user
+    # 404 y no 403: quien no gestiona a alguien tampoco tiene por qué saber que
+    # existe.
+    raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+
+def _confirma_su_clave(admin: User, clave: str) -> None:
+    """Exige al super-admin su propia contraseña antes de tocar otra cuenta.
+
+    Cambiar el correo de un sub-admin es quedarse con su cuenta: si alguien deja
+    una sesión abierta, esto es lo único que se lo impide.
+    """
+    if not clave or not pwd_context.verify(clave, admin.password):
+        raise HTTPException(status_code=403, detail="Tu contraseña no es correcta")
+
+
+class UsuarioEditIn(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    new_password: Optional[str] = None
+    admin_password: str
+
+
+@router.patch("/users/{user_id}", response_model=dict)
+def editar_usuario(
+    user_id: int,
+    data: UsuarioEditIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Nombre, correo y contraseña de un usuario gestionado, de una vez."""
+    user = _usuario_gestionable(db, user_id, admin)
+    _confirma_su_clave(admin, data.admin_password)
+
+    cambios = []
+
+    if data.full_name is not None:
+        nombre = data.full_name.strip()
+        if not nombre:
+            raise HTTPException(status_code=400, detail="El nombre no puede quedar vacío")
+        if nombre != user.full_name:
+            user.full_name = nombre
+            cambios.append("nombre")
+
+    if data.email is not None:
+        correo = data.email.strip().lower()
+        if "@" not in correo or "." not in correo.split("@")[-1]:
+            raise HTTPException(status_code=400, detail="Ese correo no es válido")
+        if correo != (user.email or "").lower():
+            existe = db.query(User).filter(
+                func.lower(User.email) == correo,
+                User.id != user.id,
+                User.deleted_at == None,
+            ).first()
+            if existe:
+                raise HTTPException(status_code=400, detail="Ya hay una cuenta con ese correo")
+            user.email = correo
+            cambios.append("correo")
+
+    if data.new_password:
+        if len(data.new_password) < 6:
+            raise HTTPException(status_code=400, detail="La contraseña necesita al menos 6 caracteres")
+        user.password = pwd_context.hash(data.new_password)
+        user.must_change_password = True
+        user.password_changed_at = datetime.now(timezone.utc)
+        cambios.append("contraseña")
+
+    if not cambios:
+        return {"success": True, "data": None, "message": "No había nada que cambiar"}
+
+    db.commit()
+    log.info("[admin %s] editó a %s (%s): %s", admin.id, user.id, user.role, ", ".join(cambios))
+    return {
+        "success": True,
+        "data": {"id": user.id, "full_name": user.full_name, "email": user.email},
+        "message": "Se actualizó " + ", ".join(cambios),
+    }
+
+
 @router.patch("/users/{user_id}/password", response_model=dict)
 def change_user_password(
     user_id: int,
@@ -875,11 +979,7 @@ def change_user_password(
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    if user.id == admin.id:
-        raise HTTPException(status_code=400, detail="Usa tu perfil para cambiar tu propia contraseña")
+    user = _usuario_gestionable(db, user_id, admin)
     from datetime import timezone as _tz
     user.password = pwd_context.hash(data.new_password)
     user.must_change_password = True  # Fuerza al usuario a cambiar en próximo login
@@ -895,11 +995,9 @@ def toggle_user_active(
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    if user.id == admin.id:
-        raise HTTPException(status_code=400, detail="No puedes desactivarte a ti mismo")
+    # Misma comprobacion que el resto: sin ella se podia desactivar la cuenta
+    # de un cliente de otro super-admin, o la del propio super-admin rival.
+    user = _usuario_gestionable(db, user_id, admin)
     user.is_active = not user.is_active
     db.commit()
     return {"success": True, "data": {"is_active": user.is_active}, "message": "Estado actualizado"}

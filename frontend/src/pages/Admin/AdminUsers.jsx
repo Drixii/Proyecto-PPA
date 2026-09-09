@@ -242,6 +242,11 @@ export default function AdminUsers() {
   const [inviteCodeCopied, setInviteCodeCopied] = useState(false)
   const [subAdminView, setSubAdminView] = useState('choice') // 'choice' | 'new' | 'existing'
   const [pwdModal, setPwdModal] = useState(null)
+  const [editModal, setEditModal] = useState(null)      // usuario a modificar
+  const [datosModal, setDatosModal] = useState(null)    // usuario cuyos datos se copian
+  // Contraseña recién fijada, en memoria y solo para esta pantalla: es la única
+  // ventana en la que se puede enseñar, porque al guardarla se cifra.
+  const [claveRecien, setClaveRecien] = useState(null)
   const [countriesModal, setCountriesModal] = useState(null)
   const [pointsModal, setPointsModal] = useState(null)
   const [ficha, setFicha] = useState(null)
@@ -713,19 +718,18 @@ export default function AdminUsers() {
                           </button>
                         )}
                         <button
-                          onClick={() => {
-                            const pwd = generatePassword()
-                            setNewPwd(pwd)
-                            setNewPwdMode('generate')
-                            setNewPwdVisible(false)
-                            setNewPwdCopied(false)
-                            setPwdError('')
-                            setPwdModal(u)
-                          }}
+                          onClick={() => setEditModal(u)}
                           className="text-xs px-3 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
                           style={{background:'rgba(255,255,255,.06)', color:'#aebfe2'}}
                         >
-                          Cambiar clave
+                          Modificar
+                        </button>
+                        <button
+                          onClick={() => setDatosModal(u)}
+                          className="text-xs px-3 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
+                          style={{background:'rgba(56,189,248,.1)', color:'#38bdf8', border:'1px solid rgba(56,189,248,.15)'}}
+                        >
+                          Copiar datos
                         </button>
                         {roleTab !== 'admin' && (
                           <button
@@ -1028,6 +1032,31 @@ export default function AdminUsers() {
         </Modal>
       )}
 
+      {editModal && (
+        <ModalModificar
+          usuario={editModal}
+          onClose={() => setEditModal(null)}
+          onHecho={(mensaje, credenciales) => {
+            showToast(mensaje)
+            setEditModal(null)
+            // Si se fijó una contraseña, se guarda en memoria para poder
+            // enseñarla en "Copiar datos": es la única ventana en que existe
+            // en claro. Al recargar la página desaparece, como debe ser.
+            if (credenciales) setClaveRecien(credenciales)
+            qc.invalidateQueries({ queryKey: ['admin-users'] })
+          }}
+        />
+      )}
+
+      {datosModal && (
+        <ModalCopiarDatos
+          usuario={datosModal}
+          recien={claveRecien}
+          onClose={() => setDatosModal(null)}
+          onAbrirModificar={() => { setEditModal(datosModal); setDatosModal(null) }}
+        />
+      )}
+
       {/* Change password modal */}
       {pwdModal && (
         <Modal title={`Cambiar clave — ${pwdModal.full_name}`} onClose={() => { setPwdModal(null); setNewPwdCopied(false) }}>
@@ -1158,5 +1187,226 @@ export default function AdminUsers() {
         </div>
       )}
     </FinexyLayout>
+  )
+}
+
+// ── Modificar usuario y copiar sus datos ─────────────────────────────────────
+//
+// Sustituyen al viejo "Cambiar clave", que solo hacía una de las tres cosas.
+//
+// Las dos piden la contraseña del propio super-admin antes de aplicar nada:
+// cambiarle el correo a un sub-admin es quedarse con su cuenta, y si alguien
+// encuentra una sesión abierta esto es lo único que se lo impide.
+
+function ModalModificar({ usuario, onClose, onHecho, onError }) {
+  const [nombre, setNombre] = useState(usuario.full_name || '')
+  const [correo, setCorreo] = useState(usuario.email || '')
+  const [cambiarClave, setCambiarClave] = useState(false)
+  const [clave, setClave] = useState('')
+  const [modoClave, setModoClave] = useState('generate')
+  const [verClave, setVerClave] = useState(false)
+  const [miClave, setMiClave] = useState('')
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+
+  const activarClave = () => {
+    setCambiarClave(true)
+    setModoClave('generate')
+    setClave(generatePassword())
+    setVerClave(true)
+  }
+
+  const guardar = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (!nombre.trim()) return setError('El nombre no puede quedar vacío')
+    if (!/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(correo.trim())) return setError('Ese correo no es válido')
+    if (cambiarClave && clave.length < 6) return setError('La contraseña necesita al menos 6 caracteres')
+    if (!miClave) return setError('Escribe tu contraseña para confirmar')
+
+    setEnviando(true)
+    try {
+      const r = await api.patch(`/admin/users/${usuario.id}`, {
+        full_name: nombre.trim(),
+        email: correo.trim(),
+        new_password: cambiarClave ? clave : null,
+        admin_password: miClave,
+      })
+      onHecho(r.data.message, cambiarClave ? { email: correo.trim(), clave } : null)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'No se pudo guardar')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const ENTRADA = {
+    width: '100%', background: 'rgba(6,13,40,.8)', border: '1px solid rgba(255,255,255,.1)',
+    color: '#eaf2ff', borderRadius: 12, padding: '10px 14px', fontSize: 14,
+  }
+
+  return (
+    <Modal title={`Modificar — ${usuario.full_name}`} onClose={onClose}>
+      <form onSubmit={guardar} className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold mb-1" style={{ color: '#aebfe2' }}>Nombre</label>
+          <input value={nombre} onChange={e => setNombre(e.target.value)} style={ENTRADA} />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold mb-1" style={{ color: '#aebfe2' }}>Correo</label>
+          <input value={correo} onChange={e => setCorreo(e.target.value)} type="email" style={ENTRADA} />
+          {correo.trim().toLowerCase() !== (usuario.email || '').toLowerCase() && (
+            <p className="text-[11px] mt-1" style={{ color: '#fcd34d' }}>
+              Cambiar el correo cambia con qué cuenta inicia sesión
+            </p>
+          )}
+        </div>
+
+        {!cambiarClave ? (
+          <button type="button" onClick={activarClave}
+            className="w-full text-xs font-semibold py-2.5 rounded-xl"
+            style={{ background: 'rgba(255,255,255,.06)', color: '#aebfe2', border: '1px solid rgba(255,255,255,.08)' }}>
+            También cambiar la contraseña
+          </button>
+        ) : (
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: '#aebfe2' }}>Nueva contraseña</label>
+            <div className="flex rounded-lg overflow-hidden mb-2" style={{ border: '1px solid rgba(255,255,255,.08)' }}>
+              {['generate', 'manual'].map(m => (
+                <button key={m} type="button"
+                  onClick={() => { setModoClave(m); if (m === 'generate') setClave(generatePassword()) }}
+                  className="flex-1 text-xs font-semibold py-1.5"
+                  style={modoClave === m
+                    ? { background: 'rgba(56,189,248,.15)', color: '#38bdf8' }
+                    : { background: 'transparent', color: '#8aa0cc' }}>
+                  {m === 'generate' ? '✨ Generar segura' : '✏️ Manual'}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 rounded-xl px-3 py-2"
+              style={{ background: 'rgba(6,13,40,.8)', border: '1px solid rgba(255,255,255,.1)' }}>
+              <input type={verClave ? 'text' : 'password'} value={clave}
+                onChange={e => setClave(e.target.value)} readOnly={modoClave === 'generate'}
+                className="flex-1 text-sm focus:outline-none font-mono"
+                style={{ background: 'transparent', color: modoClave === 'generate' ? '#4ade80' : '#eaf2ff' }}
+                placeholder="Mínimo 6 caracteres" />
+              <button type="button" onClick={() => setVerClave(v => !v)} className="shrink-0 text-xs" style={{ color: '#475569' }}>
+                {verClave ? '🙈' : '👁'}
+              </button>
+              <button type="button"
+                onClick={() => { navigator.clipboard?.writeText(clave); setCopiado(true); setTimeout(() => setCopiado(false), 2000) }}
+                className="shrink-0 text-xs font-semibold" style={{ color: copiado ? '#4ade80' : '#38bdf8' }}>
+                {copiado ? '✓' : 'Copiar'}
+              </button>
+            </div>
+            <p className="text-[11px] mt-1" style={{ color: '#64748b' }}>
+              Cópiala ahora: al guardar se cifra y no se puede volver a leer.
+              Se le pedirá cambiarla la primera vez que entre.
+            </p>
+            <button type="button" onClick={() => { setCambiarClave(false); setClave('') }}
+              className="text-[11px] mt-1" style={{ color: '#8aa0cc' }}>
+              Dejar la contraseña como está
+            </button>
+          </div>
+        )}
+
+        <div style={{ borderTop: '1px solid rgba(255,255,255,.07)', paddingTop: 14 }}>
+          <label className="block text-xs font-semibold mb-1" style={{ color: '#fcd34d' }}>
+            Tu contraseña de super-admin
+          </label>
+          <input type="password" value={miClave} onChange={e => setMiClave(e.target.value)}
+            autoComplete="current-password" placeholder="Para confirmar los cambios" style={ENTRADA} />
+        </div>
+
+        {error && (
+          <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.3)' }}>
+            <p className="text-xs" style={{ color: '#fca5a5' }}>{error}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose}
+            className="flex-1 text-sm font-semibold py-2.5 rounded-xl"
+            style={{ background: 'rgba(255,255,255,.06)', color: '#aebfe2' }}>
+            Cancelar
+          </button>
+          <button type="submit" disabled={enviando}
+            className="flex-1 bg-gradient-to-r from-blue-400 to-blue-700 text-white text-sm font-semibold py-2.5 rounded-xl disabled:opacity-50">
+            {enviando ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+
+function ModalCopiarDatos({ usuario, recien, onClose, onAbrirModificar }) {
+  const [copiado, setCopiado] = useState('')
+
+  const copiar = (texto, cual) => {
+    navigator.clipboard?.writeText(texto)
+    setCopiado(cual)
+    setTimeout(() => setCopiado(''), 2000)
+  }
+
+  // `recien` solo existe si la contraseña se acaba de fijar en esta pantalla.
+  // No hay forma de recuperar la que ya tenía: se guarda con bcrypt, que es de
+  // una sola dirección. Decirlo aquí evita que se busque un botón que no puede
+  // existir.
+  const clave = recien && recien.email === usuario.email ? recien.clave : null
+
+  const Campo = ({ etiqueta, valor, cual, mono }) => (
+    <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(6,13,40,.8)', border: '1px solid rgba(255,255,255,.1)' }}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: '#475569' }}>{etiqueta}</p>
+      <div className="flex items-center gap-2">
+        <p className={`flex-1 text-sm truncate ${mono ? 'font-mono' : ''}`} style={{ color: '#eaf2ff' }}>{valor}</p>
+        <button type="button" onClick={() => copiar(valor, cual)}
+          className="shrink-0 text-xs font-semibold" style={{ color: copiado === cual ? '#4ade80' : '#38bdf8' }}>
+          {copiado === cual ? '✓ Copiado' : 'Copiar'}
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <Modal title={`Datos de ${usuario.full_name}`} onClose={onClose}>
+      <div className="space-y-3">
+        <Campo etiqueta="Correo" valor={usuario.email} cual="email" />
+
+        {clave ? (
+          <>
+            <Campo etiqueta="Contraseña" valor={clave} cual="pwd" mono />
+            <button type="button" onClick={() => copiar(`Correo: ${usuario.email}\nContraseña: ${clave}`, 'ambos')}
+              className="w-full text-sm font-semibold py-2.5 rounded-xl"
+              style={{ background: 'rgba(56,189,248,.15)', color: '#38bdf8' }}>
+              {copiado === 'ambos' ? '✓ Copiado' : 'Copiar correo y contraseña'}
+            </button>
+            <p className="text-[11px] leading-relaxed" style={{ color: '#fcd34d' }}>
+              Solo se puede ver mientras esta pantalla siga abierta. Al cerrarla ya no hay
+              forma de recuperarla.
+            </p>
+          </>
+        ) : (
+          <div className="rounded-xl px-3 py-3" style={{ background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.2)' }}>
+            <p className="text-xs font-semibold mb-1" style={{ color: '#fcd34d' }}>
+              La contraseña no se puede mostrar
+            </p>
+            <p className="text-[11px] leading-relaxed mb-2.5" style={{ color: '#c8d8f0' }}>
+              Se guarda cifrada y en un solo sentido: ni el panel ni nadie puede leerla, ni
+              siquiera tú. Es lo que impide que alguien con acceso a la base entre en las
+              cuentas. Para pasarle sus datos, genera una nueva.
+            </p>
+            <button type="button" onClick={onAbrirModificar}
+              className="w-full text-xs font-semibold py-2 rounded-lg"
+              style={{ background: 'rgba(56,189,248,.15)', color: '#38bdf8' }}>
+              Generar una contraseña nueva
+            </button>
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
