@@ -1400,20 +1400,39 @@ function MenuAcciones({ opciones }) {
   const [abierto, setAbierto] = useState(false)
   const [pos, setPos] = useState({ top: 0, right: 0 })
   const botonRef = useRef(null)
+  const panelRef = useRef(null)
 
+  // Se cierra al pulsar fuera, comprobando DÓNDE se pulsó.
+  //
+  // El primer intento cerraba ante cualquier clic en window y confiaba en
+  // stopPropagation para salvar el del propio botón. No funciona: React engancha
+  // sus eventos en la raíz, así que el clic nativo llega a window igualmente y
+  // el menú se abría y se cerraba en el mismo gesto — parecía que el botón no
+  // hacía nada.
+  //
+  // mousedown y no click: el botón de dentro del menú debe poder ejecutarse sin
+  // que el cierre se le adelante.
   useEffect(() => {
     if (!abierto) return
-    const cerrar = () => setAbierto(false)
+    const fuera = (e) => {
+      if (botonRef.current?.contains(e.target)) return
+      if (panelRef.current?.contains(e.target)) return
+      setAbierto(false)
+    }
     const tecla = (e) => { if (e.key === 'Escape') setAbierto(false) }
-    window.addEventListener('click', cerrar)
+    // Con nombre y no anónimas: una función anónima en addEventListener no se
+    // puede retirar después, y quedaban dos oyentes vivos por cada vez que se
+    // abría un menú.
+    const cerrar = () => setAbierto(false)
+    document.addEventListener('mousedown', fuera)
+    document.addEventListener('keydown', tecla)
     window.addEventListener('resize', cerrar)
     window.addEventListener('scroll', cerrar, true)
-    window.addEventListener('keydown', tecla)
     return () => {
-      window.removeEventListener('click', cerrar)
+      document.removeEventListener('mousedown', fuera)
+      document.removeEventListener('keydown', tecla)
       window.removeEventListener('resize', cerrar)
       window.removeEventListener('scroll', cerrar, true)
-      window.removeEventListener('keydown', tecla)
     }
   }, [abierto])
 
@@ -1437,7 +1456,7 @@ function MenuAcciones({ opciones }) {
 
       {abierto && (
         <div
-          onClick={e => e.stopPropagation()}
+          ref={panelRef}
           style={{
             position: 'fixed', top: pos.top, right: pos.right, zIndex: 60,
             minWidth: 168, padding: 6, borderRadius: 14,
