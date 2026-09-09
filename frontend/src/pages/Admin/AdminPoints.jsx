@@ -184,7 +184,7 @@ function ConfigSection() {
         <h3 className="font-semibold mb-1" style={{ color: '#eaf2ff' }}>Conversión de puntos</h3>
         <p className="text-xs mb-5" style={{ color: '#8aa0cc' }}>Define cómo se calculan los puntos y su valor en pesos</p>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>% del fee → puntos</label>
               <div className="relative">

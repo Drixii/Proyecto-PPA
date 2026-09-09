@@ -71,3 +71,47 @@ body {
 *::-webkit-scrollbar-corner {
   background: rgba(6, 13, 40, 0.85);
 }
+
+/* ─── Móvil: que nada se salga de la pantalla ──────────────────────────────
+   Un teléfono pequeño destapaba varias cosas a la vez: números largos que
+   empujaban su caja, palabras sin espacios que ensanchaban la fila, y tablas
+   que arrastraban la página entera en horizontal en vez de deslizarse dentro
+   de su contenedor. */
+
+/* La página nunca se desplaza en horizontal. Lo que no quepa se desliza dentro
+   de su propia caja, no moviendo toda la pantalla. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Palabras y números larguísimos —un IBAN, un correo, un id de transacción—
+   cortan en vez de ensanchar a su contenedor y sacarlo de la pantalla. */
+body {
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 640px) {
+  /* Las tablas no caben en un móvil por muchas columnas que se oculten, así
+     que ahí sí se deslizan; pero dentro de su caja y con inercia táctil. */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* Un botón nunca se sale de su sitio ni parte el texto a media palabra. */
+  button {
+    max-width: 100%;
+  }
+
+  /* Los diálogos ocupaban un ancho fijo y se salían por los lados en pantallas
+     estrechas. */
+  [class*="max-w-md"],
+  [class*="max-w-sm"],
+  [class*="max-w-lg"] {
+    max-width: calc(100vw - 24px);
+  }
+}

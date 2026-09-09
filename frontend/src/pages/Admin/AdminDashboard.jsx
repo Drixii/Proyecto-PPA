@@ -188,7 +188,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* MIDDLE: 2x2 stat cards */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Blue gradient card */}
             <button
               onClick={() => navigate('/admin/orders')}

@@ -106,7 +106,7 @@ export default function Retenciones() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="rounded-xl p-4" style={{ background: 'rgba(6,13,40,.5)' }}>
                     <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: '#64748b' }}>Quien envía</p>
                     <div className="space-y-2.5">

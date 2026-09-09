@@ -700,7 +700,7 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
                   style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Tipo de documento</label>
                   <select
@@ -773,7 +773,7 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
           )}
 
           {!isLoading && !transferencia && !pidiendoDatos && !qr && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(data?.metodos || []).map(m => (
                 <button key={m.codigo} type="button"
                   onClick={() => elegir(m.codigo)}

@@ -299,7 +299,7 @@ export default function AdminOrders() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid gap-3 mb-6 grid-cols-4">
+        <div className="grid gap-3 mb-6 grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Total', count: (data || []).length, color: 'text-[#eaf2ff]' },
             { label: 'En Aprobación', count: (data || []).filter(o => o.status === 'en_aprobacion').length, color: 'text-orange-600' },

@@ -30,7 +30,7 @@ function PointsModal({ userId, userName, onClose }) {
             </div>
           ) : data ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(253,211,77,.08)', border: '1px solid rgba(253,211,77,.2)' }}>
                   <p className="text-xs mb-1" style={{ color: '#8aa0cc' }}>Total puntos</p>
                   <p className="text-2xl font-bold" style={{ color: '#fcd34d' }}>{data.total_points.toLocaleString()}</p>
