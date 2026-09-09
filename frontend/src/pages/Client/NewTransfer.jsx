@@ -1069,6 +1069,25 @@ export default function NewTransfer() {
                 <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Método de pago</h2>
               </div>
 
+              {/* Advertencia antes de elegir método, no después de pagar. El
+                  dinero tiene que salir de una cuenta del propio titular: si
+                  paga un tercero, el banco lo marca y la orden se retiene o se
+                  devuelve. Avisarlo cuando ya transfirió no sirve de nada. */}
+              <div className="rounded-2xl p-4 flex gap-3"
+                style={{ background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.25)' }}>
+                <span className="text-lg leading-none shrink-0">⚠️</span>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#fcd34d' }}>
+                    El pago debe salir de tu propia cuenta
+                  </p>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: '#c8d8f0' }}>
+                    La cuenta desde la que pagues tiene que estar a tu nombre, el mismo con el
+                    que te registraste. Si el dinero llega desde la cuenta de otra persona, el
+                    envío queda retenido y hay que devolverlo.
+                  </p>
+                </div>
+              </div>
+
               {/* Method selector — cada método solo aparece si se puede cobrar
                   de verdad con la moneda elegida; si no, el cliente lo
                   elegiría y se quedaría atascado sin poder pagar. */}
