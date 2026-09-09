@@ -432,7 +432,9 @@ export default function AdminUsers() {
 
   return (
     <FinexyLayout>
-      <div className="p-6 max-w-[1200px] mx-auto">
+      {/* Ancho amplio: con todas las columnas y los botones de acción
+          visibles, 1200px obligaba a desplazarse en horizontal. */}
+      <div className="p-6 max-w-[1700px] mx-auto">
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -502,7 +504,7 @@ export default function AdminUsers() {
               <p className="text-xs mt-0.5" style={{color:'#8aa0cc'}}>Se eliminan automáticamente después de 30 días. No se puede forzar la eliminación desde aquí.</p>
             </div>
             <div>
-              <table className="w-full text-sm table-fixed">
+              <table className="w-full text-sm">
                 <thead>
                   <tr style={{background:'rgba(4,10,30,.6)', borderBottom:'1px solid rgba(255,255,255,.06)'}}>
                     <th className="text-left text-xs font-semibold uppercase tracking-wider px-5 py-3" style={{color:'#64748b'}}>Usuario</th>
@@ -569,7 +571,7 @@ export default function AdminUsers() {
         {/* Users table */}
         {!trashView && <div className="rounded-2xl shadow-sm overflow-hidden" style={GLASS}>
           <div>
-            <table className="w-full text-sm table-fixed">
+            <table className="w-full text-sm">
               <thead>
                 <tr style={{background:'rgba(4,10,30,.6)', borderBottom:'1px solid rgba(255,255,255,.06)'}}>
                   <th className="text-left text-xs font-semibold uppercase tracking-wider px-5 py-3" style={{color:'#64748b'}}>Usuario</th>
@@ -630,7 +632,7 @@ export default function AdminUsers() {
                     <td className="px-4 py-4">
                       {/* title: al cortarse, el correo entero se ve al pasar
                           el ratón en vez de perderse. */}
-                      <span className="text-sm truncate block" title={u.email} style={{color:'#aebfe2'}}>{u.email}</span>
+                      <span className="text-sm truncate block max-w-[240px]" title={u.email} style={{color:'#aebfe2'}}>{u.email}</span>
                     </td>
                     <td className="px-4 py-4 hidden lg:table-cell">
                       <span className="text-sm truncate block" style={{color:'#8aa0cc'}}>{u.phone || '—'}</span>
@@ -699,25 +701,56 @@ export default function AdminUsers() {
                         {u.created_at ? new Date(u.created_at).toLocaleDateString('es-CL') : '—'}
                       </span>
                     </td>
-                    {/* Un menú y no cuatro botones: con Países, Ver puntos,
-                        Modificar, Copiar datos y Eliminar en fila, la tabla se
-                        iba muy por encima del ancho de la pantalla y había que
-                        arrastrar la barra horizontal para llegar a ellos.
-
-                        En la pestaña de super-admins solo queda Países: el
-                        backend no deja tocar a otro admin (devuelve 404), así
-                        que Modificar y Copiar datos eran botones que solo
-                        podían dar error. */}
-                    <td className="px-4 py-4 text-right">
-                      <MenuAcciones
-                        opciones={[
-                          roleTab === 'sub_admin' && { texto: 'Países', onClick: () => openCountriesModal(u) },
-                          roleTab === 'client' && { texto: 'Ver puntos', onClick: () => setPointsModal(u) },
-                          roleTab !== 'admin' && { texto: 'Modificar', onClick: () => setEditModal(u) },
-                          roleTab !== 'admin' && { texto: 'Copiar datos', onClick: () => setDatosModal(u) },
-                          roleTab !== 'admin' && { texto: 'Eliminar', onClick: () => setDeleteModal(u), peligro: true },
-                        ].filter(Boolean)}
-                      />
+                    {/* Botones sueltos, no un menú. En la pestaña de
+                        super-admins solo queda Países: el backend no deja tocar
+                        a otro admin (devuelve 404), así que Modificar y Copiar
+                        datos eran botones que solo podían dar error. */}
+                    <td className="px-4 py-4">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {roleTab === 'sub_admin' && (
+                          <button
+                            onClick={() => openCountriesModal(u)}
+                            className="text-xs px-2.5 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
+                            style={{background:'rgba(45,212,191,.1)', color:'#2dd4bf'}}
+                          >
+                            Países
+                          </button>
+                        )}
+                        {roleTab === 'client' && (
+                          <button
+                            onClick={() => setPointsModal(u)}
+                            className="text-xs px-2.5 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
+                            style={{background:'rgba(253,211,77,.1)', color:'#fcd34d'}}
+                          >
+                            Puntos
+                          </button>
+                        )}
+                        {roleTab !== 'admin' && (
+                          <>
+                            <button
+                              onClick={() => setEditModal(u)}
+                              className="text-xs px-2.5 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
+                              style={{background:'rgba(255,255,255,.06)', color:'#aebfe2'}}
+                            >
+                              Modificar
+                            </button>
+                            <button
+                              onClick={() => setDatosModal(u)}
+                              className="text-xs px-2.5 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
+                              style={{background:'rgba(56,189,248,.1)', color:'#38bdf8', border:'1px solid rgba(56,189,248,.15)'}}
+                            >
+                              Copiar datos
+                            </button>
+                            <button
+                              onClick={() => setDeleteModal(u)}
+                              className="text-xs px-2.5 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
+                              style={{background:'rgba(239,68,68,.1)', color:'#f87171', border:'1px solid rgba(239,68,68,.15)'}}
+                            >
+                              Eliminar
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1385,96 +1418,5 @@ function ModalCopiarDatos({ usuario, recien, onClose, onAbrirModificar }) {
         )}
       </div>
     </Modal>
-  )
-}
-
-// Menú de acciones de una fila. Existe para que la tabla quepa: con cada acción
-// como botón suelto, gestión de usuarios se iba muy por encima del ancho de la
-// pantalla y las acciones quedaban al otro lado de una barra horizontal.
-//
-// Se cierra al pulsar fuera y con Escape. El panel se posiciona fixed sobre las
-// coordenadas del botón en vez de absolute dentro de la celda: dentro de un
-// contenedor con overflow, un desplegable absoluto queda recortado por el borde
-// de la tabla justo cuando la fila está abajo del todo.
-function MenuAcciones({ opciones }) {
-  const [abierto, setAbierto] = useState(false)
-  const [pos, setPos] = useState({ top: 0, right: 0 })
-  const botonRef = useRef(null)
-  const panelRef = useRef(null)
-
-  // Se cierra al pulsar fuera, comprobando DÓNDE se pulsó.
-  //
-  // El primer intento cerraba ante cualquier clic en window y confiaba en
-  // stopPropagation para salvar el del propio botón. No funciona: React engancha
-  // sus eventos en la raíz, así que el clic nativo llega a window igualmente y
-  // el menú se abría y se cerraba en el mismo gesto — parecía que el botón no
-  // hacía nada.
-  //
-  // mousedown y no click: el botón de dentro del menú debe poder ejecutarse sin
-  // que el cierre se le adelante.
-  useEffect(() => {
-    if (!abierto) return
-    const fuera = (e) => {
-      if (botonRef.current?.contains(e.target)) return
-      if (panelRef.current?.contains(e.target)) return
-      setAbierto(false)
-    }
-    const tecla = (e) => { if (e.key === 'Escape') setAbierto(false) }
-    // Con nombre y no anónimas: una función anónima en addEventListener no se
-    // puede retirar después, y quedaban dos oyentes vivos por cada vez que se
-    // abría un menú.
-    const cerrar = () => setAbierto(false)
-    document.addEventListener('mousedown', fuera)
-    document.addEventListener('keydown', tecla)
-    window.addEventListener('resize', cerrar)
-    window.addEventListener('scroll', cerrar, true)
-    return () => {
-      document.removeEventListener('mousedown', fuera)
-      document.removeEventListener('keydown', tecla)
-      window.removeEventListener('resize', cerrar)
-      window.removeEventListener('scroll', cerrar, true)
-    }
-  }, [abierto])
-
-  if (!opciones.length) return <span style={{ color: '#334155' }}>—</span>
-
-  const alternar = (e) => {
-    e.stopPropagation()
-    const r = botonRef.current?.getBoundingClientRect()
-    if (r) setPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
-    setAbierto(a => !a)
-  }
-
-  return (
-    <>
-      <button ref={botonRef} onClick={alternar}
-        title="Acciones"
-        className="text-sm px-2.5 py-1.5 rounded-lg font-bold leading-none"
-        style={{ background: 'rgba(255,255,255,.06)', color: '#aebfe2', border: '1px solid rgba(255,255,255,.08)' }}>
-        ⋯
-      </button>
-
-      {abierto && (
-        <div
-          ref={panelRef}
-          style={{
-            position: 'fixed', top: pos.top, right: pos.right, zIndex: 60,
-            minWidth: 168, padding: 6, borderRadius: 14,
-            background: 'rgba(10,17,40,.98)', border: '1px solid rgba(255,255,255,.1)',
-            boxShadow: '0 12px 34px rgba(0,0,0,.5)',
-          }}>
-          {opciones.map(o => (
-            <button key={o.texto}
-              onClick={() => { setAbierto(false); o.onClick() }}
-              className="w-full text-left text-xs font-medium px-3 py-2 rounded-lg"
-              style={{ background: 'transparent', color: o.peligro ? '#f87171' : '#c3d2ee' }}
-              onMouseEnter={e => { e.currentTarget.style.background = o.peligro ? 'rgba(239,68,68,.12)' : 'rgba(255,255,255,.06)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-              {o.texto}
-            </button>
-          ))}
-        </div>
-      )}
-    </>
   )
 }
