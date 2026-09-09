@@ -118,22 +118,22 @@ export default function Pipeline() {
         </div>
 
         {/* Kanban area */}
-        <div className="flex-1 overflow-x-auto p-6">
+        <div className="flex-1 overflow-x-auto p-4 sm:p-6">
           {isLoading ? (
-            <div className="flex gap-5">
+            <div className="flex flex-col sm:flex-row gap-5">
               {COLUMNS.map(col => (
-                <div key={col.key} className="w-72 shrink-0 space-y-3">
+                <div key={col.key} className="w-full sm:w-72 sm:shrink-0 space-y-3">
                   <div className="h-8 rounded-xl animate-pulse" style={{ background:'rgba(255,255,255,.06)' }} />
                   {[1,2,3].map(i => <div key={i} className="h-28 rounded-xl animate-pulse" style={{ background:'rgba(255,255,255,.06)' }} />)}
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex gap-5 min-h-full">
+            <div className="flex flex-col sm:flex-row gap-5 sm:min-h-full">
               {COLUMNS.map(({ key, label, dot, bg }) => {
                 const orders = byStatus(key)
                 return (
-                  <div key={key} className="w-72 shrink-0 flex flex-col">
+                  <div key={key} className="w-full sm:w-72 sm:shrink-0 flex flex-col">
                     <div className={`rounded-xl border-t-4 ${bg} px-4 py-3 mb-3 flex items-center justify-between`} style={{ background:'rgba(8,16,44,.92)', border:'1px solid rgba(255,255,255,.08)', borderTopWidth:4 }}>
                       <div className="flex items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full ${dot}`} />

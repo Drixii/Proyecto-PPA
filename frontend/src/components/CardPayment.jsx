@@ -355,7 +355,7 @@ export default function CardPayment({ orderId, amountLabel, onSuccess, onClose }
   return (
     <Portal>
       <div className="fixed inset-0 z-[700] flex items-center justify-center p-4" style={{ background: 'rgba(2,6,23,.8)' }}>
-        <div className="w-full max-w-3xl rounded-2xl p-6 md:p-7 max-h-[92vh] overflow-y-auto" style={{ ...GLASS, background: 'rgba(8,16,44,.97)' }}>
+        <div className="w-full max-w-3xl rounded-2xl p-6 md:p-7 max-h-[92dvh] overflow-y-auto" style={{ ...GLASS, background: 'rgba(8,16,44,.97)' }}>
           <div className="flex items-baseline justify-between mb-6 gap-4">
             <div>
               <h3 className="font-bold text-lg" style={{ color: '#eaf2ff' }}>Pagar con tarjeta</h3>

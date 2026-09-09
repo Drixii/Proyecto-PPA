@@ -116,3 +116,32 @@ body {
     max-width: calc(100vw - 24px);
   }
 }
+
+
+/* ─── Que nada se coma el scroll en móvil ──────────────────────────────────
+   En un móvil, 100vh mide el viewport GRANDE: el que incluye la franja que
+   tapa la barra del navegador. Un panel de 100vh deja su último tramo debajo
+   de esa barra, sin forma de alcanzarlo — así se perdía el bloque de Pago al
+   abrir una orden desde el teléfono.
+
+   dvh mide el alto realmente visible. Aquí se corrige de golpe cualquier sitio
+   que siga usando las utilidades en vh, para que el fallo no pueda reaparecer
+   en una pantalla nueva que se escriba sin acordarse de esto. */
+@supports (height: 100dvh) {
+  .h-screen {
+    height: 100dvh;
+  }
+
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+}
+
+/* Todo panel a pantalla completa puede desplazarse hasta el final, y el gesto
+   no se propaga a la página de detrás al llegar al borde. */
+@media (max-width: 640px) {
+  .overflow-y-auto {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}

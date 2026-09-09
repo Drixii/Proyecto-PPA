@@ -152,7 +152,7 @@ export default function DateRangePicker({ value, onChange, className='' }) {
       {open && movil && createPortal(
         <div className="fixed inset-0 z-[200] flex items-end" style={{background:'rgba(2,6,23,.8)'}}
           onClick={()=>setOpen(false)}>
-          <div className="w-full rounded-t-3xl max-h-[88vh] overflow-y-auto"
+          <div className="w-full rounded-t-3xl max-h-[88dvh] overflow-y-auto"
             style={{background:'rgba(8,16,44,.99)', borderTop:'1px solid rgba(255,255,255,.12)'}}
             onClick={e=>e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1">

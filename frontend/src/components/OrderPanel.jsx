@@ -639,7 +639,7 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
     <Portal>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.75)'}}
         onClick={cerrar}>
-        <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl p-6" style={GLASS}
+        <div className="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl p-6" style={GLASS}
           onClick={e => e.stopPropagation()}>
           <div className="flex items-start justify-between mb-1 gap-3">
             <h3 className="font-semibold" style={{color:'#eaf2ff'}}>

@@ -688,7 +688,7 @@ export default function FinexyLayout({ children, fullHeight = false }) {
         que avisarla entre en la aplicación por donde entre. El propio aviso
         decide si toca mostrarlo (solo clientes, una vez por sesión). */}
     <AvisoPagosPendientes />
-    <div className="flex h-screen" style={{ background: '#060d22', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+    <div className="flex" style={{ background: '#060d22', fontFamily: "'Space Grotesk', system-ui, sans-serif", height: '100vh', maxHeight: '100dvh' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
         @keyframes notif-pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}70%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}

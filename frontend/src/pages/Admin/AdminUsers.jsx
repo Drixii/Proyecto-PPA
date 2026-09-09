@@ -15,7 +15,7 @@ function PointsModal({ userId, userName, onClose }) {
   })
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="rounded-2xl w-full max-w-md mx-4 overflow-hidden max-h-[90vh] flex flex-col" style={{ background: '#0a1628', border: '1px solid rgba(255,255,255,.1)', boxShadow: '0 24px 60px rgba(0,6,28,.8)' }}>
+      <div className="rounded-2xl w-full max-w-md mx-4 overflow-hidden max-h-[90dvh] flex flex-col" style={{ background: '#0a1628', border: '1px solid rgba(255,255,255,.1)', boxShadow: '0 24px 60px rgba(0,6,28,.8)' }}>
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,.07)' }}>
           <div>
             <h3 className="font-bold" style={{ color: '#eaf2ff' }}>Puntos — {userName}</h3>
@@ -150,7 +150,7 @@ const AVAILABLE_COUNTRIES = Object.keys(COUNTRY_CODE).filter(c => !['Peru', 'Mex
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="rounded-2xl w-full max-w-md mx-4 overflow-hidden max-h-[90vh] flex flex-col" style={{background:'#0a1628', border:'1px solid rgba(255,255,255,.1)', boxShadow:'0 24px 60px rgba(0,6,28,.8)'}}>
+      <div className="rounded-2xl w-full max-w-md mx-4 overflow-hidden max-h-[90dvh] flex flex-col" style={{background:'#0a1628', border:'1px solid rgba(255,255,255,.1)', boxShadow:'0 24px 60px rgba(0,6,28,.8)'}}>
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>
           <h3 className="font-bold">{title}</h3>
           <button onClick={onClose} className="text-xl leading-none" style={{color:'#8aa0cc'}}>✕</button>

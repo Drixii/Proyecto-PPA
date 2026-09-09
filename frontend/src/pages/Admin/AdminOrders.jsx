@@ -313,8 +313,33 @@ export default function AdminOrders() {
           ))}
         </div>
 
-        {/* Table */}
-        <div className="rounded-2xl overflow-hidden" style={GLASS}>
+        {/* En móvil, tarjetas. Nueve columnas en un teléfono no se leen: aquí
+            sale receptor y estado, y el resto al abrir el pedido. */}
+        <div className="sm:hidden space-y-2.5">
+          {!isLoading && orders.length === 0 && (
+            <div className="rounded-2xl py-14 text-center" style={GLASS}>
+              <p className="text-sm" style={{ color: '#475569' }}>Sin órdenes en este filtro.</p>
+            </div>
+          )}
+          {orders.map(order => (
+            <button key={order.id} onClick={() => setSelectedOrder(order)}
+              className="w-full rounded-2xl p-4 text-left" style={GLASS}>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: '#eaf2ff' }}>{order.receiver_name}</p>
+                  <p className="text-xs font-mono truncate" style={{ color: '#8aa0cc' }}>{order.order_number}</p>
+                </div>
+                <div className="shrink-0"><EstadoOrden status={order.status} /></div>
+              </div>
+              <p className="text-xs text-center mt-3 pt-2.5" style={{ color: '#38bdf8', borderTop: '1px solid rgba(255,255,255,.06)' }}>
+                Toca para ver más sobre este pedido
+              </p>
+            </button>
+          ))}
+        </div>
+
+        {/* Tabla completa, de tablet en adelante. */}
+        <div className="rounded-2xl overflow-hidden hidden sm:block" style={GLASS}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

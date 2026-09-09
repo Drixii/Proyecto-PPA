@@ -25,10 +25,16 @@ export default function SlidePanel({ open, onClose, title, subtitle, children, w
         onClick={onClose}
       />
 
-      {/* Panel */}
+      {/* Panel.
+
+          La altura va en dvh y no en h-full: h-full sobre un elemento fijo vale
+          100vh, que en un móvil incluye la franja tapada por la barra del
+          navegador, así que el final del panel quedaba debajo y no había forma
+          de llegar a él —el bloque de Pago no se veía—. El 100vh de height
+          queda de respaldo para navegadores sin dvh. */}
       <div
-        className={`fixed right-0 top-0 h-full w-full ${width} z-50 flex flex-col transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ background:'#080f28', borderLeft:'1px solid rgba(56,189,248,.12)', boxShadow:'-20px 0 60px rgba(0,6,28,.7)' }}
+        className={`fixed right-0 top-0 w-full ${width} z-50 flex flex-col transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ background:'#080f28', borderLeft:'1px solid rgba(56,189,248,.12)', boxShadow:'-20px 0 60px rgba(0,6,28,.7)', height: '100vh', maxHeight: '100dvh' }}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 shrink-0" style={{ borderBottom:'1px solid rgba(255,255,255,.07)', background:'rgba(6,13,40,.9)' }}>
