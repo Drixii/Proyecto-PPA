@@ -1072,12 +1072,33 @@ export default function NewTransfer() {
               {/* Method selector — cada método solo aparece si se puede cobrar
                   de verdad con la moneda elegida; si no, el cliente lo
                   elegiría y se quedaría atascado sin poder pagar. */}
+              {/* Puede no quedar ninguno: una moneda sin cuenta de
+                  transferencia, sin tarjeta y sin métodos de Koywe. Antes la
+                  rejilla salía vacía y parecía que la página se había roto. */}
+              {!cuentaTransfer && !cardEnabled && !koyweMethods.length && (
+                <div className="rounded-2xl p-4" style={{ background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.2)' }}>
+                  <p className="text-sm font-semibold" style={{ color: '#fcd34d' }}>
+                    Todavía no hay forma de pagar desde {calc.fromCurrency}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: '#8aa0cc' }}>
+                    Escríbenos por el chat y te damos los datos para completar este envío.
+                  </p>
+                </div>
+              )}
+
               <div className={`grid gap-3 ${(cardEnabled || koyweMethods.length) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {[
-                  {
-                    value: 'transferencia', label: 'Transferencia', icon: '🏦',
-                    desc: cuentaTransfer ? 'Te damos la cuenta' : 'Sube tu comprobante',
-                  },
+                  // Transferencia solo si hay a dónde transferir. Sin cuenta
+                  // —ni de Koywe ni cargada por el super-admin— el cliente
+                  // elegía el método y no veía ningún dato bancario: se
+                  // quedaba mirando "sube tu comprobante" sin saber a quién
+                  // pagarle.
+                  ...(cuentaTransfer
+                    ? [{
+                      value: 'transferencia', label: 'Transferencia', icon: '🏦',
+                      desc: 'Te damos la cuenta',
+                    }]
+                    : []),
                   ...(cardEnabled
                     ? [{ value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' }]
                     : []),
