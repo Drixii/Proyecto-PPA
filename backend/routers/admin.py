@@ -1077,6 +1077,24 @@ def listar_cuentas_propias(
         except Exception:
             pass
 
+    # Estado real de las cuentas que emite Koywe. Decir sólo "la emite Koywe"
+    # no sirve: puede estar emitida pero deshabilitada, o sin el titular
+    # rellenado, y entonces al cliente no se le enseña nada aunque el panel
+    # diga que está cubierta. Si su API no responde se sigue adelante sin este
+    # dato en vez de tumbar la pantalla entera.
+    estado_koywe = {}
+    try:
+        for cuenta in koywe_service.estado_cuentas():
+            estado_koywe[cuenta.get("moneda")] = {
+                "publicada": bool(cuenta.get("publicada")),
+                "habilitada": bool(cuenta.get("habilitada")),
+                "faltan": cuenta.get("faltan") or [],
+                "banco": cuenta.get("banco"),
+                "numero": cuenta.get("numero"),
+            }
+    except Exception as e:
+        log.warning("[koywe] estado de cuentas no disponible: %s", e)
+
     # Los nueve países desde los que se puede enviar. Los tres de Koywe no
     # piden datos bancarios, pero sí llevan interruptor de tarjeta.
     paises = {}
@@ -1087,6 +1105,7 @@ def listar_cuentas_propias(
             "campos": cuentas_propias.PAISES.get(moneda, {}).get("campos", []),
             "koywe": moneda in cuentas_propias.CUBIERTAS_POR_KOYWE,
             "tiene_tarjeta": moneda in con_tarjeta,
+            "estado_koywe": estado_koywe.get(moneda),
         }
 
     return {

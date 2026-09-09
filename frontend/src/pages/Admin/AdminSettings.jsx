@@ -2018,6 +2018,14 @@ function CuentasPropiasForm() {
               // Sin fila todavia, encendido: es como se comporta el backend.
               const tarjetaOn = cuenta ? cuenta.tarjeta !== false : true
 
+              // Estado de la cuenta que emite Koywe, cuando aplica.
+              const ek = info.estado_koywe
+              const koywe = !info.koywe ? {} :
+                !ek ? { texto: 'No se pudo consultar a Koywe ahora mismo', color: '#fcd34d' }
+                : ek.publicada ? { texto: 'Activa en Koywe — visible para tus clientes', color: '#4ade80' }
+                : !ek.habilitada ? { texto: 'Emitida pero deshabilitada en Koywe', color: '#fb923c' }
+                : { texto: `Falta rellenar en Koywe: ${(ek.faltan || []).join(', ')}`, color: '#fcd34d' }
+
               return (
                 <div key={moneda} style={{
                   borderRadius: 12, padding: '12px 14px',
@@ -2031,13 +2039,23 @@ function CuentasPropiasForm() {
                       <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
                         {info.pais} <span style={{ color: '#64748b', fontWeight: 600 }}>· {moneda}</span>
                       </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: info.koywe ? '#8aa0cc' : (cargada && cuenta.activa ? '#4ade80' : '#64748b') }}>
+                      {/* En los de Koywe se muestra el estado REAL de su
+                          cuenta, no un "la emite Koywe" fijo: puede estar
+                          emitida pero deshabilitada, o sin titular, y entonces
+                          al cliente no se le enseña nada aunque aquí pusiera
+                          que está cubierta. */}
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: info.koywe ? koywe.color : (cargada && cuenta.activa ? '#4ade80' : '#64748b') }}>
                         {info.koywe
-                          ? 'Cuenta emitida por Koywe automáticamente'
+                          ? koywe.texto
                           : cargada
                             ? (cuenta.activa ? 'Visible para tus clientes' : 'Cargada, pero apagada')
                             : 'Sin cuenta — no se ofrece transferencia'}
                       </p>
+                      {info.koywe && ek?.publicada && ek.banco && (
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#475569' }}>
+                          {ek.banco}{ek.numero ? ` · ${ek.numero}` : ''}
+                        </p>
+                      )}
                     </div>
                     {!info.koywe && (
                       <button onClick={() => (enEdicion ? setEditando(null) : abrirEdicion(moneda))}
