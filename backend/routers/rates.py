@@ -152,6 +152,23 @@ async def estado_paralelo(_admin=Depends(require_admin), db: Session = Depends(g
     return {"success": True, "data": salida, "message": ""}
 
 
+@router.get("/parallel/{moneda}", response_model=dict)
+async def paralelo_de_moneda(moneda: str, _admin=Depends(require_admin), db: Session = Depends(get_db)):
+    """Oficial y paralelo de una sola moneda, la que se elige en el desplegable.
+
+    Una a una y no todas de golpe: cada moneda consulta fuentes externas, y
+    pedir las veinte a la vez tardaría decenas de segundos en abrir Ajustes.
+    """
+    from services.exchange_service import comparar_moneda
+
+    moneda = moneda.upper()
+    if moneda == "USD":
+        raise HTTPException(status_code=400, detail="El dólar es la base: no tiene paralelo contra sí mismo")
+    datos = await comparar_moneda(moneda)
+    datos["activo"] = usa_paralelo(db, moneda)
+    return {"success": True, "data": datos, "message": ""}
+
+
 @router.post("/parallel", response_model=dict)
 async def cambiar_paralelo(
     data: ParaleloIn,

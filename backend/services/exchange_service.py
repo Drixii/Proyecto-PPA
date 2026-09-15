@@ -223,6 +223,48 @@ async def comparar_fuentes(moneda: str) -> dict:
     }
 
 
+async def comparar_moneda(moneda: str) -> dict:
+    """Oficial y paralelo de CUALQUIER moneda, para mirarla desde Ajustes.
+
+    Las monedas con configuración propia (VES, ARS) usan sus fuentes y su rango
+    creíble. El resto se mira solo contra Binance P2P —el precio del USDT en
+    ese país—, que responde para casi todas: sirve para ver cuánto se separa el
+    mercado real del oficial antes de plantearse cotizar a esa tasa.
+
+    Solo lectura. Que una moneda salga aquí no la enciende: para cotizar al
+    paralelo hace falta darla de alta en PARALELO, con fuentes y rango.
+    """
+    moneda = moneda.upper()
+    if moneda in PARALELO:
+        datos = await comparar_fuentes(moneda)
+        datos["configurable"] = True
+        return datos
+
+    valor = await _binance_p2p(moneda)
+    oficial = None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(EXCHANGERATE_URL)
+        if r.status_code == 200:
+            oficial = (r.json().get("rates") or {}).get(moneda)
+    except Exception:
+        pass
+
+    # Sin rango configurado, lo único que se puede exigir es que sea positivo
+    # y que no esté a más de 10 veces del oficial: una respuesta invertida o en
+    # otra unidad se descarta en vez de enseñarse como buena.
+    creible = bool(valor) and valor > 0 and (not oficial or 0.1 <= valor / oficial <= 10)
+    return {
+        "moneda": moneda,
+        "soportada": True,
+        "configurable": False,
+        "oficial": oficial,
+        "paralelo": valor if creible else None,
+        "diferencia_pct": ((valor / oficial - 1) * 100) if (creible and oficial) else None,
+        "fuentes": [{"nombre": "binance_p2p", "valor": valor, "creible": creible}],
+    }
+
+
 # Se mantiene el nombre viejo: lo usan los scripts de diagnóstico.
 async def fetch_ves_rate() -> tuple[float | None, str]:
     return await fetch_parallel_rate("VES")

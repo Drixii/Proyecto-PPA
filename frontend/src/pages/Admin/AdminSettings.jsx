@@ -966,11 +966,45 @@ function MercadoParalelo() {
   const qc = useQueryClient()
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
+  const [abierto, setAbierto] = useState(false)
+  const [seleccion, setSeleccion] = useState(null)   // { country, currency, iso2 }
+  const menuRef = useRef(null)
 
-  const { data: monedas, isLoading } = useQuery({
-    queryKey: ['tasas-paralelo'],
-    queryFn: () => api.get('/rates/parallel').then(r => r.data.data),
+  // Países del sistema. El dólar se deja fuera: es la base de todas las tasas,
+  // así que "el paralelo del USD" es siempre 1 y no dice nada.
+  const { data: paises = [] } = useQuery({
+    queryKey: ['countries'],
+    queryFn: () => api.get('/rates/countries').then(r => r.data.data),
+    staleTime: 60000,
+  })
+  const opciones = paises
+    .filter(p => p.currency && p.currency !== 'USD')
+    .sort((a, b) => a.country.localeCompare(b.country, 'es'))
+
+  // Venezuela por defecto: es donde el paralelo manda de verdad.
+  useEffect(() => {
+    if (seleccion || !opciones.length) return
+    setSeleccion(opciones.find(o => o.currency === 'VES') || opciones[0])
+  }, [opciones.length])
+
+  // Cerrar al pulsar fuera, comprobando DÓNDE se pulsó: cerrar ante cualquier
+  // clic abre y cierra el desplegable en el mismo gesto.
+  useEffect(() => {
+    if (!abierto) return
+    const fuera = (e) => { if (!menuRef.current?.contains(e.target)) setAbierto(false) }
+    document.addEventListener('mousedown', fuera)
+    return () => document.removeEventListener('mousedown', fuera)
+  }, [abierto])
+
+  // Una moneda cada vez: cada consulta sale a fuentes externas, y pedirlas
+  // todas de golpe tardaría decenas de segundos en abrir la pantalla.
+  const moneda = seleccion?.currency
+  const { data: m, isLoading, isFetching } = useQuery({
+    queryKey: ['tasa-paralelo', moneda],
+    queryFn: () => api.get(`/rates/parallel/${moneda}`).then(r => r.data.data),
+    enabled: !!moneda,
     refetchInterval: 60000,
+    staleTime: 30000,
   })
 
   const cambiar = useMutation({
@@ -978,41 +1012,95 @@ function MercadoParalelo() {
     onSuccess: (r) => {
       setMsg(r.data.message)
       setError('')
-      qc.invalidateQueries({ queryKey: ['tasas-paralelo'] })
+      qc.invalidateQueries({ queryKey: ['tasa-paralelo'] })
       qc.invalidateQueries({ queryKey: ['rates'] })
       setTimeout(() => setMsg(''), 5000)
     },
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
   })
 
-  if (isLoading || !monedas?.length) return null
-
   const num = (v, d = 2) =>
-    v == null ? '\u2014' : Number(v).toLocaleString('es-CL', { maximumFractionDigits: d })
+    v == null ? '—' : Number(v).toLocaleString('es-CL', { maximumFractionDigits: d })
+
+  const NOMBRE_FUENTE = {
+    binance_p2p: 'Binance P2P', yadio: 'Yadio', dolarapi: 'DolarAPI', dolarapi_cripto: 'DolarAPI cripto',
+  }
+
+  const etiqueta = { margin: 0, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }
 
   return (
     <div style={{ ...GLASS, padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Mercado paralelo</h3>
-      <p style={{ margin: '4px 0 16px', fontSize: 12.5, color: '#8aa0cc', lineHeight: 1.6 }}>
-        En estos países la tasa oficial no es a la que se cambia dinero. Enciéndelo solo si
-        tú también liquidas a esa tasa: si compras al oficial y prometes al paralelo, la
-        diferencia la pagas tú en cada envío.
+      <p style={{ margin: '4px 0 14px', fontSize: 12.5, color: '#8aa0cc', lineHeight: 1.6 }}>
+        Elige un país para ver a cuánto está el dólar en su mercado real, al lado del cambio
+        oficial. Cotizar al paralelo solo tiene sentido si tú también liquidas a esa tasa: si
+        compras al oficial y prometes al paralelo, la diferencia la pagas tú en cada envío.
       </p>
+
+      <div ref={menuRef} style={{ position: 'relative', marginBottom: 14, maxWidth: 420 }}>
+        <button type="button" onClick={() => setAbierto(a => !a)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+            borderRadius: 12, cursor: 'pointer', textAlign: 'left', background: 'rgba(6,13,40,.85)',
+            border: `1px solid ${abierto ? 'rgba(56,189,248,.45)' : 'rgba(255,255,255,.12)'}`,
+          }}>
+          {seleccion?.iso2 && <Bandera iso2={seleccion.iso2} ancho={24} alto={17} />}
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: '#eaf2ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {seleccion?.country || 'Elige un país'}
+            </span>
+            <span style={{ display: 'block', fontSize: 11, color: '#8aa0cc' }}>{seleccion?.currency || ''}</span>
+          </span>
+          <span style={{ color: '#8aa0cc', fontSize: 11, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
+        </button>
+
+        {abierto && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 50,
+            maxHeight: 280, overflowY: 'auto', borderRadius: 12, padding: 4,
+            background: 'rgba(5,11,35,.98)', border: '1px solid rgba(56,189,248,.2)',
+            boxShadow: '0 16px 40px rgba(0,0,0,.6)',
+          }}>
+            {opciones.map(o => {
+              const activa = o.country === seleccion?.country
+              return (
+                <button key={o.country} type="button"
+                  onClick={() => { setSeleccion(o); setAbierto(false); setError(''); setMsg('') }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px',
+                    borderRadius: 9, border: 'none', cursor: 'pointer', textAlign: 'left',
+                    background: activa ? 'rgba(56,189,248,.12)' : 'transparent',
+                  }}>
+                  <Bandera iso2={o.iso2} ancho={20} alto={14} />
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>{o.country}</span>
+                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: activa ? '#38bdf8' : '#8aa0cc' }}>{o.currency}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
       {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
 
-      {monedas.map(m => (
-        <div key={m.moneda} style={{ marginBottom: 12, padding: '14px 16px', borderRadius: 12, background: 'rgba(4,10,30,.5)', border: '1px solid rgba(255,255,255,.07)' }}>
+      {moneda && (isLoading || !m || m.moneda !== moneda) && (
+        <div style={{ height: 118, borderRadius: 12, background: 'rgba(255,255,255,.04)' }} />
+      )}
+
+      {m && m.moneda === moneda && (
+        <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(4,10,30,.5)', border: '1px solid rgba(255,255,255,.07)', opacity: isFetching ? 0.7 : 1, transition: 'opacity .2s' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-            <strong style={{ fontSize: 13, color: '#eaf2ff' }}>{m.moneda}</strong>
-            <span style={{
-              fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
-              background: m.activo ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.12)',
-              color: m.activo ? '#4ade80' : '#94a3b8',
-            }}>
-              {m.activo ? 'Cotizando al paralelo' : 'Cotizando al oficial'}
-            </span>
+            <strong style={{ fontSize: 13, color: '#eaf2ff' }}>1 USD en {m.moneda}</strong>
+            {m.configurable && (
+              <span style={{
+                fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
+                background: m.activo ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.12)',
+                color: m.activo ? '#4ade80' : '#94a3b8',
+              }}>
+                {m.activo ? 'Cotizando al paralelo' : 'Cotizando al oficial'}
+              </span>
+            )}
             {m.diferencia_pct != null && (
               <span style={{ fontSize: 11.5, color: Math.abs(m.diferencia_pct) > 3 ? '#fcd34d' : '#8aa0cc' }}>
                 diferencia {m.diferencia_pct > 0 ? '+' : ''}{num(m.diferencia_pct, 1)}%
@@ -1022,38 +1110,47 @@ function MercadoParalelo() {
 
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 10 }}>
             <div>
-              <p style={{ margin: 0, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }}>Oficial</p>
+              <p style={etiqueta}>Oficial</p>
               <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: '#8aa0cc' }}>{num(m.oficial)}</p>
             </div>
             <div>
-              <p style={{ margin: 0, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }}>Paralelo</p>
-              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>{num(m.paralelo)}</p>
+              <p style={etiqueta}>Paralelo</p>
+              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.paralelo == null ? '#64748b' : '#eaf2ff' }}>
+                {m.paralelo == null ? 'Sin datos' : num(m.paralelo)}
+              </p>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {(m.fuentes || []).map(f => (
               <span key={f.nombre} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 8, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.07)', color: f.creible ? '#aebfe2' : '#64748b' }}>
-                {f.nombre}: {f.valor == null ? 'sin respuesta' : num(f.valor)}
+                {NOMBRE_FUENTE[f.nombre] || f.nombre}: {f.valor == null ? 'sin respuesta' : num(f.valor)}
                 {f.valor != null && !f.creible && ' (descartada)'}
               </span>
             ))}
           </div>
 
-          <button
-            onClick={() => cambiar.mutate({ moneda: m.moneda, activo: !m.activo })}
-            disabled={cambiar.isPending}
-            style={{
-              fontSize: 12.5, fontWeight: 700, padding: '8px 16px', borderRadius: 9,
-              border: '1px solid rgba(255,255,255,.12)',
-              background: m.activo ? 'rgba(239,68,68,.1)' : 'rgba(74,222,128,.1)',
-              color: m.activo ? '#f87171' : '#4ade80', cursor: 'pointer',
-            }}
-          >
-            {cambiar.isPending ? 'Aplicando...' : m.activo ? 'Volver al cambio oficial' : 'Cotizar al mercado paralelo'}
-          </button>
+          {m.configurable ? (
+            <button
+              onClick={() => cambiar.mutate({ moneda: m.moneda, activo: !m.activo })}
+              disabled={cambiar.isPending}
+              style={{
+                marginTop: 10, fontSize: 12.5, fontWeight: 700, padding: '8px 16px', borderRadius: 9,
+                border: '1px solid rgba(255,255,255,.12)',
+                background: m.activo ? 'rgba(239,68,68,.1)' : 'rgba(74,222,128,.1)',
+                color: m.activo ? '#f87171' : '#4ade80', cursor: 'pointer',
+              }}
+            >
+              {cambiar.isPending ? 'Aplicando...' : m.activo ? 'Volver al cambio oficial' : 'Cotizar al mercado paralelo'}
+            </button>
+          ) : (
+            <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
+              Solo para consulta: {m.moneda} se cotiza siempre al cambio oficial. Pasarlo al
+              paralelo requiere darlo de alta con sus fuentes.
+            </p>
+          )}
         </div>
-      ))}
+      )}
     </div>
   )
 }
