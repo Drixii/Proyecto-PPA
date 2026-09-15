@@ -139,6 +139,27 @@ PARALELO = {
 
 MONEDAS_PARALELO = tuple(PARALELO.keys())
 
+
+def config_paralelo(moneda: str) -> dict:
+    """Como cotizar el paralelo de una moneda cualquiera.
+
+    Las declaradas arriba traen varias fuentes que se contrastan entre si y un
+    rango de valores creibles. El resto se apoya solo en Binance P2P, que es el
+    precio del USDT en ese pais y responde para casi todas: sin segunda fuente
+    no hay con que comparar, asi que la cordura del numero se comprueba contra
+    la tasa oficial al guardarlo, en _guardar_paralelo.
+    """
+    moneda = (moneda or "").upper()
+    if moneda in PARALELO:
+        return PARALELO[moneda]
+    return {
+        "minimo": 0.0,
+        "maximo": float("inf"),
+        "por_defecto": False,
+        "unica_fuente": True,
+        "fuentes": [("binance_p2p", lambda m=moneda: _binance_p2p(m))],
+    }
+
 # Clave del interruptor en la tabla de ajustes, una por moneda.
 def clave_paralelo(moneda: str) -> str:
     return f"tasa_paralela_{moneda.upper()}"
@@ -147,9 +168,7 @@ def clave_paralelo(moneda: str) -> str:
 def usa_paralelo(db: Session, moneda: str) -> bool:
     """Si esa moneda debe cotizarse al mercado paralelo."""
     from models.setting import Setting
-    cfg = PARALELO.get(moneda.upper())
-    if not cfg:
-        return False
+    cfg = config_paralelo(moneda)
     try:
         row = db.query(Setting).filter(Setting.key == clave_paralelo(moneda)).first()
     except Exception:
@@ -160,16 +179,14 @@ def usa_paralelo(db: Session, moneda: str) -> bool:
 
 
 def _creible(moneda: str, rate: float | None) -> bool:
-    cfg = PARALELO[moneda.upper()]
+    cfg = config_paralelo(moneda)
     return bool(rate) and cfg["minimo"] <= rate <= cfg["maximo"]
 
 
 async def fetch_parallel_rate(moneda: str) -> tuple[float | None, str]:
     """Tasa de mercado paralelo. Devuelve (unidades por USD, fuente)."""
     moneda = moneda.upper()
-    cfg = PARALELO.get(moneda)
-    if not cfg:
-        return None, "none"
+    cfg = config_paralelo(moneda)
 
     for nombre, fetcher in cfg["fuentes"]:
         rate = await fetcher()
@@ -291,7 +308,7 @@ async def fetch_and_store_rates(db: Session):
     # Qué monedas se cotizan al paralelo en esta pasada. Las demás siguen el
     # camino normal, incluidas las que tienen mercado paralelo pero están
     # apagadas: mientras el interruptor esté en off, ARS es una moneda normal.
-    al_paralelo = {m for m in MONEDAS_PARALELO if usa_paralelo(db, m)}
+    al_paralelo = {m for m in SUPPORTED_CURRENCIES if m != "USD" and usa_paralelo(db, m)}
 
     for currency, rate_vs_usd in rates_usd.items():
         if currency not in SUPPORTED_CURRENCIES:
@@ -336,6 +353,19 @@ async def _guardar_paralelo(db: Session, moneda: str, rates_usd: dict, al_parale
     if not rate or rate <= 0:
         print(f"[exchange] no se pudo actualizar {moneda} — se mantiene la tasa anterior")
         return
+
+    # Monedas con una sola fuente: no hay con que contrastarla, asi que se
+    # compara contra la oficial. Una respuesta invertida o en otra unidad sale
+    # ordenes de magnitud fuera, y guardarla convertiria cada envio a ese pais
+    # en un regalo o en un imposible. Ante la duda se deja la tasa anterior.
+    cfg = config_paralelo(moneda)
+    oficial = rates_usd.get(moneda)
+    if cfg.get("unica_fuente") and oficial and fuente != "manual_override":
+        proporcion = rate / oficial
+        if not 0.1 <= proporcion <= 10:
+            print(f"[exchange] {moneda}: el paralelo ({rate:,.4f}) esta {proporcion:.1f}x "
+                  f"respecto al oficial ({oficial:,.4f}) — se descarta y se mantiene la anterior")
+            return
 
     _upsert_rate(db, "USD", moneda, rate, auto=(fuente != "manual_override"))
     _upsert_rate(db, moneda, "USD", 1.0 / rate, auto=True)

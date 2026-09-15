@@ -6,9 +6,9 @@ from models.country import Country
 from schemas.rate import RateOut, ConvertResult, ManualRateUpdate, CountryInfo
 from services.exchange_service import (
     get_rate, set_manual_rate, fetch_and_store_rates,
-    MONEDAS_PARALELO, usa_paralelo, clave_paralelo, comparar_fuentes,
+    MONEDAS_PARALELO, SUPPORTED_CURRENCIES, usa_paralelo, clave_paralelo, comparar_fuentes,
 )
-from auth.dependencies import require_admin
+from auth.dependencies import require_admin, get_current_user_optional
 from config import settings
 from typing import List
 from pydantic import BaseModel
@@ -88,12 +88,31 @@ def convert(
     from_currency: str = Query(..., alias="from"),
     to_currency: str = Query(..., alias="to"),
     amount: float = Query(..., gt=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    quien=Depends(get_current_user_optional),
 ):
+    """Cuanto recibe el destinatario. Lo usan TODAS las calculadoras.
+
+    La comision sale de las reglas por ruta, la misma funcion que cobra la orden
+    de verdad. Antes se calculaba con el porcentaje fijo del archivo de
+    configuracion, asi que poner 7% a Chile→Venezuela no cambiaba ni la
+    calculadora de la portada ni la del panel: el cliente veia un numero y al
+    enviar se le cobraba otro.
+
+    `quien` es opcional porque la calculadora de la portada no lleva sesion.
+    Identificado, se aplica la regla de SU super-admin; sin sesion, la global.
+    """
+    from services.order_service import _get_commission
+
     rate = get_rate(db, from_currency.upper(), to_currency.upper())
     if not rate:
         raise HTTPException(status_code=404, detail=f"Tasa no disponible: {from_currency} → {to_currency}")
-    fee = round(amount * settings.FEE_PERCENTAGE / 100, 2)
+
+    dueno = None
+    if quien is not None:
+        dueno = quien.id if quien.role == "admin" else quien.super_admin_id
+    pct = _get_commission(db, from_currency.upper(), to_currency.upper(), dueno)
+    fee = round(amount * pct / 100, 2)
     amount_received = round((amount - fee) * rate, 2)
     return {
         "success": True,
@@ -179,8 +198,11 @@ async def cambiar_paralelo(
     from models.setting import Setting
 
     moneda = data.moneda.upper()
-    if moneda not in MONEDAS_PARALELO:
-        raise HTTPException(status_code=400, detail=f"{moneda} no tiene mercado paralelo configurado")
+    # Cualquier moneda del sistema, no solo las que traen fuentes declaradas a
+    # mano: el resto se cotiza contra Binance P2P. El dolar se queda fuera
+    # porque es la base de todas las tasas.
+    if moneda == "USD" or moneda not in SUPPORTED_CURRENCIES:
+        raise HTTPException(status_code=400, detail=f"{moneda} no se puede cotizar al paralelo")
 
     clave = clave_paralelo(moneda)
     row = db.query(Setting).filter(Setting.key == clave).first()

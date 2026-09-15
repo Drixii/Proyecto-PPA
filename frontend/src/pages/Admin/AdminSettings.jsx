@@ -1134,25 +1134,60 @@ function MercadoParalelo() {
             ))}
           </div>
 
-          {m.configurable ? (
-            <button
-              onClick={() => cambiar.mutate({ moneda: m.moneda, activo: !m.activo })}
-              disabled={cambiar.isPending}
-              style={{
-                marginTop: 10, fontSize: 12.5, fontWeight: 700, padding: '8px 16px', borderRadius: 9,
-                border: '1px solid rgba(255,255,255,.12)',
-                background: m.activo ? 'rgba(239,68,68,.1)' : 'rgba(74,222,128,.1)',
-                color: m.activo ? '#f87171' : '#4ade80', cursor: 'pointer',
-              }}
-            >
-              {cambiar.isPending ? 'Aplicando...' : m.activo ? 'Volver al cambio oficial' : 'Cotizar al mercado paralelo'}
-            </button>
-          ) : (
-            <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
-              Solo para consulta: {m.moneda} se cotiza siempre al cambio oficial. Pasarlo al
-              paralelo requiere darlo de alta con sus fuentes.
-            </p>
-          )}
+          {/* Con qué tasa cotiza el sistema los envíos a este país. Vale para
+              todos, no solo para los que traen varias fuentes. */}
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.06)' }}>
+            <p style={{ ...etiqueta, marginBottom: 6 }}>El sistema cotiza con</p>
+            <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 11, background: 'rgba(4,10,30,.6)', border: '1px solid rgba(255,255,255,.07)', maxWidth: 340 }}>
+              {[
+                { v: false, txt: 'Oficial', hint: 'Cambio oficial del mercado' },
+                { v: true, txt: 'Paralelo', hint: 'Precio real al que se cambia en ese país' },
+              ].map(({ v, txt, hint }) => {
+                const activa = !!m.activo === v
+                const sinDatos = v && m.paralelo == null
+                return (
+                  <button key={txt} type="button" title={sinDatos ? 'No hay cotización de mercado para esta moneda' : hint}
+                    onClick={() => { if (!activa && !sinDatos) cambiar.mutate({ moneda: m.moneda, activo: v }) }}
+                    disabled={cambiar.isPending || activa || sinDatos}
+                    style={{
+                      flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+                      cursor: activa || sinDatos ? 'default' : 'pointer',
+                      border: activa ? '1px solid transparent' : '1px solid rgba(255,255,255,.12)',
+                      background: activa ? 'rgba(74,222,128,.16)' : 'transparent',
+                      color: sinDatos ? '#475569' : activa ? '#4ade80' : '#c3d2ee',
+                    }}>
+                    {txt}
+                  </button>
+                )
+              })}
+            </div>
+
+            {cambiar.isPending && (
+              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#8aa0cc' }}>Recalculando las tasas…</p>
+            )}
+
+            {!m.configurable && m.paralelo != null && (
+              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
+                Aquí el paralelo sale de una sola fuente (Binance P2P). Si algún día devuelve un
+                valor disparatado no hay con qué contrastarlo, así que se compara con el oficial
+                y se descarta si se sale de rango: en ese caso se mantiene la tasa anterior.
+              </p>
+            )}
+
+            {m.paralelo == null && (
+              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
+                Sin cotización de mercado para {m.moneda}, así que solo se puede cotizar al oficial.
+              </p>
+            )}
+
+            {!!m.activo && m.diferencia_pct != null && Math.abs(m.diferencia_pct) > 1 && (
+              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#fcd34d', lineHeight: 1.5 }}>
+                Los envíos a este país se cotizan un {num(Math.abs(m.diferencia_pct), 1)}%
+                {m.diferencia_pct > 0 ? ' por encima' : ' por debajo'} del oficial. Compra la
+                moneda a esa tasa o la diferencia la pones tú en cada envío.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
