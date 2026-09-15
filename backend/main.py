@@ -37,6 +37,7 @@ def _run_migrations():
         "ALTER TABLE orders ADD COLUMN rejection_reason VARCHAR",
         "ALTER TABLE orders ADD COLUMN payment_intent_id VARCHAR",
         "ALTER TABLE super_admin_accounts ADD COLUMN card_enabled BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE super_admin_accounts ADD COLUMN transfer_integracion BOOLEAN DEFAULT TRUE",
         "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP WITH TIME ZONE",
         # Tarjetas creadas antes de que existiera pendiente_pago: estaban en
         # en_aprobacion, esperando una aprobación que el admin no podía dar.

@@ -121,6 +121,42 @@ PAISES = {
             _campo("conta", "Conta", requerido=False),
         ],
     },
+    "CLP": {
+        "pais": "Chile",
+        "bandera": "cl",
+        "campos": [
+            _campo("banco", "Banco", ayuda="Banco de Chile, BancoEstado, BCI, Santander..."),
+            _TITULAR,
+            _campo("documento", "RUT del titular", ayuda="12.345.678-5"),
+            _campo("tipo_cuenta", "Tipo de cuenta", tipo="select",
+                   opciones=["Cuenta Corriente", "Cuenta Vista", "Cuenta de Ahorro", "Chequera Electronica"]),
+            _campo("numero", "Numero de cuenta"),
+            _campo("correo", "Correo para el comprobante", requerido=False,
+                   ayuda="Muchos bancos chilenos lo piden al transferir"),
+        ],
+    },
+    "MXN": {
+        "pais": "Mexico",
+        "bandera": "mx",
+        "campos": [
+            _campo("banco", "Banco", ayuda="BBVA, Banorte, Santander..."),
+            _TITULAR,
+            _campo("numero", "CLABE interbancaria", ayuda="18 digitos"),
+            _campo("tarjeta", "Numero de tarjeta (opcional)", requerido=False,
+                   ayuda="16 digitos, si tambien recibes por tarjeta"),
+        ],
+    },
+    "ARS": {
+        "pais": "Argentina",
+        "bandera": "ar",
+        "campos": [
+            _campo("banco", "Banco o billetera", ayuda="Galicia, Santander, Mercado Pago..."),
+            _TITULAR,
+            _campo("documento", "CUIT / CUIL"),
+            _campo("numero", "CBU / CVU", ayuda="22 digitos"),
+            _campo("alias", "Alias", requerido=False, ayuda="Mas facil de teclear que el CBU"),
+        ],
+    },
     "CAD": {
         "pais": "Canada",
         "bandera": "ca",
@@ -140,6 +176,9 @@ PAISES = {
 # es el IBAN, en Brasil la clave PIX, en EEUU el account number. Se marca aqui
 # y no se adivina por el orden del formulario, que se ordena para quien rellena.
 PRINCIPAL = {
+    "CLP": "numero",
+    "MXN": "numero",
+    "ARS": "numero",
     "COP": "numero",
     "USD": "numero",
     "EUR": "iban",
@@ -208,6 +247,7 @@ def _a_dict(fila: SuperAdminAccount) -> dict:
         "datos": datos,
         "activa": bool(fila.active),
         "tarjeta": bool(fila.card_enabled),
+        "integracion": bool(fila.transfer_integracion),
         "actualizada": fila.updated_at.isoformat() if fila.updated_at else None,
     }
 
@@ -244,9 +284,10 @@ def guardar(db: Session, super_admin_id: int, moneda: str, datos: dict, activa: 
     return _a_dict(fila)
 
 
-# Toda moneda desde la que se puede enviar. El interruptor de tarjeta aplica a
-# todas; la ficha bancaria, solo a las que no cubre Koywe.
-MONEDAS_ORIGEN = tuple(PAISES.keys()) + CUBIERTAS_POR_KOYWE
+# Toda moneda desde la que se puede enviar. Ahora las nueve tienen ficha
+# bancaria: las que cubre Koywe tambien, porque hace falta para poder cobrar la
+# transferencia fuera de la integracion.
+MONEDAS_ORIGEN = tuple(PAISES.keys())
 
 
 def info_de(moneda: str) -> dict:
@@ -284,6 +325,55 @@ def set_tarjeta(db: Session, super_admin_id: int, moneda: str, activa: bool) -> 
     db.commit()
     db.refresh(fila)
     return _a_dict(fila)
+
+
+def set_integracion(db: Session, super_admin_id: int, moneda: str, activa: bool) -> dict:
+    """Cobrar la transferencia por la integracion o a la cuenta propia.
+
+    Apagarla no quita la transferencia: cambia a donde se transfiere. Con la
+    integracion, el dinero cae en la cuenta que emite Koywe y el aviso de cobro
+    llega solo; libre, el cliente transfiere a tu banco y sube el comprobante,
+    que alguien tiene que aprobar a mano.
+    """
+    moneda = (moneda or "").upper()
+    if moneda not in MONEDAS_ORIGEN:
+        raise ValueError(f"No se puede configurar {moneda or 'esa moneda'}")
+
+    fila = (
+        db.query(SuperAdminAccount)
+        .filter(
+            SuperAdminAccount.super_admin_id == super_admin_id,
+            SuperAdminAccount.currency == moneda,
+        )
+        .first()
+    )
+    if not fila:
+        fila = SuperAdminAccount(super_admin_id=super_admin_id, currency=moneda, datos="{}")
+        db.add(fila)
+
+    fila.transfer_integracion = bool(activa)
+    db.commit()
+    db.refresh(fila)
+    return _a_dict(fila)
+
+
+def usa_integracion(db: Session, super_admin_id: Optional[int], moneda: str) -> bool:
+    """Si la transferencia de este pais la cobra la integracion.
+
+    Sin fila, encendida: es como se comportaba antes del interruptor, y
+    apagarla por omision dejaria sin cuenta a quien nunca entro a esta pantalla.
+    """
+    if not super_admin_id:
+        return True
+    fila = (
+        db.query(SuperAdminAccount)
+        .filter(
+            SuperAdminAccount.super_admin_id == super_admin_id,
+            SuperAdminAccount.currency == (moneda or "").upper(),
+        )
+        .first()
+    )
+    return True if fila is None else bool(fila.transfer_integracion)
 
 
 def tarjeta_activa(db: Session, super_admin_id: Optional[int], moneda: str) -> bool:

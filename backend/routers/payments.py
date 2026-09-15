@@ -108,6 +108,13 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
                      if not cuentas_propias.tarjeta_activa(_db, dueno, mon) else lista
                 for mon, lista in koywe_metodos.items()
             }
+            # Y la cuenta de la integracion se retira donde este apagada, para
+            # que el navegador caiga en la propia. El frontend prefiere la de
+            # Koywe cuando existe, asi que dejarla aqui la haria ganar igual.
+            koywe_cuentas = {
+                mon: c for mon, c in koywe_cuentas.items()
+                if cuentas_propias.usa_integracion(_db, dueno, mon)
+            }
     except Exception as e:
         log.warning("[config] no se pudieron leer ajustes del cliente: %s", e)
         retencion = {"activa": False, "umbral_clp": None}
@@ -749,17 +756,19 @@ def metodos_de_orden(
         if not (koywe_service.es_tarjeta(m["codigo"]) and not tarjeta_ok)
     ]
 
+    # La cuenta de la integracion solo si este super-admin la tiene encendida
+    # para el pais. Apagada, la transferencia va libre a su propia cuenta.
     cuenta = None
-    try:
-        cuenta = koywe_service.cuentas_completas().get(moneda)
-    except Exception:
-        cuenta = None
+    if cuentas_propias.usa_integracion(db, order.super_admin_id, moneda):
+        try:
+            cuenta = koywe_service.cuentas_completas().get(moneda)
+        except Exception:
+            cuenta = None
 
-    # Donde Koywe no emite cuenta (todo salvo MXN, ARS y CLP) se usa la que
-    # haya cargado el dueno de este cliente. Es por super-admin: la orden ya
-    # sabe de quien es, asi que nadie ve la cuenta de otro.
+    # Sin integracion, o donde Koywe no emite cuenta, se usa la que haya
+    # cargado el dueno de este cliente. Es por super-admin: la orden ya sabe de
+    # quien es, asi que nadie ve la cuenta de otro.
     if not cuenta:
-        from services import cuentas_propias
         cuenta = cuentas_propias.para_cliente(db, order.super_admin_id, moneda)
 
     # Sin cuenta no hay a donde transferir. Ofrecer el metodo igual dejaba al

@@ -1299,6 +1299,31 @@ def cambiar_tarjeta_pais(
     }
 
 
+class IntegracionIn(BaseModel):
+    activa: bool
+
+
+@router.patch("/cuentas-propias/{moneda}/integracion", response_model=dict)
+def cambiar_integracion_pais(
+    moneda: str,
+    data: IntegracionIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Cobrar la transferencia por la integración o libre, a tu propia cuenta."""
+    from services import cuentas_propias
+
+    try:
+        cuenta = cuentas_propias.set_integracion(db, _admin.id, moneda, data.activa)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "success": True,
+        "data": cuenta,
+        "message": "Cobra la integración" if data.activa else "Transferencia libre a tu cuenta",
+    }
+
+
 @router.delete("/cuentas-propias/{moneda}", response_model=dict)
 def borrar_cuenta_propia(
     moneda: str,

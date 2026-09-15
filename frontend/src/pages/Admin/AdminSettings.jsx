@@ -2153,6 +2153,18 @@ function CuentasPropiasForm() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
   })
 
+  const cambiarIntegracion = useMutation({
+    mutationFn: ({ moneda, activa }) =>
+      api.patch(`/admin/cuentas-propias/${moneda}/integracion`, { activa }),
+    onSuccess: (r) => {
+      setMsg(r.data.message); setError('')
+      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
+  })
+
   const borrar = useMutation({
     mutationFn: (moneda) => api.delete(`/admin/cuentas-propias/${moneda}`),
     onSuccess: () => {
@@ -2216,6 +2228,8 @@ function CuentasPropiasForm() {
               const enEdicion = editando === moneda
               // Sin fila todavia, encendido: es como se comporta el backend.
               const tarjetaOn = cuenta ? cuenta.tarjeta !== false : true
+              // Sin fila, la integracion manda: es como se comportaba antes.
+              const integracionOn = cuenta ? cuenta.integracion !== false : true
 
               // Estado de la cuenta que emite Koywe, cuando aplica.
               const ek = info.estado_koywe
@@ -2244,7 +2258,7 @@ function CuentasPropiasForm() {
                           al cliente no se le enseña nada aunque aquí pusiera
                           que está cubierta. */}
                       <p style={{ margin: '2px 0 0', fontSize: 11.5, color: info.koywe ? koywe.color : (cargada && cuenta.activa ? '#4ade80' : '#64748b') }}>
-                        {info.koywe
+                        {info.koywe && integracionOn
                           ? koywe.texto
                           : cargada
                             ? (cuenta.activa ? 'Visible para tus clientes' : 'Cargada, pero apagada')
@@ -2256,7 +2270,7 @@ function CuentasPropiasForm() {
                         </p>
                       )}
                     </div>
-                    {!info.koywe && (
+                    {(
                       <button onClick={() => (enEdicion ? setEditando(null) : abrirEdicion(moneda))}
                         style={{
                           padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
@@ -2272,6 +2286,46 @@ function CuentasPropiasForm() {
                       de verdad: en el resto de monedas el boton no aparece
                       nunca, y ofrecer un control que no cambia nada confunde
                       mas que ayuda. */}
+                  {info.koywe && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      gap: 10, marginTop: 10, paddingTop: 10,
+                      borderTop: '1px solid rgba(255,255,255,.06)',
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#c3d2ee' }}>
+                          Transferencia por la integración
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+                          {integracionOn
+                            ? 'Transfieren a la cuenta de Koywe y el cobro se marca solo'
+                            : 'Libre: transfieren a tu cuenta y tú apruebas el comprobante'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => cambiarIntegracion.mutate({ moneda, activa: !integracionOn })}
+                        disabled={cambiarIntegracion.isPending}
+                        title={integracionOn ? 'Pasar a transferencia libre' : 'Volver a la integración'}
+                        style={{
+                          width: 42, height: 24, borderRadius: 999, border: 'none', padding: 3,
+                          cursor: 'pointer', flexShrink: 0,
+                          background: integracionOn ? 'rgba(74,222,128,.28)' : 'rgba(255,255,255,.12)',
+                          display: 'flex', justifyContent: integracionOn ? 'flex-end' : 'flex-start',
+                        }}>
+                        <span style={{
+                          width: 18, height: 18, borderRadius: 999,
+                          background: integracionOn ? '#4ade80' : '#64748b',
+                        }} />
+                      </button>
+                    </div>
+                  )}
+
+                  {!integracionOn && !cargada && (
+                    <p style={{ margin: '8px 0 0', fontSize: 11, color: '#fcd34d', lineHeight: 1.5 }}>
+                      Carga tu cuenta aquí o tus clientes no verán a dónde transferir.
+                    </p>
+                  )}
+
                   {info.tiene_tarjeta ? (
                     <div style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -2310,7 +2364,7 @@ function CuentasPropiasForm() {
                     </p>
                   )}
 
-                  {enEdicion && !info.koywe && (
+                  {enEdicion && (
                     <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
                       {info.campos.map(c => (
                         <div key={c.clave}>

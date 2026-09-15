@@ -42,5 +42,11 @@ class SuperAdminAccount(Base):
     # Por defecto encendido, que es como se comportaba antes de existir esto.
     card_enabled = Column(Boolean, nullable=False, default=True)
 
+    # Si la transferencia de este pais la cobra la integracion (la cuenta que
+    # emite Koywe) o va libre a la cuenta propia del super-admin. Por defecto
+    # la integracion, que es como funcionaba antes de existir el interruptor.
+    # Apagarlo no quita la transferencia: cambia a donde se transfiere.
+    transfer_integracion = Column(Boolean, nullable=False, default=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
