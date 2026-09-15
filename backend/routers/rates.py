@@ -111,6 +111,15 @@ def convert(
     dueno = None
     if quien is not None:
         dueno = quien.id if quien.role == "admin" else quien.super_admin_id
+    else:
+        # Sin sesion no se sabe de quien es cliente quien mira, y cada
+        # super-admin tiene sus propios precios. La portada cotiza con los del
+        # que se haya designado como cara publica; si no hay ninguno, con las
+        # reglas globales, que es como se comportaba antes.
+        from models.setting import Setting
+        fila = db.query(Setting).filter(Setting.key == "super_admin_publico").first()
+        if fila and str(fila.value or "").strip().isdigit():
+            dueno = int(fila.value)
     pct = _get_commission(db, from_currency.upper(), to_currency.upper(), dueno)
     fee = round(amount * pct / 100, 2)
     amount_received = round((amount - fee) * rate, 2)
