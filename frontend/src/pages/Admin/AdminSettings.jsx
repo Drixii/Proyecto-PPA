@@ -1029,7 +1029,11 @@ function MercadoParalelo() {
   const etiqueta = { margin: 0, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }
 
   return (
-    <div style={{ ...GLASS, padding: '20px 24px', marginBottom: 16 }}>
+    // La tarjeta entera sube cuando el desplegable esta abierto. No basta con
+    // el z-index del desplegable: GLASS lleva backdrop-filter, que crea un
+    // contexto de apilamiento propio en CADA tarjeta, asi que las siguientes se
+    // pintan encima por orden del DOM y el desplegable quedaba tapado.
+    <div style={{ ...GLASS, padding: '20px 24px', marginBottom: 16, position: 'relative', zIndex: abierto ? 60 : 'auto' }}>
       <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Mercado paralelo</h3>
       <p style={{ margin: '4px 0 14px', fontSize: 12.5, color: '#8aa0cc', lineHeight: 1.6 }}>
         Elige un país para ver a cuánto está el dólar en su mercado real, al lado del cambio
