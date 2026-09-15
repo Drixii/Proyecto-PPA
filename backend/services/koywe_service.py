@@ -375,6 +375,34 @@ def catalogo(modo: str | None = None, refrescar: bool = False) -> dict:
     return datos
 
 
+# Metodos apagados a mano, por pais. Formato "MONEDA:CODIGO" separado por comas,
+# por ejemplo "CLP:KHIPU". Existe para poder retirar un metodo que Koywe sigue
+# anunciando pero que no cobra bien, sin esperar a que lo quiten ellos ni tocar
+# el codigo: se cambia el ajuste y el metodo desaparece de todas partes.
+#
+# Es por moneda y no por codigo a secas: Khipu tambien existe en Argentina, y
+# apagarlo en Chile no tiene por que quitarlo alli.
+AJUSTE_METODOS_OFF = "koywe_metodos_desactivados"
+
+
+def metodos_desactivados() -> set:
+    from models.setting import Setting
+    db = SessionLocal()
+    try:
+        row = db.query(Setting).filter(Setting.key == AJUSTE_METODOS_OFF).first()
+        valor = (row.value if row else "") or ""
+    except Exception as e:
+        log.warning("[koywe] no se pudo leer los metodos desactivados: %s", e)
+        valor = ""
+    finally:
+        db.close()
+    return {x.strip().upper() for x in valor.split(",") if x.strip()}
+
+
+def _encendido(moneda: str, metodo: dict, apagados: set) -> bool:
+    return f"{(moneda or '').upper()}:{(metodo.get('codigo') or '').upper()}" not in apagados
+
+
 def metodos_publicos(modo: str | None = None) -> dict:
     """Lo que se le ofrece al cliente: {moneda: [métodos ofrecibles]}.
 
@@ -387,9 +415,10 @@ def metodos_publicos(modo: str | None = None) -> dict:
     except KoyweError as e:
         log.warning("[koywe] catálogo no disponible: %s", e)
         return {}
+    apagados = metodos_desactivados()
     salida = {}
     for moneda, metodos in todo.items():
-        ofrecibles = [m for m in metodos if m["soportado"]]
+        ofrecibles = [m for m in metodos if m["soportado"] and _encendido(moneda, m, apagados)]
         if ofrecibles:
             salida[moneda] = ofrecibles
     return salida
@@ -413,7 +442,11 @@ def metodos_de(moneda: str | None, modo: str | None = None) -> list:
     except KoyweError as e:
         log.warning("[koywe] catálogo no disponible: %s", e)
         return []
-    return [m for m in todo.get((moneda or "").upper(), []) if m["soportado"]]
+    apagados = metodos_desactivados()
+    return [
+        m for m in todo.get((moneda or "").upper(), [])
+        if m["soportado"] and _encendido(moneda, m, apagados)
+    ]
 
 
 def es_metodo(payment_method: str | None) -> bool:
