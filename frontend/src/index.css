@@ -80,10 +80,16 @@ body {
 
 /* La página nunca se desplaza en horizontal. Lo que no quepa se desliza dentro
    de su propia caja, no moviendo toda la pantalla. */
-html,
+/* clip y NO hidden. Con hidden en un eje, el otro deja de ser visible y pasa a
+   auto: el body se convierte en contenedor de scroll y la ventana deja de
+   desplazarse. Eso rompió la home — globe.js escucha el scroll de window, que
+   ya nunca llegaba, y la tierra y las banderas se quedaban quietas; el
+   position:sticky del hero también dejaba de pegarse. clip recorta lo que
+   sobresale igual, sin crear contenedor de scroll. Solo en body: en html no
+   hace falta y es donde más fácil rompe el scroll de la ventana. */
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Palabras y números larguísimos —un IBAN, un correo, un id de transacción—
