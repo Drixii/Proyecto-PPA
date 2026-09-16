@@ -296,9 +296,13 @@ def formatea_tasa(valor: float) -> str:
         texto = f"{valor:,.3f}".replace(",", "@").replace(".", ",").replace("@", ".")
     else:
         # Tres cifras significativas: 0,00483 en vez de 0,00.
-        decimales = 3
+        #
+        # El bucle cuenta cuantos ceros hay detras de la coma antes del primer
+        # digito, y se piden esos mas tres. Empezaba en 3 y salia uno de mas:
+        # 0,0009594 en vez de 0,000959.
+        decimales = 2
         v = valor
-        while v < 1 and decimales < 8:
+        while v < 1 and decimales < 9:
             v *= 10
             decimales += 1
         texto = f"{valor:.{decimales}f}".rstrip("0").rstrip(".").replace(".", ",")

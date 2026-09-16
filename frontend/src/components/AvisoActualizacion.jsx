@@ -17,6 +17,22 @@ export default function AvisoActualizacion() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegisterError(e) { console.warn('[sw] no se pudo registrar', e) },
+
+    // Sin esto, una versión nueva podía tardar horas en notarse: el service
+    // worker solo comprueba al arrancar, y una app instalada en el teléfono no
+    // arranca casi nunca —se queda en segundo plano y se vuelve a ella—. Se
+    // mira cada media hora y cada vez que se vuelve a la pantalla.
+    onRegisteredSW(url, registro) {
+      if (!registro) return
+      const mirar = () => {
+        if (navigator.onLine === false) return
+        registro.update().catch(() => { /* sin red; ya se reintenta */ })
+      }
+      setInterval(mirar, 30 * 60 * 1000)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') mirar()
+      })
+    },
   })
 
   if (!hayVersionNueva) return null
