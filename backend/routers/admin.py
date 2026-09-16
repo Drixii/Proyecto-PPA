@@ -1901,6 +1901,127 @@ def delete_commission_rule(
     return {"success": True, "data": {}, "message": "Regla eliminada"}
 
 
+class IAConfigIn(BaseModel):
+    api_key: Optional[str] = None
+    activa: Optional[bool] = None
+
+
+@router.get("/ia", response_model=dict)
+def get_ia(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
+    """Estado de la integración con OpenAI. Nunca devuelve la clave entera."""
+    from services import secret_store as ss
+
+    clave = ss.get_secret(db, "openai_api_key")
+    fila = db.query(Setting).filter(Setting.key == "ia_activa").first()
+    return {
+        "success": True,
+        "data": {
+            "api_key": ss.mask(clave),
+            "configurada": bool(clave),
+            "activa": bool(fila and str(fila.value).lower() == "true"),
+        },
+        "message": "",
+    }
+
+
+@router.put("/ia", response_model=dict)
+def set_ia(
+    data: IAConfigIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    from services import secret_store as ss
+
+    cambios = []
+    if data.api_key is not None:
+        valor = data.api_key.strip()
+        if valor.upper() == "BORRAR":
+            ss.set_secret(db, "openai_api_key", "")
+            cambios.append("clave eliminada")
+        elif valor:
+            if not valor.startswith("sk-"):
+                raise HTTPException(status_code=400, detail="Una clave de OpenAI empieza por sk-")
+            ss.set_secret(db, "openai_api_key", valor)
+            cambios.append("clave guardada")
+
+    if data.activa is not None:
+        fila = db.query(Setting).filter(Setting.key == "ia_activa").first()
+        valor = "true" if data.activa else "false"
+        if fila:
+            fila.value = valor
+        else:
+            db.add(Setting(key="ia_activa", value=valor))
+        db.commit()
+        cambios.append("IA activada" if data.activa else "IA desactivada")
+
+    return {"success": True, "data": None, "message": ", ".join(cambios) or "Sin cambios"}
+
+
+@router.get("/commissions/imagen")
+def imagen_de_tasas(
+    from_country: str,
+    con_ia: bool = False,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Imagen con las tasas desde un país hacia todos sus destinos.
+
+    La tasa que sale es la que recibe el destinatario por 1 unidad de la moneda
+    de origen, ya con la comisión de ESA ruta descontada: es el precio real, no
+    la tasa de mercado.
+    """
+    from fastapi.responses import Response
+    from services.exchange_service import get_rate
+    from services.order_service import _get_commission
+    from services import imagen_tasas, secret_store as ss
+
+    origen = db.query(Country).filter(Country.name == from_country, Country.active == True).first()
+    if not origen:
+        raise HTTPException(status_code=404, detail="País no encontrado")
+    if not origen.can_send:
+        raise HTTPException(status_code=400, detail=f"Desde {origen.name} no se puede enviar")
+
+    filas = []
+    for destino in db.query(Country).filter(
+        Country.active == True, Country.can_receive == True
+    ).order_by(Country.name).all():
+        if destino.name == origen.name:
+            continue
+        tasa = get_rate(db, origen.currency, destino.currency)
+        if not tasa:
+            continue
+        pct = _get_commission(
+            db, origen.currency, destino.currency, None,
+            from_country=origen.name, to_country=destino.name,
+        )
+        filas.append({
+            "name": destino.name,
+            "iso2": destino.iso2 or "",
+            "currency": destino.currency,
+            # Lo que recibe por 1 unidad: la comision se descuenta del monto
+            # enviado, asi que la tasa efectiva baja en ese porcentaje.
+            "tasa": tasa * (1 - pct / 100),
+        })
+
+    if not filas:
+        raise HTTPException(status_code=400, detail="No hay destinos con tasa disponible")
+
+    datos_origen = {"name": origen.name, "iso2": origen.iso2 or "", "currency": origen.currency}
+
+    if con_ia:
+        clave = ss.get_secret(db, "openai_api_key")
+        if not clave:
+            raise HTTPException(status_code=400, detail="Falta la clave de OpenAI en Ajustes → IA")
+        try:
+            png = imagen_tasas.generar_con_ia(datos_origen, filas, clave)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"OpenAI no pudo generarla: {e}")
+    else:
+        png = imagen_tasas.generar(datos_origen, filas)
+
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/commissions/preview", response_model=dict)
 def preview_commission(
     from_currency: str,
