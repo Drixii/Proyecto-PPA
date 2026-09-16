@@ -149,21 +149,23 @@ const AVAILABLE_COUNTRIES = Object.keys(COUNTRY_CODE).filter(c => !['Peru', 'Mex
 
 // Mensaje listo para pegarle al cliente por chat o correo.
 //
-// El enlace es la web a secas, no la URL de registro que devuelve la API: esa
-// lleva el correo del cliente como parámetro, y un enlace larguísimo con datos
-// personales dentro se ve peor y se reenvía a cualquiera. El código ya va
-// aparte, así que no se pierde nada.
+// El enlace sale de window.location.origin y no escrito a mano: asi dice la
+// direccion desde la que se esta trabajando, aunque el dominio cambie — ya
+// cambio una vez.
 //
-// window.location.origin y no un dominio escrito a mano: así el mensaje dice la
-// dirección desde la que se está trabajando, aunque cambie.
+// El codigo va en su propia linea y no pegado a los dos puntos: en un chat se
+// lee de un vistazo y se puede seleccionar sin arrastrar medio parrafo.
 function mensajeInvitacion(codigo) {
   const web = typeof window !== 'undefined' ? window.location.origin : ''
-  const dominio = web.replace(/^https?:\/\//, '')
-  return `Para registrarte en ${dominio}
+  return `KSAGLOBAL EVOLUTION
+Registrate Facil y Seguro✅
 
-Usa este código único: ${codigo}
-
-Entra a la web por acá: ${web}`
+Ingresa a:
+${web}
+Ingresa con tu correo.
+Genera una contraseña segura.
+Ingresa nuestro CODIGO DE INVITACION:
+${codigo}`
 }
 
 function Modal({ title, onClose, children }) {
