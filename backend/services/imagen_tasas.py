@@ -26,10 +26,17 @@ TEXTO_PAIS = (11, 31, 74)
 TEXTO_TITULO = (234, 242, 255)
 TEXTO_SUAVE = (138, 160, 204)
 
-ANCHO = 900
-MARGEN = 40
-ALTO_FILA = 96
-ESPACIO = 14
+# Tamano final, siempre el mismo: las dos vias —dibujada y por IA— terminan
+# aqui, asi que las imagenes son intercambiables y encajan donde se publiquen.
+ANCHO_FINAL, ALTO_FINAL = 560, 827
+
+# Se dibuja al doble y se reduce al final: a 560 px de ancho el texto directo
+# sale con los bordes sucios, y reducir desde el doble lo deja limpio.
+ESCALA = 2
+ANCHO = ANCHO_FINAL * ESCALA
+ALTO = ALTO_FINAL * ESCALA
+MARGEN = 28 * ESCALA
+ESPACIO = 7 * ESCALA
 
 _banderas: dict[str, Image.Image] = {}
 
@@ -94,12 +101,29 @@ def formatea_tasa(valor: float) -> str:
     return texto
 
 
+def _a_tamano_final(img: Image.Image) -> bytes:
+    """Deja la imagen exactamente en 560x827 y la devuelve como PNG."""
+    if img.size != (ANCHO_FINAL, ALTO_FINAL):
+        img = img.convert("RGB").resize((ANCHO_FINAL, ALTO_FINAL), Image.LANCZOS)
+    salida = io.BytesIO()
+    img.save(salida, "PNG", optimize=True)
+    return salida.getvalue()
+
+
 def generar(origen: dict, filas: list[dict]) -> bytes:
     """PNG con una fila por destino: bandera, pais y a cuanto se cambia.
 
     `origen` es {name, iso2, currency}; cada fila, {name, iso2, currency, tasa}.
     """
-    alto = MARGEN * 2 + 120 + len(filas) * (ALTO_FILA + ESPACIO)
+    alto = ALTO
+    # El alto es fijo, asi que las filas se reparten el espacio que queda bajo
+    # la cabecera. Con muchos destinos salen mas juntas, pero entran todas: es
+    # preferible a cortar la lista o a que la imagen cambie de tamano.
+    cabecera = 62 * ESCALA
+    disponible = alto - MARGEN * 2 - cabecera
+    n = max(len(filas), 1)
+    alto_fila = max(int(disponible / n) - ESPACIO, 18 * ESCALA)
+
     img = Image.new("RGB", (ANCHO, alto), FONDO_ABAJO)
     d = ImageDraw.Draw(img)
 
@@ -110,44 +134,42 @@ def generar(origen: dict, filas: list[dict]) -> bytes:
             fill=tuple(int(a + (b - a) * p) for a, b in zip(FONDO_ARRIBA, FONDO_ABAJO)),
         )
 
-    titulo = _fuente(NEGRITA, 44)
-    subtitulo = _fuente(NORMAL, 22)
-    f_pais = _fuente(NEGRITA, 30)
-    f_tasa = _fuente(NEGRITA, 36)
+    titulo = _fuente(NEGRITA, int(26 * ESCALA))
+    subtitulo = _fuente(NORMAL, int(12 * ESCALA))
+    f_pais = _fuente(NEGRITA, max(int(alto_fila * 0.34), 9 * ESCALA))
+    f_tasa = _fuente(NEGRITA, max(int(alto_fila * 0.40), 10 * ESCALA))
 
     d.text((MARGEN, MARGEN), f"ENVÍOS DESDE {origen['name'].upper()}", font=titulo, fill=TEXTO_TITULO)
     d.text(
-        (MARGEN, MARGEN + 56),
+        (MARGEN, MARGEN + int(32 * ESCALA)),
         f"Cuánto recibe el destinatario por cada 1 {origen['currency']}",
         font=subtitulo, fill=TEXTO_SUAVE,
     )
 
-    y = MARGEN + 120
+    y = MARGEN + cabecera
     for fila in filas:
         d.rounded_rectangle(
-            [(MARGEN, y), (ANCHO - MARGEN, y + ALTO_FILA)],
-            radius=ALTO_FILA // 2, fill=PILDORA,
+            [(MARGEN, y), (ANCHO - MARGEN, y + alto_fila)],
+            radius=alto_fila // 2, fill=PILDORA,
         )
 
-        bandera = _bandera(fila.get("iso2", ""), ALTO_FILA - 24)
+        lado = int(alto_fila * 0.78)
+        bandera = _bandera(fila.get("iso2", ""), lado)
         if bandera:
-            img.paste(bandera, (MARGEN + 14, y + 12), bandera)
+            img.paste(bandera, (MARGEN + (alto_fila - lado) // 2, y + (alto_fila - lado) // 2), bandera)
 
         d.text(
-            (MARGEN + 14 + (ALTO_FILA - 24) + 22, y + ALTO_FILA // 2),
+            (MARGEN + lado + int(alto_fila * 0.35), y + alto_fila // 2),
             fila["name"].upper(), font=f_pais, fill=TEXTO_PAIS, anchor="lm",
         )
 
-        texto = formatea_tasa(fila.get("tasa"))
         d.text(
-            (ANCHO - MARGEN - 28, y + ALTO_FILA // 2),
-            texto, font=f_tasa, fill=TEXTO_PAIS, anchor="rm",
+            (ANCHO - MARGEN - int(alto_fila * 0.3), y + alto_fila // 2),
+            formatea_tasa(fila.get("tasa")), font=f_tasa, fill=TEXTO_PAIS, anchor="rm",
         )
-        y += ALTO_FILA + ESPACIO
+        y += alto_fila + ESPACIO
 
-    salida = io.BytesIO()
-    img.save(salida, "PNG", optimize=True)
-    return salida.getvalue()
+    return _a_tamano_final(img)
 
 
 def generar_con_ia(origen: dict, filas: list[dict], api_key: str) -> bytes:
@@ -173,6 +195,9 @@ def generar_con_ia(origen: dict, filas: list[dict], api_key: str) -> bytes:
     r = httpx.post(
         "https://api.openai.com/v1/images/generations",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        # OpenAI solo acepta unos pocos tamanos; 1024x1536 es el de proporcion
+        # mas parecida a 560x827 (0,667 frente a 0,677), asi que al reducir casi
+        # no se deforma.
         json={"model": "gpt-image-1", "prompt": prompt, "size": "1024x1536", "n": 1},
         timeout=180,
     )
@@ -186,9 +211,12 @@ def generar_con_ia(origen: dict, filas: list[dict], api_key: str) -> bytes:
     import base64
     b64 = datos[0].get("b64_json")
     if b64:
-        return base64.b64decode(b64)
+        crudo = base64.b64decode(b64)
+    else:
+        url = datos[0].get("url")
+        if not url:
+            raise RuntimeError("OpenAI no devolvió ni imagen ni enlace")
+        crudo = httpx.get(url, timeout=60).content
 
-    url = datos[0].get("url")
-    if not url:
-        raise RuntimeError("OpenAI no devolvió ni imagen ni enlace")
-    return httpx.get(url, timeout=60).content
+    # Al mismo tamano que la dibujada, para que las dos sean intercambiables.
+    return _a_tamano_final(Image.open(io.BytesIO(crudo)))
