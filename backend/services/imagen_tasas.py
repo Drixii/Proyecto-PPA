@@ -18,7 +18,13 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 FUENTES = os.path.join(ASSETS, "fonts")
 LOGO = os.path.join(ASSETS, "logo.png")
+REFERENCIA = os.path.join(ASSETS, "referencia.jpg")
 CACHE_FONDOS = os.path.join(ASSETS, "fondos_cache")
+
+# Franja del alto donde va la tabla en el arte de la IA, en tanto por uno. Es
+# la zona que la instruccion le pide dejar limpia: debajo de la cabecera y por
+# encima de la barra del pie.
+ZONA_TABLA = (0.275, 0.895)
 
 # Montserrat va con el logo. Si faltara el fichero se cae a DejaVu, que es lo
 # unico que trae el sistema: fea pero legible, mejor que no generar la imagen.
@@ -395,17 +401,13 @@ def _pie(d: ImageDraw.ImageDraw) -> int:
     return y
 
 
-def generar(origen: dict, filas: list[dict]) -> bytes:
-    """PNG con una fila por destino: bandera, pais y a cuanto se cambia.
+def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
+                  arriba: int, abajo: int) -> None:
+    """Pinta la tabla entre `arriba` y `abajo`.
 
-    `origen` es {name, iso2, currency}; cada fila, {name, iso2, currency, tasa}.
+    Va aparte porque las filas son lo unico que no puede cambiar: se dibujan
+    igual sobre el fondo hecho aqui y sobre el arte que devuelve la IA.
     """
-    img = _lienzo_de_fondo(origen).convert("RGB")
-    d = ImageDraw.Draw(img)
-
-    arriba = _cabecera(img, d, origen)
-    abajo = _pie(d) - int(12 * ESCALA)
-
     # El alto es fijo, asi que las filas se reparten lo que queda entre la
     # cabecera y el pie. Con muchos destinos salen mas juntas, pero entran
     # todas: preferible a cortar la lista o a que la imagen cambie de tamano.
@@ -441,6 +443,18 @@ def generar(origen: dict, filas: list[dict]) -> bytes:
 
         y += alto_fila + ESPACIO
 
+
+def generar(origen: dict, filas: list[dict]) -> bytes:
+    """PNG con una fila por destino: bandera, pais y cuanto recibe.
+
+    `origen` es {name, iso2, currency, monto}; cada fila, {name, iso2,
+    currency, recibe}.
+    """
+    img = _lienzo_de_fondo(origen).convert("RGB")
+    d = ImageDraw.Draw(img)
+    arriba = _cabecera(img, d, origen)
+    abajo = _pie(d) - int(12 * ESCALA)
+    _dibuja_filas(img, d, filas, arriba, abajo)
     return _a_tamano_final(img)
 
 
@@ -462,31 +476,62 @@ def _hoy() -> str:
     return f"{d.day} de {meses[d.month - 1]} de {d.year}"
 
 
+# Que se ve de fondo en cada pais. Va en la instruccion, asi que el modelo
+# recibe el paisaje del pais elegido en el menu y no siempre el mismo.
+ESCENAS = {
+    "CL": "Santiago de Chile con la cordillera de los Andes nevada al fondo",
+    "VE": "Caracas y el cerro El Ávila",
+    "CO": "Bogotá con el cerro de Monserrate",
+    "AR": "Buenos Aires con el Obelisco",
+    "PE": "Lima frente al Pacífico, con Machu Picchu insinuado al fondo",
+    "MX": "Ciudad de México con el Paseo de la Reforma y el Ángel de la Independencia",
+    "BR": "Río de Janeiro con el Cristo Redentor y el Pan de Azúcar",
+    "EC": "Quito con el centro histórico y los volcanes al fondo",
+    "PA": "el horizonte de Ciudad de Panamá y el canal",
+    "US": "Nueva York con el puente de Brooklyn y el horizonte de Manhattan",
+    "CA": "Toronto con la Torre CN",
+    "UY": "Montevideo con su rambla",
+    "PY": "Asunción con el Palacio de los López",
+    "BO": "La Paz con el Illimani al fondo",
+    "CR": "Costa Rica con el volcán Arenal y selva tropical",
+    "DO": "Santo Domingo con su zona colonial y el mar Caribe",
+    "EU": "una ciudad europea reconocible con arquitectura clásica",
+    "ES": "Madrid con la Gran Vía",
+    "IT": "Roma con el Coliseo",
+    "PT": "Lisboa con la Torre de Belém",
+    "FR": "París con la Torre Eiffel",
+    "DE": "Berlín con la Puerta de Brandeburgo",
+    "GB": "Londres con el Tower Bridge",
+}
+
 # Lo que se le pide a la IA cuando nadie ha escrito una instruccion propia.
 # Es editable desde Ajustes -> IA; esto es solo el punto de partida.
+#
+# Ojo con lo que NO pide: ni tasas, ni cifras, ni tabla. La IA hace el arte y
+# la tabla la dibuja el codigo encima, con los numeros de verdad. Pedirle los
+# numeros al modelo era el problema: los redibuja a mano alzada y se equivoca.
 INSTRUCCION_POR_DEFECTO = (
-    "Cartel vertical de tasas de cambio.\n\n"
-    "FONDO: una foto real y reconocible de {pais} ocupando TODO el fondo, de "
-    "borde a borde —un paisaje, la ciudad o un monumento del país—, con un velo "
-    "azul marino por encima: suave arriba, donde se ve la foto, y cerrado abajo.\n\n"
-    "CABECERA, centrada y en blanco, de arriba abajo:\n"
-    "  · el logo: un globo terráqueo azul con una flecha gris, y al lado «KSA» "
-    "en mayúsculas muy gruesas con «GLOBAL EVOLUTION» debajo en letra pequeña "
-    "y espaciada\n"
-    "  · «DESDE» en letras separadas\n"
-    "  · «{PAIS}» enorme, en negrita muy gruesa\n"
-    "  · una pastilla azul oscuro con la bandera circular de {pais} y el texto "
-    "«TASAS DE CAMBIO»\n"
-    "  · «POR CADA {monto} {moneda}» en negrita\n"
-    "  · «ACTUALIZADAS HOY» en letra pequeña y espaciada\n\n"
-    "LISTA, debajo: una fila por país, cada una en una píldora blanca de "
-    "esquinas totalmente redondeadas. En cada fila, a la IZQUIERDA la bandera "
-    "circular del país y su nombre en mayúsculas en azul oscuro; a la DERECHA, "
-    "pegado al borde, el importe que recibe, en negrita gruesa y azul oscuro.\n\n"
-    "PIE: una barra azul oscuro redondeada con «SEGURIDAD • CONFIANZA • "
-    "MEJORES TASAS».\n\n"
-    "Diseño limpio, moderno, mucho contraste. Sin marcas de agua y sin ningún "
-    "texto que no esté aquí."
+    "Utiliza la imagen adjunta como referencia visual obligatoria. Crea una "
+    "versión publicitaria para una casa de cambio dedicada a {PAIS}, "
+    "manteniendo la misma composición vertical, jerarquía, paleta azul, "
+    "iluminación, estilo corporativo y distribución general.\n\n"
+    "El fondo debe mostrar {escena}, con banderas de {pais} integradas "
+    "naturalmente en la escena.\n\n"
+    "Incluye solamente estos textos, exactamente como están escritos:\n\n"
+    "“DESDE”\n"
+    "“{PAIS}”\n"
+    "“TASAS DE CAMBIO”\n"
+    "“ACTUALIZADAS HOY”\n"
+    "“SEGURIDAD • CONFIANZA • MEJORES TASAS”\n\n"
+    "No agregues otros textos, monedas, países, tasas, cifras, tablas ni "
+    "información inventada.\n\n"
+    "Deja completamente libre la zona central destinada a la tabla de tasas. "
+    "Mantén esa zona visualmente limpia, con fondo azul de bajo contraste, "
+    "para que posteriormente pueda incorporarse contenido mediante "
+    "programación.\n\n"
+    "Formato vertical 2:3, preferentemente 1024 × 1536 px. El resultado debe "
+    "sentirse como parte de una misma colección gráfica y no como un diseño "
+    "completamente diferente."
 )
 
 
@@ -496,43 +541,49 @@ def generar_con_ia(
     api_key: str,
     instruccion: str | None = None,
 ) -> bytes:
-    """La misma tabla, pero dibujada por OpenAI.
+    """El arte lo hace OpenAI; la tabla la sigue dibujando el codigo encima.
 
-    `instruccion` es el texto que el super admin escribe en Ajustes -> IA; se
-    le pega debajo la lista de paises y cifras, que no es negociable.
+    `instruccion` es el texto que el super admin escribe en Ajustes -> IA. Se
+    le pide el cartel con su fondo, su cabecera y su pie, pero con el centro
+    vacio: las cifras no se le piden a un modelo que las redibuja a mano
+    alzada, se pintan aqui con los datos de la base.
 
-    Aviso que conviene tener presente: el modelo redibuja los numeros a mano
-    alzada y suele equivocarse en alguno. Sirve para ver el estilo, no para
-    mandarle la tasa a un cliente sin mirarla.
+    Se manda ademas la imagen de referencia, para que todos los paises salgan
+    de la misma coleccion grafica y no cada uno de su padre y de su madre.
     """
-    lineas = "\n".join(
-        f"{f['name']}: {formatea_monto(f.get('recibe'))} {f.get('currency', '')}".strip()
-        for f in filas
-    )
     texto = (instruccion or "").strip() or INSTRUCCION_POR_DEFECTO
-    texto = _rellena(
+    prompt = _rellena(
         texto,
         pais=origen["name"],
         PAIS=origen["name"].upper(),
+        escena=ESCENAS.get((origen.get("iso2") or "").upper(),
+                           f"un paisaje o una ciudad reconocible de {origen['name']}"),
         moneda=origen.get("currency", ""),
         monto=formatea_monto(origen.get("monto")),
         fecha=_hoy(),
     )
-    prompt = (
-        f"{texto}\n\n"
-        "Las filas, en este orden exacto y con estas cifras exactas, sin "
-        f"cambiar ni un dígito y sin saltarte ninguna:\n{lineas}"
-    )
 
-    r = httpx.post(
-        "https://api.openai.com/v1/images/generations",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        # OpenAI solo acepta unos pocos tamanos; 1024x1536 es el de proporcion
-        # mas parecida a 560x827 (0,667 frente a 0,677), asi que al reducir casi
-        # no se deforma.
-        json={"model": "gpt-image-1", "prompt": prompt, "size": "1024x1536", "n": 1},
-        timeout=180,
-    )
+    # OpenAI solo acepta unos pocos tamanos; 1024x1536 es el de proporcion mas
+    # parecida a 560x827 (0,667 frente a 0,677), asi que al reducir casi no se
+    # deforma.
+    campos = {"model": "gpt-image-1", "prompt": prompt, "size": "1024x1536", "n": "1"}
+    if os.path.exists(REFERENCIA):
+        with open(REFERENCIA, "rb") as f:
+            referencia = f.read()
+        r = httpx.post(
+            "https://api.openai.com/v1/images/edits",
+            headers={"Authorization": f"Bearer {api_key}"},
+            data=campos,
+            files={"image[]": ("referencia.jpg", referencia, "image/jpeg")},
+            timeout=300,
+        )
+    else:
+        r = httpx.post(
+            "https://api.openai.com/v1/images/generations",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={**campos, "n": 1},
+            timeout=300,
+        )
     if r.status_code != 200:
         raise RuntimeError(f"OpenAI respondió {r.status_code}: {r.text[:300]}")
 
@@ -550,5 +601,9 @@ def generar_con_ia(
             raise RuntimeError("OpenAI no devolvió ni imagen ni enlace")
         crudo = httpx.get(url, timeout=60).content
 
-    # Al mismo tamano que la dibujada, para que las dos sean intercambiables.
-    return _a_tamano_final(Image.open(io.BytesIO(crudo)))
+    # El arte llega a 1024x1536; se lleva al lienzo de trabajo y se le pinta la
+    # tabla encima, en la franja que la instruccion le pidio dejar libre.
+    arte = Image.open(io.BytesIO(crudo)).convert("RGB").resize((ANCHO, ALTO), Image.LANCZOS)
+    _dibuja_filas(arte, ImageDraw.Draw(arte), filas,
+                  int(ALTO * ZONA_TABLA[0]), int(ALTO * ZONA_TABLA[1]))
+    return _a_tamano_final(arte)
