@@ -367,6 +367,34 @@ function CommissionMatrix({ data, onSaved }) {
     finally { setBaseSaving(false) }
   }
 
+  // Orden de los países, arrastrando las filas. Es una prioridad comercial
+  // —Venezuela arriba porque es a donde va casi todo— y es la misma para todos
+  // los orígenes: la lista vive en ajustes, no en cada país.
+  //
+  // Mientras se arrastra manda `ordenLocal`, para que la fila siga al cursor
+  // sin esperar al servidor. Al soltar se guarda y la respuesta vuelve por la
+  // consulta de siempre.
+  const [ordenLocal, setOrdenLocal] = useState(null)
+  const arrastrando = useRef(null)
+
+  const guardarOrden = useMutation({
+    mutationFn: (orden) => api.put('/admin/countries/orden', { orden }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-commissions'] })
+      qc.invalidateQueries({ queryKey: ['imagen-editor'] })
+      setOrdenLocal(null)
+    },
+    onError: () => setOrdenLocal(null),   // se vuelve a lo que diga el servidor
+  })
+
+  const mueve = (desde, hasta) => {
+    const nombres = (ordenLocal || destinations.map(d => d.name)).slice()
+    if (desde === hasta || hasta < 0 || hasta >= nombres.length) return
+    const [movido] = nombres.splice(desde, 1)
+    nombres.splice(hasta, 0, movido)
+    setOrdenLocal(nombres)
+  }
+
   const countryName = cur => (labels[cur] || cur).replace(/ \(.*\)/, '')
 
   return (
@@ -454,13 +482,16 @@ function CommissionMatrix({ data, onSaved }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'rgba(4,10,30,.6)' }}>
-              {['Destino', 'Comisión actual', 'Nueva %', 'Acciones'].map(h => (
+              {['⠿ Destino (arrastra para ordenar)', 'Comisión actual', 'Nueva %', 'Acciones'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 600, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {destinations.map(destino => {
+            {(ordenLocal
+              ? ordenLocal.map(n => destinations.find(d => d.name === n)).filter(Boolean)
+              : destinations
+            ).map((destino, indice) => {
               const tc = destino.name
               const row = getRow(origen?.name, destino.name)
               const key = k(origen?.name, destino.name)
@@ -470,10 +501,27 @@ function CommissionMatrix({ data, onSaved }) {
               const hasOwn = row?.my_pct != null
 
               return (
-                <tr key={tc} style={{ borderBottom: '1px solid rgba(255,255,255,.04)' }}>
+                <tr key={tc}
+                  draggable
+                  onDragStart={e => { arrastrando.current = indice; e.dataTransfer.effectAllowed = 'move' }}
+                  onDragOver={e => {
+                    // Sin preventDefault el navegador no considera esta fila un
+                    // destino válido y no llega a soltarse nunca.
+                    e.preventDefault()
+                    if (arrastrando.current === null || arrastrando.current === indice) return
+                    mueve(arrastrando.current, indice)
+                    arrastrando.current = indice
+                  }}
+                  onDragEnd={() => {
+                    arrastrando.current = null
+                    if (ordenLocal) guardarOrden.mutate(ordenLocal)
+                  }}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,.04)', cursor: 'grab' }}>
                   {/* Destino */}
                   <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span title="Arrastra para cambiar el orden"
+                        style={{ color: '#475569', fontSize: 13, cursor: 'grab', userSelect: 'none' }}>⠿</span>
                       <Bandera iso2={destino.iso2} ancho={18} alto={13} />
                       <span style={{ color: '#eaf2ff', fontWeight: 600 }}>{destino.name}</span>
                       <span style={{ fontSize: 12, color: '#8aa0cc' }}>{destino.currency}</span>

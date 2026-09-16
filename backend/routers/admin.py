@@ -1504,6 +1504,41 @@ def list_available_sub_admins(
 
 # ── Commission rules ──────────────────────────────────────────────────────────
 
+CLAVE_ORDEN = "orden_paises"
+
+
+def orden_paises(db: Session) -> list:
+    """En qué orden se enseñan los países. Uno solo para todo el sistema.
+
+    Es una prioridad comercial, no un dato del país: Venezuela primero porque
+    es a donde va casi todo. Por eso vive en ajustes y no en la tabla de
+    países, y por eso es el mismo para todos los orígenes — tener un orden
+    distinto por país obligaría a reordenar veinte listas para cambiar una
+    prioridad que en realidad es una sola.
+    """
+    fila = db.query(Setting).filter(Setting.key == CLAVE_ORDEN).first()
+    if not fila or not fila.value:
+        return []
+    try:
+        guardado = json.loads(fila.value)
+        return [str(x) for x in guardado] if isinstance(guardado, list) else []
+    except ValueError:
+        return []
+
+
+def ordena(paises: list, orden: list, nombre=lambda p: p.name) -> list:
+    """Coloca primero los del orden guardado y el resto detrás, alfabético.
+
+    Un país recién dado de alta no está en la lista guardada: en vez de
+    esconderlo o mandarlo al principio, cae al final por su nombre y ya se
+    arrastrará a donde toque.
+    """
+    if not orden:
+        return paises
+    posicion = {p: i for i, p in enumerate(orden)}
+    return sorted(paises, key=lambda p: (posicion.get(nombre(p), len(orden)), nombre(p)))
+
+
 def _monedas_de_rutas(db: Session) -> dict:
     """Monedas de origen y destino, sacadas de los paises dados de alta.
 
@@ -1553,7 +1588,10 @@ def _monedas_de_rutas(db: Session) -> dict:
         "destino": destino,
         "etiquetas": etiquetas,
         "banderas": banderas,
-        "paises": lista_paises,
+        # Ya ordenados: la tabla de destinos y la imagen tienen que salir en el
+        # mismo orden, y ese orden se decide aqui una vez.
+        "paises": ordena(lista_paises, orden_paises(db), nombre=lambda p: p["name"]),
+        "orden": orden_paises(db),
     }
 
 
@@ -1954,6 +1992,9 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
         Country.active == True,
         Country.can_send == True if recibe else Country.can_receive == True,
     ).order_by(Country.name).all()
+    # El mismo orden que la tabla de Comisiones por ruta: la imagen es esa
+    # tabla, y verlas en orden distinto no tendria explicacion.
+    otros = ordena(otros, orden_paises(db))
 
     filas = []
     for otro in otros:
@@ -2007,6 +2048,32 @@ def _posicion_guardada(db: Session, iso2: str, sentido: str = "envia") -> dict:
         return {**POSICION_POR_DEFECTO, **json.loads(fila.value)}
     except ValueError:
         return dict(POSICION_POR_DEFECTO)
+
+
+class OrdenPaisesIn(BaseModel):
+    orden: List[str]
+
+
+@router.put("/countries/orden", response_model=dict)
+def guardar_orden_paises(
+    data: OrdenPaisesIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda en qué orden se enseñan los países. Uno solo para todo.
+
+    No se valida contra la tabla de países a propósito: si un país se da de
+    baja y vuelve, su sitio en la lista sigue ahí esperándolo. Los nombres que
+    ya no existen no estorban, simplemente no casan con nadie.
+    """
+    orden = [str(x).strip() for x in data.orden if str(x).strip()]
+    fila = db.query(Setting).filter(Setting.key == CLAVE_ORDEN).first()
+    if fila:
+        fila.value = json.dumps(orden, ensure_ascii=False)
+    else:
+        db.add(Setting(key=CLAVE_ORDEN, value=json.dumps(orden, ensure_ascii=False)))
+    db.commit()
+    return {"success": True, "data": {"orden": orden}, "message": "Orden guardado"}
 
 
 @router.get("/commissions/imagen")
