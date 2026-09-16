@@ -260,10 +260,23 @@ export default function NewTransfer() {
   // Donde Koywe no emite cuenta (todo salvo MXN, ARS y CLP) se usa la que haya
   // cargado el super-admin dueño de este cliente, que el backend ya filtra por
   // dueño: nadie ve la cuenta de otro.
-  const cuentaTransfer =
-    (payCfg?.koywe?.transfer_accounts || {})[calc.fromCurrency] ||
-    (payCfg?.cuentas_propias || {})[calc.fromCurrency] ||
-    null
+  // Todas las cuentas a las que se puede transferir desde este país. Suele
+  // haber una, pero una casa puede tener dos bancos y entonces el cliente
+  // elige: mandar a la que no es cuesta un día de revisión manual.
+  const cuentasTransfer = (() => {
+    const koywe = (payCfg?.koywe?.transfer_accounts || {})[calc.fromCurrency]
+    if (koywe) return [koywe]
+    const propia = (payCfg?.cuentas_propias || {})[calc.fromCurrency]
+    if (!propia) return []
+    const todas = propia.todas || [propia]
+    // Varios países comparten moneda y cada uno cobra por su lado: desde
+    // Estados Unidos se paga por Zelle, no a la cuenta de Ecuador.
+    const delPais = todas.filter(c => !c.pais || !calc.fromCountry || c.pais === calc.fromCountry)
+    return delPais.length ? delPais : todas
+  })()
+
+  const [cuentaElegida, setCuentaElegida] = useState(0)
+  const cuentaTransfer = cuentasTransfer[cuentaElegida] || cuentasTransfer[0] || null
 
   const [displayAmount, setDisplayAmount] = useState(
     calc.amount ? formatDisplay(parseRaw(String(calc.amount)), calc.fromCurrency) : ''
@@ -323,6 +336,9 @@ export default function NewTransfer() {
     try { sessionStorage.setItem('aviso-titular', 'visto') } catch { /* da igual */ }
     setAvisoPagador(false)
   }
+
+  // Al cambiar de país de origen, la cuenta elegida ya no existe.
+  useEffect(() => { setCuentaElegida(0) }, [calc.fromCountry, calc.fromCurrency])
 
   const rawAmount = parseRaw(displayAmount)
 
@@ -1133,6 +1149,26 @@ export default function NewTransfer() {
                           {calc.fromCurrency}
                         </span>
                       </div>
+
+                      {/* Con más de una cuenta en el país, el cliente elige a
+                          cuál transfiere: mandar a la que no es cuesta un día
+                          de revisión a mano. */}
+                      {cuentasTransfer.length > 1 && (
+                        <div className="flex gap-2 flex-wrap">
+                          {cuentasTransfer.map((c, i) => (
+                            <button key={c.id ?? i} type="button"
+                              onClick={() => setCuentaElegida(i)}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                              style={{
+                                background: i === cuentaElegida ? 'rgba(56,189,248,.16)' : 'rgba(255,255,255,.04)',
+                                border: `1px solid ${i === cuentaElegida ? 'rgba(56,189,248,.45)' : 'rgba(255,255,255,.1)'}`,
+                                color: i === cuentaElegida ? '#eaf2ff' : '#8aa0cc',
+                              }}>
+                              {c.alias || c.campos?.find(x => /banco/i.test(x.etiqueta))?.valor || `Cuenta ${i + 1}`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="space-y-2">
                         {/* La cuenta de Koywe viene plana con claves fijas; la

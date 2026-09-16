@@ -2929,11 +2929,20 @@ export default function AdminSettings() {
 // español y una clave PIX brasileña no se parecen, y duplicar esa lista en el
 // navegador garantiza que un día deje de coincidir con lo que valida el
 // servidor.
+// Cuentas de cobro, una tarjeta por país y tantas cuentas como haga falta.
+//
+// Antes era una sola por moneda, así que una casa no podía tener dos bancos en
+// el mismo país y Ecuador, Estados Unidos y Panamá compartían ficha por usar el
+// dólar. Cada país tiene ahora su tarjeta, con sus cuentas y su «Añadir
+// cuenta», y los campos que pide los dice el servidor: en Estados Unidos es
+// Zelle —titular y correo— y no un formulario bancario.
 function CuentasPropiasForm() {
   const qc = useQueryClient()
   const [abierto, setAbierto] = useState(false)
-  const [editando, setEditando] = useState(null)   // moneda en edición
+  // { pais, moneda, id } de la cuenta en edición. `id` null = una nueva.
+  const [editando, setEditando] = useState(null)
   const [form, setForm] = useState({})
+  const [alias, setAlias] = useState('')
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
 
@@ -2945,73 +2954,57 @@ function CuentasPropiasForm() {
     refetchInterval: 120000,
   })
 
-  const catalogo = data?.catalogo || {}
+  const paises = data?.catalogo_paises || []
   const cuentas = data?.cuentas || []
-  const porMoneda = Object.fromEntries(cuentas.map(c => [c.moneda, c]))
+
+  const delPais = (pais) => cuentas.filter(c => (c.pais || '') === pais)
   const listas = cuentas.filter(c => c.activa && Object.keys(c.datos || {}).length).length
-  const conFicha = Object.values(catalogo).filter(i => !i.koywe).length
+
+  const aviso = (texto, malo = false) => {
+    if (malo) { setError(texto); setMsg('') } else { setMsg(texto); setError('') }
+    setTimeout(() => { setMsg(''); setError('') }, 4000)
+  }
+
+  const refrescar = () => {
+    qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
+    qc.invalidateQueries({ queryKey: ['payments-config'] })
+  }
 
   const guardar = useMutation({
-    mutationFn: ({ moneda, datos, activa }) =>
-      api.put(`/admin/cuentas-propias/${moneda}`, { datos, activa }),
+    mutationFn: ({ pais, moneda, id, datos, alias }) =>
+      api.put(`/admin/cuentas-propias/${moneda}`, { datos, activa: true, alias },
+        { params: { pais, ...(id ? { cuenta_id: id } : {}) } }),
     onSuccess: (r) => {
-      setMsg(r.data.message); setError(''); setEditando(null); setForm({})
-      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
-      qc.invalidateQueries({ queryKey: ['payments-config'] })
-      setTimeout(() => setMsg(''), 4000)
+      setEditando(null); setForm({}); setAlias('')
+      refrescar(); aviso(r.data.message)
     },
-    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
-  })
-
-  const cambiarTarjeta = useMutation({
-    mutationFn: ({ moneda, activa }) =>
-      api.patch(`/admin/cuentas-propias/${moneda}/tarjeta`, { activa }),
-    onSuccess: (r) => {
-      setMsg(r.data.message); setError('')
-      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
-      qc.invalidateQueries({ queryKey: ['payments-config'] })
-      setTimeout(() => setMsg(''), 4000)
-    },
-    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
-  })
-
-  const cambiarIntegracion = useMutation({
-    mutationFn: ({ moneda, activa }) =>
-      api.patch(`/admin/cuentas-propias/${moneda}/integracion`, { activa }),
-    onSuccess: (r) => {
-      setMsg(r.data.message); setError('')
-      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
-      qc.invalidateQueries({ queryKey: ['payments-config'] })
-      setTimeout(() => setMsg(''), 4000)
-    },
-    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
+    onError: (e) => aviso(e.response?.data?.detail || 'No se pudo guardar', true),
   })
 
   const borrar = useMutation({
-    mutationFn: (moneda) => api.delete(`/admin/cuentas-propias/${moneda}`),
-    onSuccess: () => {
-      setMsg('Cuenta eliminada'); setError(''); setEditando(null); setForm({})
-      qc.invalidateQueries({ queryKey: ['cuentas-propias'] })
-      qc.invalidateQueries({ queryKey: ['payments-config'] })
-      setTimeout(() => setMsg(''), 4000)
-    },
-    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo eliminar'); setMsg('') },
+    mutationFn: (id) => api.delete(`/admin/cuentas-propias/cuenta/${id}`),
+    onSuccess: (r) => { refrescar(); aviso(r.data.message) },
+    onError: (e) => aviso(e.response?.data?.detail || 'No se pudo borrar', true),
   })
 
-  const abrirEdicion = (moneda) => {
-    setEditando(moneda)
-    setForm({ ...(porMoneda[moneda]?.datos || {}) })
-    setError(''); setMsg('')
+  const nueva = (p) => {
+    setEditando({ pais: p.pais, moneda: p.moneda, id: null })
+    setForm({}); setAlias(''); setError('')
+  }
+
+  const editar = (p, c) => {
+    setEditando({ pais: p.pais, moneda: p.moneda, id: c.id })
+    setForm(c.datos || {}); setAlias(c.alias || ''); setError('')
   }
 
   const ENTRADA = {
-    width: '100%', padding: '9px 11px', borderRadius: 9, fontSize: 13,
-    background: 'rgba(2,6,23,.7)', color: '#eaf2ff',
-    border: '1px solid rgba(255,255,255,.12)',
+    width: '100%', padding: '9px 11px', borderRadius: 10, fontSize: 13,
+    background: 'rgba(6,13,40,.85)', color: '#eaf2ff',
+    border: '1px solid rgba(255,255,255,.12)', boxSizing: 'border-box',
   }
 
   return (
-    <div style={{ ...GLASS, padding: '20px 24px' }}>
+    <div style={{ ...GLASS, padding: '20px 24px', marginBottom: 16 }}>
       <button
         onClick={() => setAbierto(a => !a)}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
@@ -3021,14 +3014,14 @@ function CuentasPropiasForm() {
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Mis cuentas de cobro</h3>
             <span style={{
               fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-              background: listas ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
-              color: listas ? '#4ade80' : '#fcd34d',
+              background: listas ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.12)',
+              color: listas ? '#4ade80' : '#94a3b8',
             }}>
-              {listas ? `${listas} de ${conFicha}` : 'Sin cuentas'}
+              {listas ? `${listas} cuenta${listas === 1 ? '' : 's'}` : 'Sin cuentas'}
             </span>
           </div>
           <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
-            Dónde te transfieren en los países que Koywe no cubre
+            Dónde te transfieren tus clientes, por país
           </p>
         </div>
         <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
@@ -3036,161 +3029,81 @@ function CuentasPropiasForm() {
 
       {abierto && (
         <div style={{ marginTop: 18 }}>
-          <p style={{ margin: '0 0 16px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
-            Los nueve países desde los que se puede enviar. Koywe emite cuenta sola en
-            {' '}{(data?.cubiertas_por_koywe || []).join(', ')}; en el resto, tus clientes no ven a
-            dónde transferir hasta que cargues una cuenta aquí — y son tuyas, las ven solo
-            tus clientes. El interruptor de tarjeta va aparte y aplica a todos.
+          <p style={{ margin: '0 0 16px', fontSize: 11.5, color: '#64748b', lineHeight: 1.7 }}>
+            Puedes tener varias cuentas en el mismo país; el cliente elige a cuál
+            transferir. Una cuenta sin datos no se le enseña a nadie.
           </p>
 
-          <div style={{ display: 'grid', gap: 10 }}>
-            {Object.entries(catalogo).map(([moneda, info]) => {
-              const cuenta = porMoneda[moneda]
-              const cargada = cuenta && Object.keys(cuenta.datos || {}).length > 0
-              const enEdicion = editando === moneda
-              // Sin fila todavia, encendido: es como se comporta el backend.
-              const tarjetaOn = cuenta ? cuenta.tarjeta !== false : true
-              // Sin fila, la integracion manda: es como se comportaba antes.
-              const integracionOn = cuenta ? cuenta.integracion !== false : true
-
-              // Estado de la cuenta que emite Koywe, cuando aplica.
-              const ek = info.estado_koywe
-              const koywe = !info.koywe ? {} :
-                !ek ? { texto: 'No se pudo consultar a Koywe ahora mismo', color: '#fcd34d' }
-                : ek.publicada ? { texto: 'Activa en Koywe — visible para tus clientes', color: '#4ade80' }
-                : !ek.habilitada ? { texto: 'Emitida pero deshabilitada en Koywe', color: '#fb923c' }
-                : { texto: `Falta rellenar en Koywe: ${(ek.faltan || []).join(', ')}`, color: '#fcd34d' }
-
+          <div style={{
+            display: 'grid', gap: 14,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          }}>
+            {paises.map(p => {
+              const mias = delPais(p.pais)
+              const editandoAqui = editando?.pais === p.pais
               return (
-                <div key={moneda} style={{
-                  borderRadius: 12, padding: '12px 14px',
+                <div key={p.pais} style={{
+                  borderRadius: 14, padding: 14,
                   background: 'rgba(4,10,30,.5)',
-                  border: `1px solid ${enEdicion ? 'rgba(56,189,248,.3)' : 'rgba(255,255,255,.07)'}`,
+                  border: '1px solid rgba(255,255,255,.07)',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <img src={`https://flagcdn.com/w40/${info.bandera}.png`} alt="" width={22}
-                      style={{ borderRadius: 3, flexShrink: 0 }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+                    <Bandera iso2={p.bandera} ancho={22} alto={16} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
-                        {info.pais} <span style={{ color: '#64748b', fontWeight: 600 }}>· {moneda}</span>
+                      <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>{p.pais}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: '#8aa0cc' }}>
+                        {p.moneda}{p.metodo ? ` · ${p.metodo}` : ''}
                       </p>
-                      {/* En los de Koywe se muestra el estado REAL de su
-                          cuenta, no un "la emite Koywe" fijo: puede estar
-                          emitida pero deshabilitada, o sin titular, y entonces
-                          al cliente no se le enseña nada aunque aquí pusiera
-                          que está cubierta. */}
-                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: info.koywe ? koywe.color : (cargada && cuenta.activa ? '#4ade80' : '#64748b') }}>
-                        {info.koywe && integracionOn
-                          ? koywe.texto
-                          : cargada
-                            ? (cuenta.activa ? 'Visible para tus clientes' : 'Cargada, pero apagada')
-                            : 'Sin cuenta — no se ofrece transferencia'}
-                      </p>
-                      {info.koywe && ek?.publicada && ek.banco && (
-                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#475569' }}>
-                          {ek.banco}{ek.numero ? ` · ${ek.numero}` : ''}
-                        </p>
-                      )}
                     </div>
-                    {(
-                      <button onClick={() => (enEdicion ? setEditando(null) : abrirEdicion(moneda))}
-                        style={{
-                          padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                          border: '1px solid rgba(255,255,255,.14)', background: 'transparent',
-                          color: '#c3d2ee', cursor: 'pointer', flexShrink: 0,
-                        }}>
-                        {enEdicion ? 'Cancelar' : (cargada ? 'Editar' : 'Añadir')}
-                      </button>
+                    {mias.length > 0 && (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#4ade80' }}>{mias.length}</span>
                     )}
                   </div>
 
-                  {/* Interruptor de tarjeta. Solo donde Stripe puede cobrar
-                      de verdad: en el resto de monedas el boton no aparece
-                      nunca, y ofrecer un control que no cambia nada confunde
-                      mas que ayuda. */}
-                  {info.koywe && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      gap: 10, marginTop: 10, paddingTop: 10,
-                      borderTop: '1px solid rgba(255,255,255,.06)',
-                    }}>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#c3d2ee' }}>
-                          Transferencia por la integración
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-                          {integracionOn
-                            ? 'Transfieren a la cuenta de Koywe y el cobro se marca solo'
-                            : 'Libre: transfieren a tu cuenta y tú apruebas el comprobante'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => cambiarIntegracion.mutate({ moneda, activa: !integracionOn })}
-                        disabled={cambiarIntegracion.isPending}
-                        title={integracionOn ? 'Pasar a transferencia libre' : 'Volver a la integración'}
-                        style={{
-                          width: 42, height: 24, borderRadius: 999, border: 'none', padding: 3,
-                          cursor: 'pointer', flexShrink: 0,
-                          background: integracionOn ? 'rgba(74,222,128,.28)' : 'rgba(255,255,255,.12)',
-                          display: 'flex', justifyContent: integracionOn ? 'flex-end' : 'flex-start',
-                        }}>
-                        <span style={{
-                          width: 18, height: 18, borderRadius: 999,
-                          background: integracionOn ? '#4ade80' : '#64748b',
-                        }} />
-                      </button>
-                    </div>
-                  )}
-
-                  {!integracionOn && !cargada && (
-                    <p style={{ margin: '8px 0 0', fontSize: 11, color: '#fcd34d', lineHeight: 1.5 }}>
-                      Carga tu cuenta aquí o tus clientes no verán a dónde transferir.
+                  {mias.length === 0 && !editandoAqui && (
+                    <p style={{ margin: '0 0 10px', fontSize: 11.5, color: '#475569' }}>
+                      Todavía no hay ninguna.
                     </p>
                   )}
 
-                  {info.tiene_tarjeta ? (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      gap: 10, marginTop: 10, paddingTop: 10,
-                      borderTop: '1px solid rgba(255,255,255,.06)',
+                  {mias.map(c => (
+                    <div key={c.id} style={{
+                      borderRadius: 10, padding: '9px 11px', marginBottom: 8,
+                      background: 'rgba(255,255,255,.03)',
+                      border: '1px solid rgba(255,255,255,.06)',
                     }}>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#c3d2ee' }}>
-                          Pago con tarjeta
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b' }}>
-                          {tarjetaOn
-                            ? 'Tus clientes pueden pagar con tarjeta desde este pais'
-                            : 'Solo transferencia — el boton de tarjeta no aparece'}
-                        </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: '#eaf2ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {c.alias || c.datos?.banco || c.datos?.titular || 'Cuenta'}
+                          </p>
+                          <p style={{ margin: 0, fontSize: 11, color: '#8aa0cc', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {c.datos?.[c.principal] || '—'}
+                          </p>
+                        </div>
+                        <button onClick={() => editar(p, c)} title="Editar"
+                          style={{ padding: '4px 9px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.12)', color: '#8aa0cc' }}>
+                          Editar
+                        </button>
+                        <button onClick={() => borrar.mutate(c.id)} title="Eliminar"
+                          style={{ padding: '4px 8px', borderRadius: 8, fontSize: 11, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(248,113,113,.3)', color: '#f87171' }}>
+                          ✕
+                        </button>
                       </div>
-                      <button
-                        onClick={() => cambiarTarjeta.mutate({ moneda, activa: !tarjetaOn })}
-                        disabled={cambiarTarjeta.isPending}
-                        title={tarjetaOn ? 'Desactivar tarjeta aqui' : 'Activar tarjeta aqui'}
-                        style={{
-                          width: 42, height: 24, borderRadius: 999, border: 'none', padding: 3,
-                          cursor: 'pointer', flexShrink: 0,
-                          background: tarjetaOn ? 'rgba(74,222,128,.28)' : 'rgba(255,255,255,.12)',
-                          display: 'flex', justifyContent: tarjetaOn ? 'flex-end' : 'flex-start',
-                        }}>
-                        <span style={{
-                          width: 18, height: 18, borderRadius: 999,
-                          background: tarjetaOn ? '#4ade80' : '#64748b',
-                        }} />
-                      </button>
                     </div>
-                  ) : (
-                    <p style={{ margin: '8px 0 0', fontSize: 11, color: '#475569' }}>
-                      En {moneda} no hay ninguna pasarela de tarjeta — aquí nunca sale ese botón.
-                    </p>
-                  )}
+                  ))}
 
-                  {enEdicion && (
-                    <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
-                      {info.campos.map(c => (
-                        <div key={c.clave}>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
+                  {editandoAqui ? (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.07)' }}>
+                      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
+                        Nombre para ti
+                      </label>
+                      <input value={alias} onChange={e => setAlias(e.target.value)}
+                        placeholder="BCI principal" style={{ ...ENTRADA, marginBottom: 9 }} />
+
+                      {(p.campos || []).map(c => (
+                        <div key={c.clave} style={{ marginBottom: 9 }}>
+                          <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
                             {c.etiqueta}{c.requerido && <span style={{ color: '#f87171' }}> *</span>}
                           </label>
                           {c.tipo === 'select' ? (
@@ -3202,53 +3115,40 @@ function CuentasPropiasForm() {
                               opciones={c.opciones.map(o => ({ valor: o, texto: o }))}
                               style={ENTRADA} />
                           ) : (
-                            <input
-                              value={form[c.clave] || ''}
+                            <input value={form[c.clave] || ''}
                               onChange={e => setForm(f => ({ ...f, [c.clave]: e.target.value }))}
-                              placeholder={c.ayuda}
-                              style={ENTRADA} />
-                          )}
-                          {c.ayuda && c.tipo !== 'select' && (
-                            <p style={{ margin: '3px 0 0', fontSize: 10.5, color: '#475569' }}>{c.ayuda}</p>
+                              placeholder={c.ayuda} style={ENTRADA} />
                           )}
                         </div>
                       ))}
 
-                      <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 11 }}>
                         <button
-                          onClick={() => guardar.mutate({ moneda, datos: form, activa: true })}
+                          onClick={() => guardar.mutate({ ...editando, datos: form, alias })}
                           disabled={guardar.isPending}
-                          style={{
-                            padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 12.5,
-                            fontWeight: 700, background: 'rgba(56,189,248,.16)', color: '#38bdf8',
-                            cursor: 'pointer',
-                          }}>
-                          {guardar.isPending ? 'Guardando…' : 'Guardar y mostrar'}
+                          style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', color: '#fff', background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)' }}>
+                          {guardar.isPending ? 'Guardando…' : 'Guardar'}
                         </button>
-                        {cargada && (
-                          <>
-                            <button
-                              onClick={() => guardar.mutate({ moneda, datos: form, activa: !cuenta.activa })}
-                              style={{
-                                padding: '9px 16px', borderRadius: 9, fontSize: 12.5, fontWeight: 700,
-                                border: '1px solid rgba(255,255,255,.14)', background: 'transparent',
-                                color: '#c3d2ee', cursor: 'pointer',
-                              }}>
-                              {cuenta.activa ? 'Guardar y ocultar' : 'Guardar y mostrar'}
-                            </button>
-                            <button
-                              onClick={() => borrar.mutate(moneda)}
-                              style={{
-                                padding: '9px 16px', borderRadius: 9, fontSize: 12.5, fontWeight: 700,
-                                border: '1px solid rgba(248,113,113,.25)', background: 'transparent',
-                                color: '#f87171', cursor: 'pointer',
-                              }}>
-                              Eliminar
-                            </button>
-                          </>
-                        )}
+                        <button onClick={() => { setEditando(null); setForm({}); setAlias('') }}
+                          style={{ padding: '9px 14px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.12)', color: '#8aa0cc' }}>
+                          Cancelar
+                        </button>
                       </div>
                     </div>
+                  ) : (
+                    <button onClick={() => nueva(p)}
+                      disabled={!(p.campos || []).length}
+                      title={(p.campos || []).length ? '' : 'Este país todavía no tiene formulario'}
+                      style={{
+                        width: '100%', padding: '8px 0', borderRadius: 10, fontSize: 12,
+                        fontWeight: 700, marginTop: 4,
+                        cursor: (p.campos || []).length ? 'pointer' : 'not-allowed',
+                        opacity: (p.campos || []).length ? 1 : .4,
+                        background: 'rgba(56,189,248,.08)',
+                        border: '1px solid rgba(56,189,248,.28)', color: '#38bdf8',
+                      }}>
+                      + Añadir cuenta
+                    </button>
                   )}
                 </div>
               )
