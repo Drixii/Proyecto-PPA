@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import FinexyLayout from '../../components/FinexyLayout'
@@ -1984,7 +1985,20 @@ function SmtpForm() {
 
 export default function AdminSettings() {
   const qc = useQueryClient()
-  const [section, setSection] = useState(null)
+
+  // La sección abierta vive en la URL (?seccion=tasas) y no en el estado del
+  // componente. Antes se perdía en cuanto la página se volvía a montar: al
+  // recargar volvías al menú, y un despliegue nuevo —que recarga la pestaña
+  // sola cuando entra la versión nueva— te sacaba de donde estabas sin motivo
+  // aparente. De paso, el botón Atrás del navegador hace lo esperado y la
+  // dirección se puede guardar o compartir.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const section = SECTIONS.some(s => s.key === searchParams.get('seccion'))
+    ? searchParams.get('seccion')
+    : null
+  const setSection = useCallback((key) => {
+    setSearchParams(key ? { seccion: key } : {}, { replace: false })
+  }, [setSearchParams])
 
   const { data: commData, isLoading, isError, refetch: reintentarComisiones } = useQuery({
     queryKey: ['admin-commissions'],
