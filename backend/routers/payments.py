@@ -89,9 +89,11 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
         if quien is not None:
             dueno = quien.id if quien.role == "admin" else quien.super_admin_id
             for moneda in cuentas_propias.MONEDAS:
-                cuenta = cuentas_propias.para_cliente(_db, dueno, moneda)
-                if cuenta:
-                    cuentas_admin[moneda] = cuenta
+                propias = cuentas_propias.para_cliente(_db, dueno, moneda)
+                if propias:
+                    # La primera es la que se enseña por defecto; van todas
+                    # para que el cliente pueda elegir banco.
+                    cuentas_admin[moneda] = {**propias[0], "todas": propias}
             # Y se quitan las monedas donde su super-admin apago la tarjeta.
             # Esta pantalla decide el metodo ANTES de que exista la orden, asi
             # que sin filtrar aqui el boton seguia saliendo al crear el envio y
@@ -769,7 +771,14 @@ def metodos_de_orden(
     # cargado el dueno de este cliente. Es por super-admin: la orden ya sabe de
     # quien es, asi que nadie ve la cuenta de otro.
     if not cuenta:
-        cuenta = cuentas_propias.para_cliente(db, order.super_admin_id, moneda)
+        propias = cuentas_propias.para_cliente(
+            db, order.super_admin_id, moneda, getattr(order, "sender_country", None))
+        # La primera para lo de siempre y la lista entera para que el cliente
+        # pueda elegir: una casa puede tener dos bancos en el mismo pais.
+        cuenta = propias[0] if propias else None
+        cuentas_del_pais = propias
+    else:
+        cuentas_del_pais = [cuenta]
 
     # Sin cuenta no hay a donde transferir. Ofrecer el metodo igual dejaba al
     # cliente con "sube tu comprobante" y ningun dato bancario: pagaba a ciegas
@@ -784,6 +793,9 @@ def metodos_de_orden(
             "moneda": moneda,
             "metodos": metodos,
             "cuenta_transferencia": cuenta,
+            # Todas las del país, para que el cliente elija banco cuando hay
+            # más de una. La de arriba sigue siendo la que se enseña primero.
+            "cuentas_transferencia": cuentas_del_pais,
             # Para poder pedir lo que falte sin salir de la pantalla: PSE no
             # cobra sin documento, apellido y teléfono de quien paga.
             "documentos": koywe_service.documentos_de(moneda),

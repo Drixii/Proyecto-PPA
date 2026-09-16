@@ -11,9 +11,13 @@ class SuperAdminAccount(Base):
     le ofrecia "Transferencia / sube tu comprobante" sin decirle a donde mandar
     el dinero. Aqui cada super-admin registra la suya.
 
-    Es UNA por super-admin y moneda: `super_admin_id` no es opcional y el indice
-    unico lo garantiza. Los clientes de un super-admin ven solo las cuentas de
-    su dueno, igual que la cartera se reparte por `Order.super_admin_id`.
+    VARIAS por super-admin y pais: una casa suele tener cuenta en dos o tres
+    bancos del mismo pais y el cliente elige a cual transfiere. Antes habia una
+    sola por moneda, lo que ademas metia a Ecuador, Estados Unidos y Panama en
+    la misma ficha por compartir el dolar, sin poder distinguirlas.
+
+    Los clientes de un super-admin ven solo las cuentas de su dueno, igual que
+    la cartera se reparte por `Order.super_admin_id`.
 
     `datos` es JSON y no columnas fijas a proposito: cada pais pide cosas
     distintas (IBAN+BIC en Espana, clave PIX en Brasil, routing+account en
@@ -21,13 +25,19 @@ class SuperAdminAccount(Base):
     cada moneda lo define services/cuentas_propias.py, que tambien valida.
     """
     __tablename__ = "super_admin_accounts"
-    __table_args__ = (
-        UniqueConstraint("super_admin_id", "currency", name="uq_cuenta_propia_admin_moneda"),
-    )
 
     id = Column(Integer, primary_key=True, index=True)
     super_admin_id = Column(Integer, nullable=False, index=True)
     currency = Column(String, nullable=False, index=True)
+
+    # El pais, que es lo que manda: tres paises comparten el dolar y cada uno
+    # cobra por su lado (en Estados Unidos, por Zelle). Nullable porque las
+    # filas que ya existian no lo tenian; la migracion las rellena.
+    country = Column(String, nullable=True, index=True)
+
+    # Como la llama el super-admin en su panel: "BCI principal", "Santander".
+    # Con varias cuentas del mismo banco, el numero no basta para distinguirlas.
+    alias = Column(String, nullable=True)
 
     # {"banco": "...", "titular": "...", ...} segun la moneda.
     datos = Column(Text, nullable=False, default="{}")

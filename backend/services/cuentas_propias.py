@@ -14,6 +14,8 @@ El mismo catalogo lo consume el panel (para pintar el formulario) y el
 validador (para no guardar basura), asi que no pueden desincronizarse.
 """
 import json
+
+from sqlalchemy import or_
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -190,6 +192,68 @@ PRINCIPAL = {
 MONEDAS = tuple(PAISES.keys())
 
 
+# Paises que no cobran como su moneda sugiere.
+#
+# El dolar lo usan Ecuador, Estados Unidos y Panama, pero en Estados Unidos
+# nadie pide un numero de cuenta para recibir de un particular: se usa Zelle, y
+# lo unico que hace falta es el correo (o el telefono) y el nombre del titular.
+# Pedir routing y account ahi era pedir datos que nadie iba a usar.
+POR_PAIS = {
+    "Estados Unidos": {
+        "pais": "Estados Unidos",
+        "bandera": "us",
+        "metodo": "Zelle",
+        "principal": "correo",
+        "campos": [
+            _TITULAR,
+            _campo("correo", "Correo de Zelle",
+                   ayuda="El correo o telefono con el que recibes el Zelle"),
+        ],
+    },
+}
+
+
+def ficha(pais: str, moneda: str) -> dict:
+    """Que campos pide un pais. El pais manda sobre la moneda."""
+    if pais in POR_PAIS:
+        return POR_PAIS[pais]
+    moneda = (moneda or "").upper()
+    if moneda in PAISES:
+        return PAISES[moneda]
+    info = INFO_KOYWE.get(moneda, {"pais": pais or moneda, "bandera": ""})
+    return {**info, "campos": []}
+
+
+def campo_principal(pais: str, moneda: str) -> str:
+    """El dato que el cliente copia y pega: IBAN, clave PIX, correo de Zelle."""
+    f = ficha(pais, moneda)
+    return f.get("principal") or PRINCIPAL.get((moneda or "").upper(), "numero")
+
+
+def catalogo_por_pais(db) -> list:
+    """Una ficha por pais que puede enviar, con los campos que pide cada uno.
+
+    Sale de la tabla de paises y no de una lista escrita aqui: si manana se da
+    de alta uno nuevo, aparece solo en el panel con su formulario.
+    """
+    from models.country import Country
+
+    salida = []
+    for c in (db.query(Country)
+              .filter(Country.active == True, Country.can_send == True)
+              .order_by(Country.name).all()):
+        f = ficha(c.name, c.currency)
+        salida.append({
+            "pais": c.name,
+            "moneda": c.currency,
+            "bandera": (c.iso2 or f.get("bandera") or "").lower(),
+            "metodo": f.get("metodo"),
+            "campos": f.get("campos") or [],
+            "koywe": c.currency in CUBIERTAS_POR_KOYWE,
+        })
+    return salida
+
+
 def catalogo() -> dict:
     """Que campos pide cada moneda. Lo consume el panel para pintar el form."""
     return PAISES
@@ -207,7 +271,7 @@ def _limpiar(datos: dict) -> dict:
     return salida
 
 
-def validar(moneda: str, datos: dict) -> dict:
+def validar(pais: str, moneda: str, datos: dict) -> dict:
     """Devuelve los datos limpios o levanta ValueError con el motivo.
 
     Se descartan las claves que no pertenecen a la moneda: sin esto, cambiar un
@@ -215,10 +279,9 @@ def validar(moneda: str, datos: dict) -> dict:
     cliente veia un IBAN al lado de una clave PIX.
     """
     moneda = (moneda or "").upper()
-    if moneda not in PAISES:
-        raise ValueError(f"No se pueden cargar cuentas en {moneda or 'esa moneda'}")
-
-    campos = PAISES[moneda]["campos"]
+    campos = ficha(pais, moneda).get("campos") or []
+    if not campos:
+        raise ValueError(f"No se pueden cargar cuentas en {pais or moneda or 'ese pais'}")
     permitidas = {c["clave"] for c in campos}
     limpios = {k: v for k, v in _limpiar(datos).items() if k in permitidas}
 
@@ -240,10 +303,16 @@ def _a_dict(fila: SuperAdminAccount) -> dict:
     except ValueError:
         datos = {}
     info = info_de(fila.currency)
+    pais = fila.country or info["pais"]
+    f = ficha(pais, fila.currency)
     return {
+        "id": fila.id,
         "moneda": fila.currency,
-        "pais": info["pais"],
-        "bandera": info["bandera"],
+        "pais": pais,
+        "bandera": f.get("bandera") or info["bandera"],
+        "metodo": f.get("metodo"),
+        "alias": fila.alias or "",
+        "principal": campo_principal(pais, fila.currency),
         "datos": datos,
         "activa": bool(fila.active),
         "tarjeta": bool(fila.card_enabled),
@@ -261,27 +330,55 @@ def listar(db: Session, super_admin_id: int) -> list:
     return [_a_dict(f) for f in filas]
 
 
-def guardar(db: Session, super_admin_id: int, moneda: str, datos: dict, activa: bool = True) -> dict:
-    moneda = (moneda or "").upper()
-    limpios = validar(moneda, datos)
+def guardar(db: Session, super_admin_id: int, pais: str, moneda: str, datos: dict,
+            activa: bool = True, alias: str = "", cuenta_id: int = None) -> dict:
+    """Crea una cuenta o actualiza la que se le diga por `cuenta_id`.
 
-    fila = (
-        db.query(SuperAdminAccount)
-        .filter(
-            SuperAdminAccount.super_admin_id == super_admin_id,
-            SuperAdminAccount.currency == moneda,
+    Sin `cuenta_id` siempre crea: un pais puede tener todas las que haga falta,
+    y guardar una nueva no debe pisar la que ya estaba.
+    """
+    moneda = (moneda or "").upper()
+    limpios = validar(pais, moneda, datos)
+
+    fila = None
+    if cuenta_id:
+        fila = (
+            db.query(SuperAdminAccount)
+            .filter(
+                SuperAdminAccount.id == cuenta_id,
+                SuperAdminAccount.super_admin_id == super_admin_id,
+            )
+            .first()
         )
-        .first()
-    )
+        if not fila:
+            raise ValueError("Esa cuenta no existe")
+
     if not fila:
-        fila = SuperAdminAccount(super_admin_id=super_admin_id, currency=moneda)
+        fila = SuperAdminAccount(super_admin_id=super_admin_id, currency=moneda, country=pais)
         db.add(fila)
 
+    fila.country = pais
+    fila.currency = moneda
+    fila.alias = (alias or "").strip()[:80]
     fila.datos = json.dumps(limpios, ensure_ascii=False)
     fila.active = bool(activa)
     db.commit()
     db.refresh(fila)
     return _a_dict(fila)
+
+
+def borrar_una(db: Session, super_admin_id: int, cuenta_id: int) -> bool:
+    """Borra una cuenta concreta. Las demas del pais se quedan."""
+    n = (
+        db.query(SuperAdminAccount)
+        .filter(
+            SuperAdminAccount.id == cuenta_id,
+            SuperAdminAccount.super_admin_id == super_admin_id,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return bool(n)
 
 
 # Toda moneda desde la que se puede enviar. Ahora las nueve tienen ficha
@@ -412,49 +509,59 @@ def borrar(db: Session, super_admin_id: int, moneda: str) -> bool:
     return True
 
 
-def para_cliente(db: Session, super_admin_id: Optional[int], moneda: str) -> Optional[dict]:
-    """La cuenta que hay que ensenarle a quien va a transferir.
+def para_cliente(db: Session, super_admin_id: Optional[int], moneda: str,
+                 pais: Optional[str] = None) -> list:
+    """Las cuentas que hay que ensenarle a quien va a transferir.
 
-    Devuelve None si ese super-admin no tiene cuenta en esa moneda, si la tiene
-    apagada, o si no se sabe de quien es el cliente. Quien llama decide que
-    hacer con el None; hoy significa que no se ofrece transferencia.
+    Devuelve una LISTA: una casa puede tener varias en el mismo pais y el
+    cliente elige a cual manda. Vacia si ese super-admin no tiene ninguna, si
+    estan apagadas, si les faltan los datos, o si no se sabe de quien es el
+    cliente. Quien llama decide que hacer con la lista vacia; hoy significa que
+    no se ofrece transferencia.
+
+    `pais` afina cuando varios comparten moneda: quien envia desde Estados
+    Unidos tiene que ver el Zelle, no la cuenta de Ecuador.
     """
     if not super_admin_id:
-        return None
+        return []
     moneda = (moneda or "").upper()
-    if moneda not in PAISES:
-        return None
 
-    fila = (
-        db.query(SuperAdminAccount)
-        .filter(
-            SuperAdminAccount.super_admin_id == super_admin_id,
-            SuperAdminAccount.currency == moneda,
-            SuperAdminAccount.active == True,
-        )
-        .first()
+    q = db.query(SuperAdminAccount).filter(
+        SuperAdminAccount.super_admin_id == super_admin_id,
+        SuperAdminAccount.currency == moneda,
+        SuperAdminAccount.active == True,
     )
-    if not fila:
-        return None
+    if pais:
+        # Las filas de antes de que existiera la columna no tienen pais: se
+        # dejan pasar en vez de esconderlas, que es peor que ensenar una de mas.
+        q = q.filter(or_(SuperAdminAccount.country == pais,
+                         SuperAdminAccount.country == None))
 
-    d = _a_dict(fila)
-    if not d["datos"]:
-        return None
+    salida = []
+    for fila in q.order_by(SuperAdminAccount.id).all():
+        d = _a_dict(fila)
+        if not d["datos"]:
+            continue
 
-    # Se manda tambien la etiqueta de cada campo para que el cliente vea
-    # "Numero de documento: 12345" y no "documento: 12345".
-    etiquetas = {c["clave"]: c["etiqueta"] for c in PAISES[moneda]["campos"]}
-    return {
-        "moneda": moneda,
-        "pais": d["pais"],
-        "bandera": d["bandera"],
-        "origen": "propia",
-        "campos": [
-            {
-                "etiqueta": etiquetas.get(k, k),
-                "valor": v,
-                "principal": k == PRINCIPAL.get(moneda),
-            }
-            for k, v in d["datos"].items()
-        ],
-    }
+        # Se manda tambien la etiqueta de cada campo para que el cliente vea
+        # "Numero de documento: 12345" y no "documento: 12345".
+        campos = ficha(d["pais"], moneda).get("campos") or []
+        etiquetas = {c["clave"]: c["etiqueta"] for c in campos}
+        salida.append({
+            "id": d["id"],
+            "moneda": moneda,
+            "pais": d["pais"],
+            "bandera": d["bandera"],
+            "metodo": d["metodo"],
+            "alias": d["alias"],
+            "origen": "propia",
+            "campos": [
+                {
+                    "etiqueta": etiquetas.get(k, k),
+                    "valor": v,
+                    "principal": k == d["principal"],
+                }
+                for k, v in d["datos"].items()
+            ],
+        })
+    return salida

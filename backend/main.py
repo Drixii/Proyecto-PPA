@@ -57,6 +57,12 @@ def _run_migrations():
             created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS ix_push_subscriptions_user_id ON push_subscriptions(user_id)",
+        # Varias cuentas de cobro por pais, no una por moneda.
+        "ALTER TABLE super_admin_accounts ADD COLUMN country VARCHAR",
+        "ALTER TABLE super_admin_accounts ADD COLUMN alias VARCHAR",
+        "CREATE INDEX IF NOT EXISTS ix_cuentas_pais ON super_admin_accounts (super_admin_id, country)",
+        # El unico por moneda impedia tener dos cuentas en el mismo pais.
+        "ALTER TABLE super_admin_accounts DROP CONSTRAINT IF EXISTS uq_cuenta_propia_admin_moneda",
         # Tarjetas creadas antes de que existiera pendiente_pago: estaban en
         # en_aprobacion, esperando una aprobación que el admin no podía dar.
         """UPDATE orders SET status = 'pendiente_pago'

@@ -1182,6 +1182,9 @@ def list_sub_admins(
 class CuentaPropiaIn(BaseModel):
     datos: dict
     activa: bool = True
+    # Como la llama el super-admin: con dos cuentas del mismo banco, el número
+    # no basta para saber cuál es cuál en el panel.
+    alias: Optional[str] = None
 
 
 @router.get("/cuentas-propias", response_model=dict)
@@ -1248,6 +1251,9 @@ def listar_cuentas_propias(
         "success": True,
         "data": {
             "catalogo": paises,
+            # Por país, que es como se cobra: tres comparten el dólar y en
+            # Estados Unidos se cobra por Zelle, no con número de cuenta.
+            "catalogo_paises": cuentas_propias.catalogo_por_pais(db),
             "cuentas": cuentas_propias.listar(db, _admin.id),
             "cubiertas_por_koywe": list(cuentas_propias.CUBIERTAS_POR_KOYWE),
             "monedas_tarjeta": sorted(con_tarjeta),
@@ -1260,16 +1266,39 @@ def listar_cuentas_propias(
 def guardar_cuenta_propia(
     moneda: str,
     data: CuentaPropiaIn,
+    pais: Optional[str] = None,
+    cuenta_id: Optional[int] = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
+    """Crea una cuenta de cobro, o actualiza la de `cuenta_id`.
+
+    Sin `cuenta_id` siempre crea: un país puede tener varias y guardar una
+    nueva no debe pisar la que ya estaba.
+    """
     from services import cuentas_propias
 
     try:
-        cuenta = cuentas_propias.guardar(db, _admin.id, moneda, data.datos, data.activa)
+        cuenta = cuentas_propias.guardar(
+            db, _admin.id, pais or cuentas_propias.info_de(moneda)["pais"],
+            moneda, data.datos, data.activa, data.alias or "", cuenta_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"success": True, "data": cuenta, "message": "Cuenta guardada"}
+
+
+@router.delete("/cuentas-propias/cuenta/{cuenta_id}", response_model=dict)
+def borrar_cuenta_propia(
+    cuenta_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Borra una cuenta concreta. Las demás de ese país se quedan."""
+    from services import cuentas_propias
+
+    if not cuentas_propias.borrar_una(db, _admin.id, cuenta_id):
+        raise HTTPException(status_code=404, detail="Esa cuenta no existe")
+    return {"success": True, "data": None, "message": "Cuenta eliminada"}
 
 
 class TarjetaIn(BaseModel):
