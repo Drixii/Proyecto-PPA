@@ -1,25 +1,35 @@
 """Imagen con las tasas de un pais de origen hacia todos sus destinos.
 
-Se dibuja aqui con los datos reales en vez de pedirsela a un modelo: los
-generadores de imagen no escriben digitos de forma fiable —cambian un 3 por un
-8, se saltan una coma— y esto es una tabla de cambio que se le manda a un
-cliente. Dibujada, sale identica cada vez y en menos de un segundo.
+Se dibuja aqui con los datos reales. Hubo una version que le pedia la imagen
+entera a un generador y no sirvio: esos modelos no escriben digitos de forma
+fiable —cambiaban un 3 por un 8, se saltaban una coma, y una vez pusieron
+Canada diez veces mas alto— y esto es una tabla de cambio que se le manda a un
+cliente. Dibujada, sale identica cada vez, en menos de un segundo y gratis.
 
-La via con IA existe igual, detras de un interruptor en Ajustes, para poder
-compararlas. Ver `generar_con_ia`.
+Hay dos formas de fondo:
+
+- Subida. Se sube por pais una imagen ya terminada, con su fondo y todas sus
+  letras, y aqui solo se dibuja encima la tabla, en el sitio que se haya
+  colocado con el editor. Ver `guardar_fondo` y `POSICION_POR_DEFECTO`.
+- Automatica, si no hay ninguna subida: foto del pais, velo azul y la cabecera
+  y el pie dibujados tambien aqui.
 """
 import io
 import os
 from datetime import datetime
 
 import httpx
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 FUENTES = os.path.join(ASSETS, "fonts")
 LOGO = os.path.join(ASSETS, "logo.png")
-REFERENCIA = os.path.join(ASSETS, "referencia.jpg")
 CACHE_FONDOS = os.path.join(ASSETS, "fondos_cache")
+
+# Los fondos que sube el super admin. Van en uploads/, junto a los comprobantes
+# y los avatares: es el directorio que no esta en git, asi que un deploy no se
+# los lleva por delante.
+FONDOS_SUBIDOS = os.path.join("uploads", "fondos")
 
 # Montserrat va con el logo. Si faltara el fichero se cae a DejaVu, que es lo
 # unico que trae el sistema: fea pero legible, mejor que no generar la imagen.
@@ -381,15 +391,16 @@ def _pie(d: ImageDraw.ImageDraw) -> int:
 
 
 def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
-                  arriba: int, abajo: int) -> None:
-    """Pinta la tabla entre `arriba` y `abajo`.
+                  izq: int, arriba: int, der: int, abajo: int) -> None:
+    """Pinta la tabla dentro del rectangulo dado.
 
-    Va aparte porque las filas son lo unico que no puede cambiar: se dibujan
-    igual sobre el fondo hecho aqui y sobre el arte que devuelve la IA.
+    Va aparte porque las filas son lo unico que no cambia: se dibujan igual en
+    el hueco entre la cabecera y el pie de la version automatica y en el sitio
+    donde se haya colocado el bloque sobre una imagen subida.
     """
-    # El alto es fijo, asi que las filas se reparten lo que queda entre la
-    # cabecera y el pie. Con muchos destinos salen mas juntas, pero entran
-    # todas: preferible a cortar la lista o a que la imagen cambie de tamano.
+    # El rectangulo manda, asi que las filas se reparten su alto. Con muchos
+    # destinos salen mas juntas, pero entran todas: preferible a cortar la
+    # lista o a que la imagen cambie de tamano.
     n = max(len(filas), 1)
     alto_fila = max(int((abajo - arriba) / n) - ESPACIO, 16 * ESCALA)
     # Con pocos destinos no tiene sentido estirarlas hasta parecer botones;
@@ -399,22 +410,22 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
 
     y = arriba + max(sobra, 0) // 2
     for fila in filas:
-        d.rounded_rectangle([(MARGEN, y), (ANCHO - MARGEN, y + alto_fila)],
+        d.rounded_rectangle([(izq, y), (der, y + alto_fila)],
                             radius=alto_fila // 2, fill=PILDORA)
 
         lado = int(alto_fila * 0.80)
         bandera = _bandera(fila.get("iso2", ""), lado)
         if bandera:
-            img.paste(bandera, (MARGEN + (alto_fila - lado) // 2, y + (alto_fila - lado) // 2), bandera)
+            img.paste(bandera, (izq + (alto_fila - lado) // 2, y + (alto_fila - lado) // 2), bandera)
 
         # La tasa manda: se dibuja primero y el nombre usa lo que sobre.
         f_tasa = _fuente("extra", max(int(alto_fila * 0.42), 10 * ESCALA))
         texto_tasa = formatea_tasa(fila.get("tasa"))
-        borde_tasa = ANCHO - MARGEN - int(alto_fila * 0.45)
+        borde_tasa = der - int(alto_fila * 0.45)
         d.text((borde_tasa, y + alto_fila // 2), texto_tasa,
                font=f_tasa, fill=TEXTO_PAIS, anchor="rm")
 
-        x_nombre = MARGEN + lado + int(alto_fila * 0.40)
+        x_nombre = izq + lado + int(alto_fila * 0.40)
         hueco = borde_tasa - _ancho(texto_tasa, f_tasa) - int(10 * ESCALA) - x_nombre
         f_nombre = _encaja("bold", fila["name"].upper(), max(int(alto_fila * 0.33), 9 * ESCALA), hueco)
         d.text((x_nombre, y + alto_fila // 2), fila["name"].upper(),
@@ -423,166 +434,71 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
         y += alto_fila + ESPACIO
 
 
-def generar(origen: dict, filas: list[dict]) -> bytes:
+# Donde va el bloque de la tabla sobre una imagen subida, en pixeles de la
+# imagen final (560x827). Es lo que mueve el editor; este es el punto de
+# partida, mas o menos donde cae en la version automatica.
+POSICION_POR_DEFECTO = {"x": 24, "y": 215, "ancho": 512, "alto": 550}
+
+
+def ruta_fondo(iso2: str) -> str | None:
+    """Fichero de la imagen subida para ese pais, si la hay."""
+    if not iso2:
+        return None
+    ruta = os.path.join(FONDOS_SUBIDOS, f"{iso2.lower()}.jpg")
+    return ruta if os.path.exists(ruta) else None
+
+
+def guardar_fondo(iso2: str, datos: bytes) -> None:
+    """Deja la imagen subida lista para usarse: recortada a 560x827.
+
+    Se guarda ya recortada para que lo que se ve en el editor y lo que sale al
+    generar sean exactamente lo mismo.
+    """
+    img = Image.open(io.BytesIO(datos))
+    # Las fotos de movil vienen giradas con una etiqueta EXIF en vez de con los
+    # pixeles girados; sin esto se guardan tumbadas.
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    os.makedirs(FONDOS_SUBIDOS, exist_ok=True)
+    _cubre(img, ANCHO, ALTO).save(os.path.join(FONDOS_SUBIDOS, f"{iso2.lower()}.jpg"),
+                                  "JPEG", quality=92)
+
+
+def borrar_fondo(iso2: str) -> bool:
+    ruta = ruta_fondo(iso2)
+    if not ruta:
+        return False
+    os.remove(ruta)
+    return True
+
+
+def generar(origen: dict, filas: list[dict], posicion: dict | None = None) -> bytes:
     """PNG con una fila por destino: bandera, pais y a cuanto se le envia.
 
     `origen` es {name, iso2, currency}; cada fila, {name, iso2, currency,
     tasa}, donde la tasa ya lleva descontada la comision de esa ruta.
+
+    Si hay imagen subida para el pais, se usa tal cual y solo se le dibuja la
+    tabla encima, en `posicion`. Si no, se arma entera aqui.
     """
+    subida = ruta_fondo(origen.get("iso2", ""))
+    if subida:
+        img = Image.open(subida).convert("RGB")
+        if img.size != (ANCHO, ALTO):
+            img = img.resize((ANCHO, ALTO), Image.LANCZOS)
+        p = {**POSICION_POR_DEFECTO, **(posicion or {})}
+        # El editor trabaja en pixeles de la imagen final y aqui se dibuja al
+        # doble, asi que todo se multiplica por la escala.
+        izq = int(p["x"]) * ESCALA
+        arriba = int(p["y"]) * ESCALA
+        _dibuja_filas(img, ImageDraw.Draw(img), filas,
+                      izq, arriba,
+                      izq + int(p["ancho"]) * ESCALA,
+                      arriba + int(p["alto"]) * ESCALA)
+        return _a_tamano_final(img)
+
     img = _lienzo_de_fondo(origen).convert("RGB")
     d = ImageDraw.Draw(img)
     arriba = _cabecera(img, d, origen)
     abajo = _pie(d) - int(12 * ESCALA)
-    _dibuja_filas(img, d, filas, arriba, abajo)
+    _dibuja_filas(img, d, filas, MARGEN, arriba, ANCHO - MARGEN, abajo)
     return _a_tamano_final(img)
-
-
-def _rellena(texto: str, **valores) -> str:
-    """Sustituye {pais}, {moneda}, {fecha}... sin usar str.format.
-
-    La instruccion la escribe el super admin a mano y puede llevar llaves
-    sueltas; con format eso revienta, con un replace simple no.
-    """
-    for clave, valor in valores.items():
-        texto = texto.replace("{" + clave + "}", str(valor))
-    return texto
-
-
-def _hoy() -> str:
-    meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-             "agosto", "septiembre", "octubre", "noviembre", "diciembre")
-    d = datetime.now()
-    return f"{d.day} de {meses[d.month - 1]} de {d.year}"
-
-
-# Que se ve de fondo en cada pais. Va en la instruccion, asi que el modelo
-# recibe el paisaje del pais elegido en el menu y no siempre el mismo.
-ESCENAS = {
-    "CL": "Santiago de Chile con la cordillera de los Andes nevada al fondo",
-    "VE": "Caracas y el cerro El Ávila",
-    "CO": "Bogotá con el cerro de Monserrate",
-    "AR": "Buenos Aires con el Obelisco",
-    "PE": "Lima frente al Pacífico, con Machu Picchu insinuado al fondo",
-    "MX": "Ciudad de México con el Paseo de la Reforma y el Ángel de la Independencia",
-    "BR": "Río de Janeiro con el Cristo Redentor y el Pan de Azúcar",
-    "EC": "Quito con el centro histórico y los volcanes al fondo",
-    "PA": "el horizonte de Ciudad de Panamá y el canal",
-    "US": "Nueva York con el puente de Brooklyn y el horizonte de Manhattan",
-    "CA": "Toronto con la Torre CN",
-    "UY": "Montevideo con su rambla",
-    "PY": "Asunción con el Palacio de los López",
-    "BO": "La Paz con el Illimani al fondo",
-    "CR": "Costa Rica con el volcán Arenal y selva tropical",
-    "DO": "Santo Domingo con su zona colonial y el mar Caribe",
-    "EU": "una ciudad europea reconocible con arquitectura clásica",
-    "ES": "Madrid con la Gran Vía",
-    "IT": "Roma con el Coliseo",
-    "PT": "Lisboa con la Torre de Belém",
-    "FR": "París con la Torre Eiffel",
-    "DE": "Berlín con la Puerta de Brandeburgo",
-    "GB": "Londres con el Tower Bridge",
-}
-
-# Lo que se le pide a la IA cuando nadie ha escrito una instruccion propia.
-# Es editable desde Ajustes -> IA; esto es solo el punto de partida.
-#
-# Ojo con lo que NO pide: ni tasas, ni cifras, ni tabla. La IA hace el arte y
-# la tabla la dibuja el codigo encima, con los numeros de verdad. Pedirle los
-# numeros al modelo era el problema: los redibuja a mano alzada y se equivoca.
-INSTRUCCION_POR_DEFECTO = (
-    "Utiliza la imagen adjunta como referencia visual obligatoria. Crea una "
-    "versión publicitaria para una casa de cambio dedicada a {PAIS}, "
-    "manteniendo la misma composición vertical, jerarquía, paleta azul, "
-    "iluminación, estilo corporativo y distribución general.\n\n"
-    "El fondo debe mostrar {escena}, con banderas de {pais} integradas "
-    "naturalmente en la escena.\n\n"
-    "NO escribas ningún texto: ni «DESDE», ni el nombre del país, ni «TASAS DE "
-    "CAMBIO», ni logotipos, ni letras de ningún tipo. Tampoco monedas, países, "
-    "tasas, cifras, tablas ni información inventada. Solo la escena. Todos los "
-    "textos y la tabla se añaden después por programación, encima de tu "
-    "imagen; si los dibujas tú, quedan uno encima del otro.\n\n"
-    "Deja el centro de la imagen limpio y de bajo contraste, sin elementos "
-    "llamativos entre el 30% y el 90% de la altura: ahí va la tabla.\n\n"
-    "Formato vertical 2:3, preferentemente 1024 × 1536 px. El resultado debe "
-    "sentirse como parte de una misma colección gráfica y no como un diseño "
-    "completamente diferente."
-)
-
-
-def generar_con_ia(
-    origen: dict,
-    filas: list[dict],
-    api_key: str,
-    instruccion: str | None = None,
-) -> bytes:
-    """El arte lo hace OpenAI; la tabla la sigue dibujando el codigo encima.
-
-    `instruccion` es el texto que el super admin escribe en Ajustes -> IA. Se
-    le pide el cartel con su fondo, su cabecera y su pie, pero con el centro
-    vacio: las cifras no se le piden a un modelo que las redibuja a mano
-    alzada, se pintan aqui con los datos de la base.
-
-    Se manda ademas la imagen de referencia, para que todos los paises salgan
-    de la misma coleccion grafica y no cada uno de su padre y de su madre.
-    """
-    texto = (instruccion or "").strip() or INSTRUCCION_POR_DEFECTO
-    prompt = _rellena(
-        texto,
-        pais=origen["name"],
-        PAIS=origen["name"].upper(),
-        escena=ESCENAS.get((origen.get("iso2") or "").upper(),
-                           f"un paisaje o una ciudad reconocible de {origen['name']}"),
-        moneda=origen.get("currency", ""),
-        fecha=_hoy(),
-    )
-
-    # OpenAI solo acepta unos pocos tamanos; 1024x1536 es el de proporcion mas
-    # parecida a 560x827 (0,667 frente a 0,677), asi que al reducir casi no se
-    # deforma.
-    campos = {"model": "gpt-image-1", "prompt": prompt, "size": "1024x1536", "n": "1"}
-    if os.path.exists(REFERENCIA):
-        with open(REFERENCIA, "rb") as f:
-            referencia = f.read()
-        r = httpx.post(
-            "https://api.openai.com/v1/images/edits",
-            headers={"Authorization": f"Bearer {api_key}"},
-            data=campos,
-            files={"image[]": ("referencia.jpg", referencia, "image/jpeg")},
-            timeout=300,
-        )
-    else:
-        r = httpx.post(
-            "https://api.openai.com/v1/images/generations",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={**campos, "n": 1},
-            timeout=300,
-        )
-    if r.status_code != 200:
-        raise RuntimeError(f"OpenAI respondió {r.status_code}: {r.text[:300]}")
-
-    datos = r.json().get("data") or []
-    if not datos:
-        raise RuntimeError("OpenAI no devolvió ninguna imagen")
-
-    import base64
-    b64 = datos[0].get("b64_json")
-    if b64:
-        crudo = base64.b64decode(b64)
-    else:
-        url = datos[0].get("url")
-        if not url:
-            raise RuntimeError("OpenAI no devolvió ni imagen ni enlace")
-        crudo = httpx.get(url, timeout=60).content
-
-    # El arte llega a 1024x1536; se lleva al lienzo de trabajo y se le pinta la
-    # tabla encima, en la franja que la instruccion le pidio dejar libre.
-    # El arte llega a 1024x1536 y solo trae la escena. Encima va exactamente lo
-    # mismo que en la version dibujada —cabecera, tabla y pie—, asi que las dos
-    # salen identicas salvo por el fondo, y los numeros son siempre los buenos.
-    arte = Image.open(io.BytesIO(crudo)).convert("RGB").resize((ANCHO, ALTO), Image.LANCZOS)
-    arte = _velo(arte)
-    d = ImageDraw.Draw(arte)
-    arriba = _cabecera(arte, d, origen)
-    abajo = _pie(d) - int(12 * ESCALA)
-    _dibuja_filas(arte, d, filas, arriba, abajo)
-    return _a_tamano_final(arte)

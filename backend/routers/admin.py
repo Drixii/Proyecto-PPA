@@ -1,6 +1,7 @@
+import json
 import logging
-import math
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from typing import Optional, List
@@ -1902,105 +1903,24 @@ def delete_commission_rule(
     return {"success": True, "data": {}, "message": "Regla eliminada"}
 
 
-class IAConfigIn(BaseModel):
-    api_key: Optional[str] = None
-    activa: Optional[bool] = None
-    instruccion: Optional[str] = None
+def _pais_de_origen(db: Session, nombre: str) -> Country:
+    pais = db.query(Country).filter(Country.name == nombre, Country.active == True).first()
+    if not pais:
+        raise HTTPException(status_code=404, detail="País no encontrado")
+    if not pais.can_send:
+        raise HTTPException(status_code=400, detail=f"Desde {pais.name} no se puede enviar")
+    return pais
 
 
-@router.get("/ia", response_model=dict)
-def get_ia(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
-    """Estado de la integración con OpenAI. Nunca devuelve la clave entera."""
-    from services import secret_store as ss
-    from services.imagen_tasas import INSTRUCCION_POR_DEFECTO
+def _filas_de_tasas(db: Session, origen: Country) -> list[dict]:
+    """Una fila por destino dado de alta, con la tasa ya con su comisión.
 
-    clave = ss.get_secret(db, "openai_api_key")
-    fila = db.query(Setting).filter(Setting.key == "ia_activa").first()
-    instr = db.query(Setting).filter(Setting.key == "ia_instruccion").first()
-    return {
-        "success": True,
-        "data": {
-            "api_key": ss.mask(clave),
-            "configurada": bool(clave),
-            "activa": bool(fila and str(fila.value).lower() == "true"),
-            "instruccion": (instr.value if instr and instr.value else INSTRUCCION_POR_DEFECTO),
-            "instruccion_defecto": INSTRUCCION_POR_DEFECTO,
-        },
-        "message": "",
-    }
-
-
-@router.put("/ia", response_model=dict)
-def set_ia(
-    data: IAConfigIn,
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_super_admin),
-):
-    from services import secret_store as ss
-
-    cambios = []
-    if data.api_key is not None:
-        valor = data.api_key.strip()
-        if valor.upper() == "BORRAR":
-            ss.set_secret(db, "openai_api_key", "")
-            cambios.append("clave eliminada")
-        elif valor:
-            if not valor.startswith("sk-"):
-                raise HTTPException(status_code=400, detail="Una clave de OpenAI empieza por sk-")
-            ss.set_secret(db, "openai_api_key", valor)
-            cambios.append("clave guardada")
-
-    if data.activa is not None:
-        fila = db.query(Setting).filter(Setting.key == "ia_activa").first()
-        valor = "true" if data.activa else "false"
-        if fila:
-            fila.value = valor
-        else:
-            db.add(Setting(key="ia_activa", value=valor))
-        db.commit()
-        cambios.append("IA activada" if data.activa else "IA desactivada")
-
-    if data.instruccion is not None:
-        # Vacío = volver a la instrucción que trae el sistema, que es lo que
-        # devuelve el GET cuando no hay nada guardado.
-        texto = data.instruccion.strip()
-        fila = db.query(Setting).filter(Setting.key == "ia_instruccion").first()
-        if fila:
-            fila.value = texto
-        else:
-            db.add(Setting(key="ia_instruccion", value=texto))
-        db.commit()
-        cambios.append("instrucción guardada" if texto else "instrucción restaurada")
-
-    return {"success": True, "data": None, "message": ", ".join(cambios) or "Sin cambios"}
-
-
-@router.get("/commissions/imagen")
-def imagen_de_tasas(
-    from_country: str,
-    con_ia: bool = False,
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_super_admin),
-):
-    """Imagen con la tasa a la que se envía a cada país desde `from_country`.
-
-    Es a cuánto se cambia una unidad de la moneda de origen, con la comisión
-    de ESA ruta ya descontada: el precio real, no la tasa de mercado. Sale la
-    tasa y nada más.
-
-    Aparecen TODOS los destinos de la lista de países. Si a alguno le falta la
-    tasa sale con una raya: si está dado de alta, tiene que verse.
+    Salen TODOS los destinos de la lista de países. Si a alguno le falta la
+    tasa, viene con tasa None y en la imagen sale con una raya: si está dado de
+    alta, tiene que verse.
     """
-    from fastapi.responses import Response
     from services.exchange_service import get_rate
     from services.order_service import _get_commission
-    from services import imagen_tasas, secret_store as ss
-
-    origen = db.query(Country).filter(Country.name == from_country, Country.active == True).first()
-    if not origen:
-        raise HTTPException(status_code=404, detail="País no encontrado")
-    if not origen.can_send:
-        raise HTTPException(status_code=400, detail=f"Desde {origen.name} no se puede enviar")
 
     filas = []
     for destino in db.query(Country).filter(
@@ -2015,8 +1935,8 @@ def imagen_de_tasas(
                 db, origen.currency, destino.currency, None,
                 from_country=origen.name, to_country=destino.name,
             )
-            # La comision se descuenta del monto enviado, asi que la tasa a la
-            # que sale la operacion baja en ese porcentaje. Es la misma cuenta
+            # La comisión se descuenta del monto enviado, así que la tasa a la
+            # que sale la operación baja en ese porcentaje. Es la misma cuenta
             # que hace /rates/convert, que es lo que ven las calculadoras.
             efectiva = tasa * (1 - pct / 100)
         filas.append({
@@ -2028,24 +1948,202 @@ def imagen_de_tasas(
 
     if not filas:
         raise HTTPException(status_code=400, detail="No hay destinos dados de alta")
+    return filas
 
-    datos_origen = {"name": origen.name, "iso2": origen.iso2 or "", "currency": origen.currency}
 
-    if con_ia:
-        clave = ss.get_secret(db, "openai_api_key")
-        if not clave:
-            raise HTTPException(status_code=400, detail="Falta la clave de OpenAI en Ajustes → IA")
-        instr = db.query(Setting).filter(Setting.key == "ia_instruccion").first()
-        try:
-            png = imagen_tasas.generar_con_ia(
-                datos_origen, filas, clave, instr.value if instr else None
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"OpenAI no pudo generarla: {e}")
-    else:
-        png = imagen_tasas.generar(datos_origen, filas)
+def _clave_posicion(iso2: str) -> str:
+    return f"imagen_tabla_{(iso2 or '').lower()}"
 
+
+def _posicion_guardada(db: Session, iso2: str) -> dict:
+    from services.imagen_tasas import POSICION_POR_DEFECTO
+
+    fila = db.query(Setting).filter(Setting.key == _clave_posicion(iso2)).first()
+    if not fila or not fila.value:
+        return dict(POSICION_POR_DEFECTO)
+    try:
+        return {**POSICION_POR_DEFECTO, **json.loads(fila.value)}
+    except ValueError:
+        return dict(POSICION_POR_DEFECTO)
+
+
+@router.get("/commissions/imagen")
+def imagen_de_tasas(
+    from_country: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Imagen con la tasa a la que se envía a cada país desde `from_country`.
+
+    Es a cuánto se cambia una unidad de la moneda de origen, con la comisión de
+    ESA ruta ya descontada: el precio real, no la tasa de mercado.
+
+    Si hay una imagen subida para el país se usa tal cual y solo se le dibuja
+    encima la tabla, donde la haya dejado el editor.
+    """
+    from fastapi.responses import Response
+    from services import imagen_tasas
+
+    origen = _pais_de_origen(db, from_country)
+    filas = _filas_de_tasas(db, origen)
+    datos = {"name": origen.name, "iso2": origen.iso2 or "", "currency": origen.currency}
+    png = imagen_tasas.generar(datos, filas, _posicion_guardada(db, origen.iso2))
     return Response(content=png, media_type="image/png")
+
+
+@router.get("/commissions/imagen/editor", response_model=dict)
+def editor_de_imagen(
+    from_country: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Lo que necesita el editor: si hay fondo, dónde va la tabla y qué filas.
+
+    Las filas van ya formateadas igual que en la imagen, para que lo que se
+    arrastra en pantalla sea lo mismo que va a salir.
+    """
+    from services.imagen_tasas import (
+        ANCHO_FINAL, ALTO_FINAL, formatea_tasa, ruta_fondo,
+    )
+
+    origen = _pais_de_origen(db, from_country)
+    return {
+        "success": True,
+        "data": {
+            "lienzo": {"ancho": ANCHO_FINAL, "alto": ALTO_FINAL},
+            "tiene_fondo": bool(ruta_fondo(origen.iso2 or "")),
+            "posicion": _posicion_guardada(db, origen.iso2),
+            "filas": [
+                {"name": f["name"], "iso2": f["iso2"], "tasa": formatea_tasa(f["tasa"])}
+                for f in _filas_de_tasas(db, origen)
+            ],
+        },
+        "message": "",
+    }
+
+
+@router.get("/commissions/imagen/fondo")
+def ver_fondo(
+    from_country: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """La imagen subida de ese país, para pintarla debajo del editor."""
+    from fastapi.responses import FileResponse
+    from services.imagen_tasas import ruta_fondo
+
+    origen = _pais_de_origen(db, from_country)
+    ruta = ruta_fondo(origen.iso2 or "")
+    if not ruta:
+        raise HTTPException(status_code=404, detail="Ese país no tiene imagen de fondo")
+    return FileResponse(ruta, media_type="image/jpeg")
+
+
+# def (no async): lee el fichero y lo convierte con Pillow, que es bloqueante.
+# En async def eso congelaría el event loop y con él todas las demás peticiones.
+@router.post("/commissions/imagen/fondo", response_model=dict)
+def subir_fondo(
+    from_country: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Sube la imagen de fondo de un país. Se guarda recortada a 560x827."""
+    from services.imagen_tasas import guardar_fondo
+
+    origen = _pais_de_origen(db, from_country)
+    if not origen.iso2:
+        raise HTTPException(status_code=400, detail=f"{origen.name} no tiene código de país")
+
+    permitidas = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in permitidas:
+        raise HTTPException(
+            status_code=400,
+            detail="Ese tipo de archivo no sirve. Acepta JPG, PNG, WEBP o HEIC.",
+        )
+
+    datos = file.file.read()
+    if len(datos) > 12 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="La imagen pesa más de 12 MB")
+    try:
+        guardar_fondo(origen.iso2, datos)
+    except Exception:
+        raise HTTPException(status_code=400, detail="No se pudo leer esa imagen")
+
+    return {"success": True, "data": None, "message": f"Fondo de {origen.name} guardado"}
+
+
+@router.delete("/commissions/imagen/fondo", response_model=dict)
+def quitar_fondo(
+    from_country: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Quita la imagen subida. El país vuelve a la versión automática."""
+    from services.imagen_tasas import borrar_fondo
+
+    origen = _pais_de_origen(db, from_country)
+    if not borrar_fondo(origen.iso2 or ""):
+        raise HTTPException(status_code=404, detail="Ese país no tiene imagen de fondo")
+    return {"success": True, "data": None, "message": f"Fondo de {origen.name} eliminado"}
+
+
+class PosicionTablaIn(BaseModel):
+    x: int
+    y: int
+    ancho: Optional[int] = None
+    alto: Optional[int] = None
+
+
+@router.put("/commissions/imagen/tabla", response_model=dict)
+def mover_tabla(
+    from_country: str,
+    data: PosicionTablaIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda dónde va el bloque de países y tasas sobre la imagen del país."""
+    from services.imagen_tasas import ANCHO_FINAL, ALTO_FINAL, POSICION_POR_DEFECTO
+
+    origen = _pais_de_origen(db, from_country)
+    actual = _posicion_guardada(db, origen.iso2)
+    ancho = int(data.ancho or actual["ancho"])
+    alto = int(data.alto or actual["alto"])
+
+    # Se deja salir un poco por los bordes —a veces se quiere el bloque a
+    # sangre— pero no tanto como para perderlo de vista y no poder recuperarlo.
+    margen = 40
+    posicion = {
+        "x": max(-margen, min(int(data.x), ANCHO_FINAL - margen)),
+        "y": max(-margen, min(int(data.y), ALTO_FINAL - margen)),
+        "ancho": max(120, min(ancho, ANCHO_FINAL)),
+        "alto": max(80, min(alto, ALTO_FINAL)),
+    }
+
+    clave = _clave_posicion(origen.iso2)
+    fila = db.query(Setting).filter(Setting.key == clave).first()
+    if fila:
+        fila.value = json.dumps(posicion)
+    else:
+        db.add(Setting(key=clave, value=json.dumps(posicion)))
+    db.commit()
+    return {"success": True, "data": posicion, "message": "Posición guardada"}
+
+
+@router.delete("/commissions/imagen/tabla", response_model=dict)
+def centrar_tabla(
+    from_country: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Devuelve el bloque a su sitio de fábrica."""
+    from services.imagen_tasas import POSICION_POR_DEFECTO
+
+    origen = _pais_de_origen(db, from_country)
+    db.query(Setting).filter(Setting.key == _clave_posicion(origen.iso2)).delete()
+    db.commit()
+    return {"success": True, "data": dict(POSICION_POR_DEFECTO), "message": "Posición restablecida"}
 
 
 @router.get("/commissions/preview", response_model=dict)

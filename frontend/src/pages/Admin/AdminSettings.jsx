@@ -551,12 +551,6 @@ const SECTIONS = [
     title: 'Correo',
     desc: 'Servidor de envío y verificación del correo de los clientes',
   },
-  {
-    key: 'ia',
-    icon: '🤖',
-    title: 'IA',
-    desc: 'Clave de OpenAI y dónde se usa',
-  },
 ]
 
 function SectionCard({ icon, title, desc, onClick }) {
@@ -1054,266 +1048,331 @@ function KoyweKeysForm() {
 // cotizar al paralelo solo es correcto si la casa TAMBIÉN liquida a esa tasa.
 // Si el dinero se compra al oficial y se promete al paralelo, la diferencia la
 // paga la casa en cada orden.
-// Genera la imagen de tasas de un país y la deja lista para descargar o
-// compartir. Se dibuja en el servidor con los datos reales; si la IA está
-// activada, se ofrece además la versión que dibuja OpenAI para poder
-// compararlas — esa redibuja los números y suele equivocarse en alguno, así
-// que conviene mirarla antes de mandarla.
+// Editor de la imagen de tasas de un país.
+//
+// Se sube una imagen ya terminada —fondo y todas sus letras, hecha en el
+// programa de diseño de turno— y aquí solo se coloca encima el bloque de
+// países y tasas, arrastrándolo con el ratón. Lo que se ve en pantalla es lo
+// que sale: el bloque se dibuja con las mismas cuentas que usa el servidor.
+//
+// Sin imagen subida el país sigue con la versión automática, que se arma
+// entera en el servidor con la foto del país.
+
+// Mismas constantes que services/imagen_tasas.py, en píxeles de la imagen
+// final. Si cambian allí, cambian aquí: lo que se arrastra dejaría de
+// coincidir con lo que se genera.
+const ESPACIO_FILA = 5
+const ALTO_FILA_MIN = 16
+const ALTO_FILA_MAX = 42
+
+// Reparte las filas dentro del bloque igual que _dibuja_filas en el servidor.
+function reparteFilas(n, alto) {
+  const cuantas = Math.max(n, 1)
+  let altoFila = Math.max(Math.floor(alto / cuantas) - ESPACIO_FILA, ALTO_FILA_MIN)
+  altoFila = Math.min(altoFila, ALTO_FILA_MAX)
+  const sobra = alto - (altoFila + ESPACIO_FILA) * cuantas + ESPACIO_FILA
+  return { altoFila, desde: Math.max(sobra, 0) / 2 }
+}
+
 function ImagenDeTasas({ origen }) {
   const [url, setUrl] = useState(null)
+  const [fondoUrl, setFondoUrl] = useState(null)
   const [cargando, setCargando] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
-  const [hechaConIa, setHechaConIa] = useState(false)
+  const [mensaje, setMensaje] = useState('')
+  const [pos, setPos] = useState(null)
+  const [anchoVista, setAnchoVista] = useState(340)
+  const lienzoRef = useRef(null)
+  const arrastreRef = useRef(null)
+  const ficheroRef = useRef(null)
 
-  const { data: ia } = useQuery({
-    queryKey: ['ia-config'],
-    queryFn: () => api.get('/admin/ia').then(r => r.data.data),
+  const { data: editor, refetch } = useQuery({
+    queryKey: ['imagen-editor', origen?.name],
+    queryFn: () => api.get('/admin/commissions/imagen/editor', {
+      params: { from_country: origen.name },
+    }).then(r => r.data.data),
+    enabled: !!origen?.name,
   })
 
-  // Al cambiar de país, la imagen anterior deja de valer.
+  const lienzo = editor?.lienzo || { ancho: 560, alto: 827 }
+  const filas = editor?.filas || []
+  const posicion = pos || editor?.posicion || { x: 24, y: 215, ancho: 512, alto: 550 }
+
+  // La posición vuelve a mandarla el servidor al cambiar de país; el estado
+  // local solo existe mientras se arrastra.
+  useEffect(() => { setPos(null) }, [origen?.name])
+
+  // La imagen de fondo va detrás de sesión, así que no se puede poner en un
+  // <img src>: se pide con el token y se convierte en URL de objeto.
+  useEffect(() => {
+    let vivo = true
+    let creada = null
+    setFondoUrl(u => { if (u) URL.revokeObjectURL(u); return null })
+    if (origen?.name && editor?.tiene_fondo) {
+      api.get('/admin/commissions/imagen/fondo', {
+        params: { from_country: origen.name }, responseType: 'blob',
+      }).then(r => {
+        if (!vivo) return
+        creada = URL.createObjectURL(r.data)
+        setFondoUrl(creada)
+      }).catch(() => { /* sin fondo se enseña el aviso de arriba */ })
+    }
+    return () => { vivo = false; if (creada) URL.revokeObjectURL(creada) }
+  }, [origen?.name, editor?.tiene_fondo])
+
+  // Al cambiar de país la imagen generada anterior deja de valer.
   useEffect(() => {
     setUrl(u => { if (u) URL.revokeObjectURL(u); return null })
     setError('')
   }, [origen?.name])
 
-  const generar = async (conIa) => {
+  const aviso = (texto) => { setMensaje(texto); setTimeout(() => setMensaje(''), 4000) }
+
+  const detalleDeError = async (e, porDefecto) => {
+    let detalle = porDefecto
+    try {
+      const cuerpo = e.response?.data
+      detalle = (cuerpo instanceof Blob ? JSON.parse(await cuerpo.text()) : cuerpo)?.detail || detalle
+    } catch { /* se queda el genérico */ }
+    return detalle
+  }
+
+  const generar = async () => {
     if (!origen) return
     setCargando(true); setError('')
     try {
       const r = await api.get('/admin/commissions/imagen', {
-        params: { from_country: origen.name, con_ia: conIa },
-        responseType: 'blob',
+        params: { from_country: origen.name }, responseType: 'blob',
       })
       setUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(r.data) })
-      setHechaConIa(conIa)
     } catch (e) {
-      // El error viene como blob porque se pidió una imagen; hay que leerlo.
-      let detalle = 'No se pudo generar la imagen'
-      try { detalle = JSON.parse(await e.response.data.text()).detail || detalle } catch { /* se queda el genérico */ }
-      setError(detalle)
+      setError(await detalleDeError(e, 'No se pudo generar la imagen'))
     } finally { setCargando(false) }
+  }
+
+  const subirFondo = async (archivo) => {
+    if (!archivo || !origen) return
+    setSubiendo(true); setError('')
+    const cuerpo = new FormData()
+    cuerpo.append('file', archivo)
+    try {
+      await api.post('/admin/commissions/imagen/fondo', cuerpo, {
+        params: { from_country: origen.name },
+      })
+      await refetch()
+      aviso('Imagen de fondo guardada')
+    } catch (e) {
+      setError(await detalleDeError(e, 'No se pudo subir la imagen'))
+    } finally {
+      setSubiendo(false)
+      if (ficheroRef.current) ficheroRef.current.value = ''
+    }
+  }
+
+  const quitarFondo = async () => {
+    setError('')
+    try {
+      await api.delete('/admin/commissions/imagen/fondo', {
+        params: { from_country: origen.name },
+      })
+      await refetch()
+      aviso('Imagen quitada. Este país vuelve a la versión automática.')
+    } catch (e) {
+      setError(await detalleDeError(e, 'No se pudo quitar la imagen'))
+    }
+  }
+
+  const guardarPosicion = async (siguiente) => {
+    try {
+      await api.put('/admin/commissions/imagen/tabla', siguiente, {
+        params: { from_country: origen.name },
+      })
+    } catch (e) {
+      setError(await detalleDeError(e, 'No se pudo guardar la posición'))
+    }
+  }
+
+  const restablecer = async () => {
+    try {
+      const r = await api.delete('/admin/commissions/imagen/tabla', {
+        params: { from_country: origen.name },
+      })
+      setPos(r.data.data)
+      aviso('Bloque devuelto a su sitio')
+    } catch (e) {
+      setError(await detalleDeError(e, 'No se pudo restablecer'))
+    }
+  }
+
+  // Arrastre. Se usan eventos de puntero para que funcione igual con ratón y
+  // con dedo, y setPointerCapture para no perder el bloque si el cursor sale
+  // del lienzo a mitad de movimiento.
+  const alAgarrar = (e) => {
+    const caja = lienzoRef.current?.getBoundingClientRect()
+    if (!caja) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const escala = caja.width / lienzo.ancho
+    arrastreRef.current = {
+      escala,
+      dx: e.clientX - caja.left - posicion.x * escala,
+      dy: e.clientY - caja.top - posicion.y * escala,
+    }
+  }
+
+  const alMover = (e) => {
+    const agarre = arrastreRef.current
+    const caja = lienzoRef.current?.getBoundingClientRect()
+    if (!agarre || !caja) return
+    setPos({
+      ...posicion,
+      x: Math.round((e.clientX - caja.left - agarre.dx) / agarre.escala),
+      y: Math.round((e.clientY - caja.top - agarre.dy) / agarre.escala),
+    })
+  }
+
+  const alSoltar = (e) => {
+    if (!arrastreRef.current) return
+    arrastreRef.current = null
+    try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* ya soltado */ }
+    guardarPosicion(posicion)
+  }
+
+  // El tamano de letra se calcula en pixeles de pantalla, asi que hace falta
+  // saber a que tamano se esta viendo el lienzo.
+  useEffect(() => {
+    const medir = () => {
+      const caja = lienzoRef.current?.getBoundingClientRect()
+      if (caja?.width) setAnchoVista(caja.width)
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [editor?.tiene_fondo, fondoUrl])
+
+  const { altoFila, desde } = reparteFilas(filas.length, posicion.alto)
+  const escalaVista = anchoVista / lienzo.ancho
+  const botonBase = {
+    padding: '9px 16px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
+    cursor: 'pointer', border: '1px solid rgba(255,255,255,.12)',
+    background: 'transparent', color: '#8aa0cc',
   }
 
   return (
     <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,.07)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        {/* Un solo botón. Con la IA encendida hace las dos cosas —el fondo lo
-            pinta OpenAI y el texto y la tabla los pinta el código—; apagada,
-            genera igual, solo que con la foto del país en vez del fondo hecho
-            a medida. */}
-        <button onClick={() => generar(!!ia?.activa)} disabled={cargando || !origen}
-          title={ia?.activa
-            ? 'El fondo lo pinta OpenAI; los textos y las cifras las pone el sistema, con los datos reales.'
-            : 'Se dibuja con la foto del país. Enciende la IA en Ajustes → IA para que el fondo lo haga OpenAI.'}
+      <h4 style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
+        Imagen de tasas de {origen?.name || ''}
+      </h4>
+      <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+        Sube la imagen del país con su fondo y sus letras ya puestas, y coloca
+        encima el bloque de países y tasas arrastrándolo. Sin imagen subida se
+        genera la versión automática.
+      </p>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+        <input
+          ref={ficheroRef}
+          type="file"
+          accept="image/*"
+          onChange={e => subirFondo(e.target.files?.[0])}
+          style={{ display: 'none' }} />
+        <button onClick={() => ficheroRef.current?.click()} disabled={subiendo || !origen}
           style={{
-            padding: '10px 20px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 700,
-            cursor: cargando ? 'wait' : 'pointer', color: '#fff',
-            background: ia?.activa
-              ? 'linear-gradient(135deg,#a855f7,#6d28d9)'
-              : 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+            ...botonBase, border: 'none', color: '#fff',
+            background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+            cursor: subiendo ? 'wait' : 'pointer',
           }}>
-          {cargando
-            ? (ia?.activa ? 'Generando con IA… (~1 min)' : 'Generando…')
-            : (ia?.activa ? 'Generar con IA + C' : `Generar imagen de ${origen?.name || ''}`)}
+          {subiendo ? 'Subiendo…' : (editor?.tiene_fondo ? 'Cambiar imagen de fondo' : 'Subir imagen de fondo')}
         </button>
 
-        <span style={{ fontSize: 11.5, color: '#64748b' }}>
-          A cuánto se envía a cada destino, con la comisión de su ruta ya
-          descontada.
-        </span>
+        {editor?.tiene_fondo && (
+          <>
+            <button onClick={quitarFondo} style={botonBase}>Quitar imagen</button>
+            <button onClick={restablecer} style={botonBase}>Centrar bloque</button>
+          </>
+        )}
+
+        <button onClick={generar} disabled={cargando || !origen}
+          style={{
+            ...botonBase, border: 'none', color: '#fff',
+            background: 'linear-gradient(135deg,#22c55e,#15803d)',
+            cursor: cargando ? 'wait' : 'pointer',
+          }}>
+          {cargando ? 'Generando…' : 'Generar imagen'}
+        </button>
       </div>
 
-      {error && (
-        <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#f87171' }}>{error}</p>
+      {editor?.tiene_fondo && (
+        <>
+          <div
+            ref={lienzoRef}
+            style={{
+              position: 'relative', width: '100%', maxWidth: 340,
+              aspectRatio: `${lienzo.ancho} / ${lienzo.alto}`,
+              borderRadius: 14, overflow: 'hidden', touchAction: 'none',
+              border: '1px solid rgba(255,255,255,.12)',
+              background: fondoUrl ? `center / cover no-repeat url(${fondoUrl})` : 'rgba(6,13,40,.8)',
+            }}>
+            <div
+              onPointerDown={alAgarrar}
+              onPointerMove={alMover}
+              onPointerUp={alSoltar}
+              onPointerCancel={alSoltar}
+              style={{
+                position: 'absolute', cursor: 'grab', touchAction: 'none',
+                left: `${(posicion.x / lienzo.ancho) * 100}%`,
+                top: `${(posicion.y / lienzo.alto) * 100}%`,
+                width: `${(posicion.ancho / lienzo.ancho) * 100}%`,
+                height: `${(posicion.alto / lienzo.alto) * 100}%`,
+                outline: '1px dashed rgba(56,189,248,.55)',
+                outlineOffset: 2,
+              }}>
+              {filas.map((f, i) => (
+                <div key={f.name} style={{
+                  position: 'absolute', left: 0, right: 0,
+                  top: `${((desde + i * (altoFila + ESPACIO_FILA)) / posicion.alto) * 100}%`,
+                  height: `${(altoFila / posicion.alto) * 100}%`,
+                  background: '#fff', borderRadius: 999,
+                  display: 'flex', alignItems: 'center', gap: '3%',
+                  padding: '0 2.5%', boxSizing: 'border-box',
+                  color: '#0a1e58', fontWeight: 800, overflow: 'hidden',
+                }}>
+                  {f.iso2 && (
+                    <img src={`https://flagcdn.com/w80/${f.iso2.toLowerCase()}.png`} alt=""
+                      style={{
+                        height: '80%', aspectRatio: '1 / 1', borderRadius: '50%',
+                        objectFit: 'cover', flexShrink: 0,
+                      }} />
+                  )}
+                  <span style={{
+                    flex: 1, minWidth: 0, fontSize: Math.max(altoFila * 0.30 * escalaVista, 5),
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {f.name.toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: Math.max(altoFila * 0.36 * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748b' }}>
+            Arrastra el bloque. Se guarda solo al soltarlo. — x {posicion.x}, y {posicion.y}
+          </p>
+        </>
       )}
 
+      {mensaje && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#4ade80' }}>{mensaje}</p>}
+      {error && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#f87171' }}>{error}</p>}
+
       {url && (
-        <div style={{ marginTop: 14 }}>
-          {hechaConIa && (
-            <p style={{ margin: '0 0 8px', fontSize: 11.5, color: '#c084fc', lineHeight: 1.5 }}>
-              El fondo lo hizo la IA. Los textos y las cifras las puso el sistema,
-              con los datos de la base: son las mismas que dan las calculadoras.
-            </p>
-          )}
-          <img src={url} alt="Tasas" style={{ maxWidth: 380, width: '100%', borderRadius: 14, border: '1px solid rgba(255,255,255,.1)' }} />
+        <div style={{ marginTop: 16 }}>
+          <img src={url} alt="Tasas" style={{ maxWidth: 340, width: '100%', borderRadius: 14, border: '1px solid rgba(255,255,255,.1)' }} />
           <div style={{ marginTop: 10 }}>
             <a href={url} download={`tasas-${origen?.name || 'origen'}.png`}
               style={{ fontSize: 12.5, fontWeight: 700, color: '#38bdf8', textDecoration: 'none' }}>
               Descargar imagen
             </a>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function IAConfig() {
-  const qc = useQueryClient()
-  const [clave, setClave] = useState('')
-  const [msg, setMsg] = useState('')
-  const [error, setError] = useState('')
-  // Abierta de entrada: es su propia pantalla del menú, no una tarjeta
-  // entre otras, así que plegarla solo añadiría un clic.
-  const [abierto, setAbierto] = useState(true)
-
-  const { data } = useQuery({
-    queryKey: ['ia-config'],
-    queryFn: () => api.get('/admin/ia').then(r => r.data.data),
-  })
-
-  const guardar = useMutation({
-    mutationFn: (body) => api.put('/admin/ia', body),
-    onSuccess: (r) => {
-      setMsg(r.data.message); setError(''); setClave('')
-      qc.invalidateQueries({ queryKey: ['ia-config'] })
-      setTimeout(() => setMsg(''), 4000)
-    },
-    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
-  })
-
-  // La instrucción llega del servidor, pero mientras se escribe manda el
-  // borrador local; si no, cada refresco de la consulta pisaría lo escrito.
-  const [instruccion, setInstruccion] = useState(null)
-  const texto = instruccion ?? data?.instruccion ?? ''
-  const cambiada = instruccion !== null && instruccion !== data?.instruccion
-
-  const activa = !!data?.activa
-  const configurada = !!data?.configurada
-
-  return (
-    <div style={{ ...GLASS, padding: '20px 24px', marginBottom: 16 }}>
-      <button
-        onClick={() => setAbierto(a => !a)}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-      >
-        <div style={{ textAlign: 'left' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>IA</h3>
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-              background: activa ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.12)',
-              color: activa ? '#4ade80' : '#94a3b8',
-            }}>
-              {activa ? 'Activada' : 'Desactivada'}
-            </span>
-          </div>
-          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
-            Clave de OpenAI para las funciones que la usen
-          </p>
-        </div>
-        <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
-      </button>
-
-      {abierto && (
-        <div style={{ marginTop: 18 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 10, padding: '12px 14px', borderRadius: 12, marginBottom: 14,
-            background: 'rgba(4,10,30,.5)', border: '1px solid rgba(255,255,255,.07)',
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: '#c3d2ee' }}>Usar IA</p>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-                {activa
-                  ? 'Donde haya alternativa, se ofrece también la versión hecha con IA'
-                  : 'Todo se genera sin IA'}
-              </p>
-            </div>
-            <button
-              onClick={() => guardar.mutate({ activa: !activa })}
-              disabled={guardar.isPending || (!configurada && !activa)}
-              title={!configurada ? 'Primero guarda la clave' : (activa ? 'Desactivar' : 'Activar')}
-              style={{
-                width: 42, height: 24, borderRadius: 999, border: 'none', padding: 3,
-                cursor: (!configurada && !activa) ? 'not-allowed' : 'pointer', flexShrink: 0,
-                opacity: (!configurada && !activa) ? .4 : 1,
-                background: activa ? 'rgba(74,222,128,.28)' : 'rgba(255,255,255,.12)',
-                display: 'flex', justifyContent: activa ? 'flex-end' : 'flex-start',
-              }}>
-              <span style={{ width: 18, height: 18, borderRadius: 999, background: activa ? '#4ade80' : '#64748b' }} />
-            </button>
-          </div>
-
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
-            Clave de OpenAI
-          </label>
-          <input
-            type="password"
-            value={clave}
-            onChange={e => setClave(e.target.value)}
-            placeholder={data?.api_key || 'sk-...'}
-            autoComplete="off"
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: 11, fontSize: 13,
-              background: 'rgba(6,13,40,.8)', color: '#eaf2ff',
-              border: '1px solid rgba(255,255,255,.12)',
-            }} />
-          <p style={{ margin: '6px 0 0', fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
-            Se guarda cifrada, como las de Stripe y Koywe, y nunca vuelve a mostrarse entera.
-            Escribe <code style={{ color: '#8aa0cc' }}>BORRAR</code> para quitarla.
-          </p>
-
-          <button
-            onClick={() => guardar.mutate({ api_key: clave })}
-            disabled={!clave.trim() || guardar.isPending}
-            style={{
-              marginTop: 12, padding: '9px 18px', borderRadius: 10, border: 'none',
-              fontSize: 13, fontWeight: 700, cursor: clave.trim() ? 'pointer' : 'not-allowed',
-              background: clave.trim() ? 'rgba(56,189,248,.16)' : 'rgba(255,255,255,.06)',
-              color: clave.trim() ? '#38bdf8' : '#64748b',
-            }}>
-            {guardar.isPending ? 'Guardando…' : 'Guardar clave'}
-          </button>
-
-          <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,.07)' }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
-              Instrucción para la imagen de tasas
-            </label>
-            <p style={{ margin: '0 0 8px', fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
-              Cómo quieres que la IA dibuje la imagen. Puedes usar{' '}
-              <code style={{ color: '#8aa0cc' }}>{'{pais}'}</code>,{' '}
-              <code style={{ color: '#8aa0cc' }}>{'{moneda}'}</code> y{' '}
-              <code style={{ color: '#8aa0cc' }}>{'{fecha}'}</code>, que se reemplazan solos.
-              La lista de países y sus tasas se añade siempre al final, no hace falta escribirla.
-            </p>
-            <textarea
-              value={texto}
-              onChange={e => setInstruccion(e.target.value)}
-              rows={12}
-              style={{
-                width: '100%', padding: '11px 13px', borderRadius: 11, fontSize: 12.5,
-                lineHeight: 1.65, resize: 'vertical', fontFamily: 'inherit',
-                background: 'rgba(6,13,40,.8)', color: '#eaf2ff',
-                border: '1px solid rgba(255,255,255,.12)',
-              }} />
-
-            <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => guardar.mutate({ instruccion: texto })}
-                disabled={!cambiada || guardar.isPending}
-                style={{
-                  padding: '9px 18px', borderRadius: 10, border: 'none',
-                  fontSize: 13, fontWeight: 700, cursor: cambiada ? 'pointer' : 'not-allowed',
-                  background: cambiada ? 'rgba(56,189,248,.16)' : 'rgba(255,255,255,.06)',
-                  color: cambiada ? '#38bdf8' : '#64748b',
-                }}>
-                {guardar.isPending ? 'Guardando…' : 'Guardar instrucción'}
-              </button>
-              <button
-                onClick={() => setInstruccion(data?.instruccion_defecto || '')}
-                style={{
-                  padding: '9px 16px', borderRadius: 10, fontSize: 12.5, fontWeight: 600,
-                  cursor: 'pointer', background: 'transparent',
-                  border: '1px solid rgba(255,255,255,.12)', color: '#8aa0cc',
-                }}>
-                Restaurar la del sistema
-              </button>
-            </div>
-          </div>
-
-          {msg && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#4ade80' }}>{msg}</p>}
-          {error && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#f87171' }}>{error}</p>}
         </div>
       )}
     </div>
@@ -2439,7 +2498,6 @@ export default function AdminSettings() {
         )}
         {section === 'pagos' && <><CuentasPropiasForm /><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
         {section === 'correo' && <SmtpForm />}
-        {section === 'ia' && <IAConfig />}
       </div>
     </FinexyLayout>
   )
