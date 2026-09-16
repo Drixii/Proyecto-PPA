@@ -1048,6 +1048,14 @@ def _koywe_deposito(evento: dict):
         db.commit()
         log.info("[koywe] transferencia %s %s %s %s -> %s",
                  "nueva" if nuevo else "actualizada", tx, dep.amount, dep.currency, dep.match_note)
+
+        # Y si el cruce es de los que no dejan duda —monto al céntimo y el
+        # nombre del remitente coincidiendo en varias palabras— la orden pasa
+        # sola a en_proceso. Las condiciones están en deposito_auto; cuando no
+        # se cumplen, el depósito se queda sugerido y lo aprueba el admin, que
+        # es como funcionaba antes.
+        from services import deposito_auto
+        deposito_auto.intentar(db, dep, _mark_paid)
     except Exception as e:
         db.rollback()
         # Koywe sí reintenta ante 5xx, así que aquí se propaga: es preferible
@@ -1261,6 +1269,11 @@ def _guardar_deposito(cuerpo: dict):
             "nuevo" if nuevo else "actualizado",
             tx, dep.amount, dep.currency, dep.match_note,
         )
+
+        # Mismo criterio que con Koywe: los dos son dinero que llega a una
+        # cuenta bancaria y se cruza igual, así que se aprueban igual.
+        from services import deposito_auto
+        deposito_auto.intentar(db, dep, _mark_paid)
     except Exception as e:
         db.rollback()
         # Global66 no reintenta: si esto falla, el aviso solo existe en este
@@ -1268,6 +1281,42 @@ def _guardar_deposito(cuerpo: dict):
         log.error("[global66] NO SE PUDO GUARDAR el aviso: %s | cuerpo=%s", e, json.dumps(cuerpo)[:4000])
     finally:
         db.close()
+
+
+class DepositoAutoIn(BaseModel):
+    activo: bool
+
+
+@router.get("/depositos/auto", response_model=dict)
+def estado_deposito_auto(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    from services import deposito_auto
+
+    return {"success": True, "data": {"activo": deposito_auto.activo(db)}, "message": ""}
+
+
+@router.put("/depositos/auto", response_model=dict)
+def cambiar_deposito_auto(
+    data: DepositoAutoIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Enciende o apaga que una transferencia se apruebe sola.
+
+    Apagarlo no pierde nada: los depósitos siguen llegando y cruzándose, solo
+    que esperan a que un admin los aplique.
+    """
+    from services import deposito_auto
+
+    deposito_auto.set_activo(db, data.activo)
+    return {
+        "success": True,
+        "data": {"activo": data.activo},
+        "message": ("Las transferencias que cuadren se aprobarán solas"
+                    if data.activo else "Las transferencias las aprobará un admin"),
+    }
 
 
 @router.post("/global66/webhook")
