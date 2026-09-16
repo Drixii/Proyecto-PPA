@@ -34,8 +34,13 @@ SUPPORTED_CURRENCIES = {
 # se activa a mano desde Ajustes y ninguna se enciende sola.
 
 
+# Volumen minimo para que una oferta cuente. Por debajo, el anuncio se agota
+# antes de poder usarlo y su precio no es el precio del mercado.
+VOLUMEN_MINIMO_USDT = 500
+
+
 async def _binance_p2p(fiat: str) -> float | None:
-    """Promedio de las 5 mejores ofertas SELL de USDT contra esa moneda.
+    """Promedio de las 5 mejores ofertas SELL con volumen real.
 
     SELL y no BUY: es el lado que hace la casa. Para entregarle bolívares al
     destinatario hay que VENDER el USDT, así que ese es el precio al que se
@@ -46,7 +51,8 @@ async def _binance_p2p(fiat: str) -> float | None:
 
     Endpoint no oficial pero es donde está el volumen. Se promedian cinco y no
     se toma la primera porque la mejor oferta suele ser de monto mínimo y no
-    representa el precio al que se puede cambiar de verdad.
+    representa el precio al que se puede cambiar de verdad — por la misma razón
+    se descartan las que no llegan a VOLUMEN_MINIMO_USDT.
     """
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
     payload = {
@@ -65,12 +71,26 @@ async def _binance_p2p(fiat: str) -> float | None:
             r = await client.post(url, json=payload, headers=headers)
         if r.status_code != 200:
             return None
-        precios = []
-        for ad in (r.json().get("data") or [])[:5]:
+
+        # Se descartan los anuncios sin volumen. Los primeros de la lista suelen
+        # ser de 25 o 50 USDT: dan el mejor precio y se agotan en el primer
+        # segundo, asi que promediarlos daba una tasa que no se consigue. En COP
+        # eso eran ~3.089 frente a ~3.085 reales, siempre a favor del cliente y
+        # en contra de la casa.
+        grandes, todos = [], []
+        for ad in (r.json().get("data") or []):
             try:
-                precios.append(float(ad["adv"]["price"]))
+                precio = float(ad["adv"]["price"])
+                disponible = float(ad["adv"].get("tradableQuantity") or 0)
             except (KeyError, ValueError, TypeError):
                 continue
+            todos.append(precio)
+            if disponible >= VOLUMEN_MINIMO_USDT:
+                grandes.append(precio)
+
+        # Si ningun anuncio llega al minimo —mercado fino, moneda con poco
+        # movimiento— se usan todos antes que quedarse sin tasa.
+        precios = (grandes or todos)[:5]
         return sum(precios) / len(precios) if precios else None
     except Exception:
         return None
