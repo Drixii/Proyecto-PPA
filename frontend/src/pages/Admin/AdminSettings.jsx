@@ -551,6 +551,12 @@ const SECTIONS = [
     title: 'Correo',
     desc: 'Servidor de envío y verificación del correo de los clientes',
   },
+  {
+    key: 'ia',
+    icon: '🤖',
+    title: 'IA',
+    desc: 'Clave de OpenAI y dónde se usa',
+  },
 ]
 
 function SectionCard({ icon, title, desc, onClick }) {
@@ -1147,7 +1153,9 @@ function IAConfig() {
   const [clave, setClave] = useState('')
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
-  const [abierto, setAbierto] = useState(false)
+  // Abierta de entrada: es su propia pantalla del menú, no una tarjeta
+  // entre otras, así que plegarla solo añadiría un clic.
+  const [abierto, setAbierto] = useState(true)
 
   const { data } = useQuery({
     queryKey: ['ia-config'],
@@ -2377,8 +2385,9 @@ export default function AdminSettings() {
             </>
           )
         )}
-        {section === 'pagos' && <><CuentasPropiasForm /><IAConfig /><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
+        {section === 'pagos' && <><CuentasPropiasForm /><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
         {section === 'correo' && <SmtpForm />}
+        {section === 'ia' && <IAConfig />}
       </div>
     </FinexyLayout>
   )
