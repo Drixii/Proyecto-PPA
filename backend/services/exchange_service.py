@@ -34,7 +34,14 @@ SUPPORTED_CURRENCIES = {
 
 
 async def _binance_p2p(fiat: str) -> float | None:
-    """Promedio de las 5 mejores ofertas BUY de USDT contra esa moneda.
+    """Promedio de las 5 mejores ofertas SELL de USDT contra esa moneda.
+
+    SELL y no BUY: es el lado que hace la casa. Para entregarle bolívares al
+    destinatario hay que VENDER el USDT, así que ese es el precio al que se
+    convierte de verdad. Con BUY se cotizaba el lado contrario —lo que cuesta
+    comprar el USDT— y se prometía algo más de moneda local por dólar de la que
+    se iba a recibir al cambiarlo. La diferencia entre ambos lados es pequeña
+    (0,05% en VES el 2026-09-15), pero va siempre en contra de la casa.
 
     Endpoint no oficial pero es donde está el volumen. Se promedian cinco y no
     se toma la primera porque la mejor oferta suele ser de monto mínimo y no
@@ -44,7 +51,7 @@ async def _binance_p2p(fiat: str) -> float | None:
     payload = {
         "asset": "USDT",
         "fiat": fiat,
-        "tradeType": "BUY",
+        "tradeType": "SELL",
         "page": 1,
         "rows": 10,
         "payTypes": [],
