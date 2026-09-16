@@ -73,25 +73,28 @@
     ctx.restore();
   }
 
-  // Los países que se atienden caben casi todos en el mismo trozo de globo, y
-  // ahí las banderas se pisan unas a otras. Esto los abre en abanico: se toma
-  // el centro del grupo y cada país se aleja de él el doble de lo que estaba,
-  // sin pasar de 78°, que es donde ya empiezan a irse por el borde. Se
-  // conserva el orden —quién está al norte de quién— y solo cambia el
-  // repartido, que es lo que se pidió.
+  // Los países que se atienden caben todos en el mismo rincón del mundo, así
+  // que en el globo las banderas se pisan unas a otras. Aquí se reparten por
+  // toda la esfera en vez de respetar el mapa:
+  //
+  // - Las longitudes, a la misma distancia una de otra alrededor del globo,
+  //   así que girando van apareciendo de una en una y siempre hay unas cuantas
+  //   de cara.
+  // - Las latitudes, dentro de una banda de ±38°. Más arriba o más abajo la
+  //   esfera las escorza contra el borde y quedan escondidas, que es justo lo
+  //   que se quería evitar; el ángulo áureo las va alternando para que no
+  //   salga un collar de banderas todas a la misma altura.
+  //
+  // Se conserva el orden de oeste a este, que es lo único del mapa que sigue
+  // significando algo aquí.
+  var BANDA=38, AUREO=2.39996;
   function repartir(){
-    var m=[0,0,0];
-    countries.forEach(function(c){ m[0]+=c.vec[0];m[1]+=c.vec[1];m[2]+=c.vec[2]; });
-    var n=Math.hypot(m[0],m[1],m[2])||1;
-    var centro=[m[0]/n,m[1]/n,m[2]/n];
-    var tope=78*Math.PI/180;
-
-    countries.forEach(function(c){
-      var d=Math.max(-1,Math.min(1,centro[0]*c.vec[0]+centro[1]*c.vec[1]+centro[2]*c.vec[2]));
-      var ang=Math.acos(d);
-      if(ang<1e-4){ c.vecGlobo=c.vec.slice(); return; }
-      var nuevo=Math.min(ang*2.1,tope);
-      c.vecGlobo=slerp(centro,c.vec,nuevo/ang);
+    var orden=countries.slice().sort(function(a,b){return a.lon-b.lon;});
+    var n=orden.length;
+    orden.forEach(function(c,i){
+      var lon=-180+(i+0.5)*(360/n);
+      var lat=BANDA*Math.sin(i*AUREO);
+      c.vecGlobo=toVec(lat,lon);
     });
   }
   var dots=[], arcs=[];
