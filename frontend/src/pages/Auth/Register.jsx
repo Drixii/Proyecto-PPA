@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import CampoSelector from '../../components/CampoSelector'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import api from '../../services/api'
 import { useStore } from '../../store/useStore'
@@ -84,13 +85,12 @@ export default function Register() {
 
               <div>
                 <label style={{ display: 'block', color: '#8aa0cc', fontSize: 12, fontWeight: 500, marginBottom: 5 }}>País</label>
-                <select
+                <CampoSelector
                   value={form.country}
-                  onChange={e => setForm({ ...form, country: e.target.value })}
-                  style={{ ...INPUT_STYLE, cursor: 'pointer' }}
-                >
-                  {COUNTRIES.map(c => <option key={c} style={{ background: '#0d1f3c' }}>{c}</option>)}
-                </select>
+                  onChange={v => setForm({ ...form, country: v })}
+                  titulo="¿En qué país vives?"
+                  opciones={COUNTRIES.map(c => ({ valor: c, texto: c }))}
+                  style={INPUT_STYLE} />
               </div>
             </div>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CampoSelector from '../../components/CampoSelector'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import FinexyLayout from '../../components/FinexyLayout'
 import SlidePanel from '../../components/SlidePanel'
@@ -307,12 +308,14 @@ export default function SubAdminOrders() {
               style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
           </div>
           {adminNames.length > 1 && (
-            <select value={adminFilter} onChange={e => setAdminFilter(e.target.value)}
-              className="rounded-xl px-3 py-2 text-xs focus:outline-none"
-              style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color: adminFilter ? '#fcd34d' : '#8aa0cc'}}>
-              <option value="">Todos los admins</option>
-              {adminNames.map(n => <option key={n}>{n}</option>)}
-            </select>
+            <CampoSelector
+              value={adminFilter}
+              onChange={setAdminFilter}
+              placeholder="Todos los admins"
+              titulo="Filtrar por admin"
+              opciones={[{ valor: '', texto: 'Todos los admins' }, ...adminNames.map(n => ({ valor: n, texto: n }))]}
+              className="rounded-xl px-3 py-2 text-xs"
+              style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color: adminFilter ? '#fcd34d' : '#8aa0cc', minWidth: 150}} />
           )}
         </div>
 

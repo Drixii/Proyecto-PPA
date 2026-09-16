@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import CampoSelector from '../../components/CampoSelector'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
@@ -3155,13 +3156,13 @@ function CuentasPropiasForm() {
                             {c.etiqueta}{c.requerido && <span style={{ color: '#f87171' }}> *</span>}
                           </label>
                           {c.tipo === 'select' ? (
-                            <select
+                            <CampoSelector
                               value={form[c.clave] || ''}
-                              onChange={e => setForm(f => ({ ...f, [c.clave]: e.target.value }))}
-                              style={ENTRADA}>
-                              <option value="">Elegir…</option>
-                              {c.opciones.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
+                              onChange={v => setForm(f => ({ ...f, [c.clave]: v }))}
+                              placeholder="Elegir…"
+                              titulo={c.etiqueta}
+                              opciones={c.opciones.map(o => ({ valor: o, texto: o }))}
+                              style={ENTRADA} />
                           ) : (
                             <input
                               value={form[c.clave] || ''}

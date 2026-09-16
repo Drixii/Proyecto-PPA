@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import CampoSelector from '../../components/CampoSelector'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { activarNotificaciones, revalidarNotificaciones } from '../../services/push'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
@@ -473,11 +474,12 @@ export default function Login() {
               <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: '0 0 42%' }}>
                   <label style={labelStyle}>Documento</label>
-                  <select value={regForm.document_type} onChange={e => setRegForm({ ...regForm, document_type: e.target.value })} style={{ ...inputStyle, appearance: 'none' }}>
-                    {docsDisponibles.map(([codigo, nombre]) => (
-                      <option key={codigo} value={codigo} style={{ background: '#0f172a', color: '#fff' }}>{nombre}</option>
-                    ))}
-                  </select>
+                  <CampoSelector
+                    value={regForm.document_type}
+                    onChange={v => setRegForm({ ...regForm, document_type: v })}
+                    titulo="Tipo de documento"
+                    opciones={docsDisponibles.map(([codigo, nombre]) => ({ valor: codigo, texto: nombre }))}
+                    style={inputStyle} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Número</label>

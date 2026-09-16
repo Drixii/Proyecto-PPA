@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import CampoSelector from '../../components/CampoSelector'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -987,12 +988,14 @@ export default function NewTransfer() {
                     )}
                   </label>
                   {banksData?.length > 0 ? (
-                    <select value={receiver.receiver_bank_id} onChange={e => setReceiver({ ...receiver, receiver_bank_id: e.target.value })}
-                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
-                      <option value="" style={{background:'#0f172a', color:'#fff'}}>Seleccionar banco...</option>
-                      {banksData.map(b => <option key={b.id} value={b.id} style={{background:'#0f172a', color:'#fff'}}>{b.name}</option>)}
-                    </select>
+                    <CampoSelector
+                      value={receiver.receiver_bank_id}
+                      onChange={v => setReceiver({ ...receiver, receiver_bank_id: v })}
+                      placeholder="Seleccionar banco..."
+                      titulo="Banco del destinatario"
+                      opciones={banksData.map(b => ({ valor: b.id, texto: b.name }))}
+                      className="w-full rounded-xl px-3 py-2.5"
+                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
                   ) : (
                     <input type="text" value={receiver.receiver_bank_id} onChange={e => setReceiver({ ...receiver, receiver_bank_id: e.target.value })}
                       placeholder="Nombre del banco"
@@ -1014,11 +1017,13 @@ export default function NewTransfer() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Tipo de ID</label>
-                    <select value={receiver.receiver_id_type} onChange={e => setReceiver({ ...receiver, receiver_id_type: e.target.value, receiver_id_num: '' })}
-                      className="w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
-                      {(COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES).map(t => <option key={t} style={{background:'#0f172a', color:'#fff'}}>{t}</option>)}
-                    </select>
+                    <CampoSelector
+                      value={receiver.receiver_id_type}
+                      onChange={v => setReceiver({ ...receiver, receiver_id_type: v, receiver_id_num: '' })}
+                      titulo="Tipo de documento"
+                      opciones={(COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES).map(t => ({ valor: t, texto: t }))}
+                      className="w-full rounded-xl px-3 py-2.5"
+                      style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
                   </div>
                   <div>
                     <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Número de ID</label>
@@ -1367,14 +1372,13 @@ export default function NewTransfer() {
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Tipo de documento</label>
-                                <select value={pagador.sender_id_type} onChange={e => setPagador(p => ({ ...p, sender_id_type: e.target.value }))}
+                                <CampoSelector
+                                  value={pagador.sender_id_type}
+                                  onChange={v => setPagador(p => ({ ...p, sender_id_type: v }))}
+                                  titulo="Tipo de documento"
+                                  opciones={(payCfg?.koywe?.documentos?.[calc.fromCurrency] || []).map(d => ({ valor: d.codigo, texto: d.nombre }))}
                                   className="w-full rounded-xl px-3 py-2.5 text-sm"
-                                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}>
-                                  <option value="" style={{background:'#0f172a'}}>Elige...</option>
-                                  {(payCfg?.koywe?.documentos?.[calc.fromCurrency] || []).map(d => (
-                                    <option key={d.codigo} value={d.codigo} style={{background:'#0f172a'}}>{d.nombre}</option>
-                                  ))}
-                                </select>
+                                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
                               </div>
                               <div>
                                 <label className="text-xs block mb-1" style={{color:'#aebfe2'}}>Número</label>

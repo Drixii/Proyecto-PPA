@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CampoSelector from '../../components/CampoSelector'
 import { useStore } from '../../store/useStore'
 import { fmtDate, userTz } from '../../utils/timezone'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -288,12 +289,14 @@ export default function SubAdminPipeline() {
           <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Pipeline</h2>
           <DateRangePicker value={dateRange} onChange={setDateRange} />
           {adminNames.length > 1 && (
-            <select value={adminFilter} onChange={e => setAdminFilter(e.target.value)}
-              className="text-xs rounded-lg px-2 py-1 outline-none"
-              style={{background:'rgba(255,255,255,.06)', color:'#eaf2ff', border:'1px solid rgba(255,255,255,.1)'}}>
-              <option value=''>Todos</option>
-              {adminNames.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
+            <CampoSelector
+              value={adminFilter}
+              onChange={setAdminFilter}
+              placeholder="Todos"
+              titulo="Filtrar por admin"
+              opciones={[{ valor: '', texto: 'Todos' }, ...adminNames.map(n => ({ valor: n, texto: n }))]}
+              className="text-xs rounded-lg px-2 py-1"
+              style={{background:'rgba(255,255,255,.06)', color:'#eaf2ff', border:'1px solid rgba(255,255,255,.1)', minWidth: 120}} />
           )}
           <span className="text-xs ml-auto" style={{color:'#aebfe2'}}>actualiza cada 15s · {(data || []).length} órdenes</span>
         </div>
