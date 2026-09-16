@@ -1675,6 +1675,21 @@ function MercadoParalelo() {
     binance_p2p: 'Binance P2P', yadio: 'Yadio', dolarapi: 'DolarAPI', dolarapi_cripto: 'DolarAPI cripto',
   }
 
+  // Binance no tiene mercado P2P para todas las monedas —el real brasileño no
+  // publica precio— y donde no lo tiene solo queda la tasa de Google.
+  const hayBinance = !!m && (m.compra != null || m.venta != null)
+  // Qué precio cobra hoy el sistema: 'oficial' si la moneda no está cotizando
+  // al paralelo, y si lo está, el lado elegido de Binance.
+  const enUso = (!m || !m.activo || !hayBinance) ? 'oficial' : (m.lado || 'SELL')
+
+  const elegirFuente = (clave) => {
+    if (clave === 'oficial') { cambiar.mutate({ moneda, activo: false }); return }
+    // Elegir un lado implica cotizar al paralelo: si no, se guardaba el lado y
+    // la moneda seguía cobrando al oficial, sin que nada lo dijera.
+    cambiarLado.mutate(clave)
+    if (!m?.activo) cambiar.mutate({ moneda, activo: true })
+  }
+
   const etiqueta = { margin: 0, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }
 
   return (
@@ -1769,32 +1784,36 @@ function MercadoParalelo() {
           </div>
 
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 10 }}>
-            {/* Los dos lados de Binance, como se ven en la app. La casa cobra
-                al de venta: es el que hace de verdad en cada envío. */}
-            {/* Los dos lados de Binance, como se ven en la app. Se pulsa el
-                que se quiera usar: ese es el que cobra el sistema. */}
+            {/* Una tarjeta por precio disponible; se pulsa la que se quiera
+                cobrar. Binance solo aparece donde tiene mercado: para el real
+                brasileño no publica precio P2P, así que Brasil sale con su
+                tasa de Google y nada más — enseñar dos "Sin datos" no informa
+                de nada y escondía el único número que sí hay. */}
             {[
-              { lado: 'BUY', texto: 'Compra', valor: m.compra },
-              { lado: 'SELL', texto: 'Venta', valor: m.venta },
-            ].map(({ lado, texto, valor }) => {
-              const elegido = (m.lado || 'SELL') === lado
+              { clave: 'oficial', texto: 'Google', valor: m.oficial, pie: 'tasa de referencia' },
+              ...(hayBinance ? [
+                { clave: 'BUY', texto: 'Compra (Binance)', valor: m.compra },
+                { clave: 'SELL', texto: 'Venta (Binance)', valor: m.venta },
+              ] : []),
+            ].map(({ clave, texto, valor, pie }) => {
+              const elegido = clave === enUso
               return (
-                <button key={lado}
-                  onClick={() => !elegido && cambiarLado.mutate(lado)}
-                  disabled={cambiarLado.isPending}
-                  title={elegido ? 'Es la que se está cobrando' : `Cobrar al precio de ${texto.toLowerCase()}`}
+                <button key={clave}
+                  onClick={() => !elegido && elegirFuente(clave)}
+                  disabled={valor == null || cambiar.isPending || cambiarLado.isPending}
+                  title={elegido ? 'Es la que se está cobrando' : `Cobrar a ${texto}`}
                   style={{
                     textAlign: 'left', padding: '8px 14px', borderRadius: 12,
-                    cursor: elegido ? 'default' : 'pointer',
+                    cursor: elegido || valor == null ? 'default' : 'pointer',
                     background: elegido ? 'rgba(56,189,248,.12)' : 'rgba(255,255,255,.04)',
                     border: `1px solid ${elegido ? 'rgba(56,189,248,.45)' : 'rgba(255,255,255,.08)'}`,
                   }}>
-                  <p style={etiqueta}>{texto} (Binance)</p>
+                  <p style={etiqueta}>{texto}</p>
                   <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: valor == null ? '#64748b' : (elegido ? '#eaf2ff' : '#8aa0cc') }}>
                     {valor == null ? 'Sin datos' : num(comoSeLee(valor), 4)}
                   </p>
                   <p style={{ margin: '2px 0 0', fontSize: 10.5, color: elegido ? '#38bdf8' : '#64748b' }}>
-                    {elegido ? '● la que se cobra' : 'usar esta'}
+                    {elegido ? '● la que se cobra' : (pie || 'usar esta')}
                   </p>
                 </button>
               )
@@ -1806,13 +1825,24 @@ function MercadoParalelo() {
                 <span style={{ fontSize: 15, fontWeight: 700, color: isFetching ? '#38bdf8' : '#aebfe2', fontVariantNumeric: 'tabular-nums' }}>
                   {isFetching ? 'ahora…' : `${restan ?? '—'} s`}
                 </span>
-                <button onClick={() => refetch()} disabled={isFetching} title="Actualizar ya"
+                {/* cancelRefetch para que dos clics seguidos no se anulen
+                    entre sí, y el aviso porque los precios se mueven por
+                    decimales: sin él no había forma de saber si había pasado
+                    algo al pulsar. */}
+                <button
+                  onClick={async () => {
+                    await refetch({ cancelRefetch: true })
+                    setMsg('Tasas actualizadas')
+                    setTimeout(() => setMsg(''), 2500)
+                  }}
+                  disabled={isFetching} title="Actualizar ya"
                   style={{
                     padding: '4px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700,
-                    cursor: isFetching ? 'wait' : 'pointer', color: '#8aa0cc',
+                    cursor: isFetching ? 'wait' : 'pointer',
+                    color: isFetching ? '#38bdf8' : '#8aa0cc',
                     background: 'transparent', border: '1px solid rgba(255,255,255,.12)',
                   }}>
-                  ↻
+                  {isFetching ? '…' : '↻'}
                 </button>
               </div>
             </div>
