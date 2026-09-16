@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 // Aviso de versión nueva.
@@ -35,6 +36,33 @@ export default function AvisoActualizacion() {
     },
   })
 
+  const [actualizando, setActualizando] = useState(false)
+
+  // Pasar a la versión nueva.
+  //
+  // updateServiceWorker(true) le dice al service worker en espera que tome el
+  // control y recarga cuando lo hace. A veces no hay ninguno esperando —ya
+  // activó, o el aviso quedó de una comprobación anterior— y entonces el botón
+  // no hacía absolutamente nada, sin forma de salir de ahí.
+  //
+  // Por eso hay red de seguridad: si en dos segundos no ha recargado, se
+  // vacían las cachés de la aplicación y se recarga a mano. Vaciarlas importa;
+  // sin eso la recarga vuelve a servir los mismos archivos viejos.
+  const actualizar = async () => {
+    setActualizando(true)
+    try { await updateServiceWorker(true) } catch { /* se recarga igual */ }
+
+    setTimeout(async () => {
+      try {
+        if (window.caches) {
+          const nombres = await caches.keys()
+          await Promise.all(nombres.map(n => caches.delete(n)))
+        }
+      } catch { /* si no deja borrarlas, se recarga igual */ }
+      window.location.reload()
+    }, 2000)
+  }
+
   if (!hayVersionNueva) return null
 
   return (
@@ -46,15 +74,19 @@ export default function AvisoActualizacion() {
       boxShadow: '0 12px 34px rgba(0,6,28,.55)',
       backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
     }}>
-      <span style={{ fontSize: 12.5, color: '#c3d2ee' }}>Hay una versión nueva</span>
+      <span style={{ fontSize: 12.5, color: '#c3d2ee' }}>
+        {actualizando ? 'Actualizando…' : 'Hay una versión nueva'}
+      </span>
       <button
-        onClick={() => updateServiceWorker(true)}
+        onClick={actualizar}
+        disabled={actualizando}
         style={{
           padding: '7px 14px', borderRadius: 10, border: 'none', fontSize: 12.5,
-          fontWeight: 700, cursor: 'pointer', color: '#061027',
+          fontWeight: 700, cursor: actualizando ? 'wait' : 'pointer', color: '#061027',
+          opacity: actualizando ? .7 : 1,
           background: 'linear-gradient(135deg,#7dd3fc,#38bdf8)',
         }}>
-        Actualizar
+        {actualizando ? 'Espera…' : 'Actualizar'}
       </button>
       <button
         onClick={() => setHayVersionNueva(false)}
