@@ -1386,7 +1386,8 @@ def restore_order(
 # ── Invite Codes ───────────────────────────────────────────
 
 class InviteCodeCreate(BaseModel):
-    email: str
+    # Opcional: se puede generar un codigo sin saber a quien se le va a pasar.
+    email: Optional[str] = None
     trusted: bool = False
 
 
@@ -1399,16 +1400,15 @@ def create_invite_code(
     code = secrets.token_urlsafe(6).upper()[:8]
     invite = InviteCode(
         code=code,
-        email=data.email.strip().lower(),
+        email=(data.email or "").strip().lower() or None,
         super_admin_id=_admin.id,
         trusted=bool(data.trusted),
     )
     db.add(invite)
     db.commit()
     db.refresh(invite)
-    from urllib.parse import quote
-    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-    reg_url = f"{frontend_url}/login?mode=register&code={code}&email={quote(invite.email)}"
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173").split(",")[0]
+    reg_url = f"{frontend_url}/login?mode=register&code={code}"
     return {
         "success": True,
         "data": {

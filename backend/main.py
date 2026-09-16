@@ -102,6 +102,7 @@ def _run_migrations():
         "ALTER TABLE orders ADD COLUMN released_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE orders ADD COLUMN released_by_id INTEGER",
         "ALTER TABLE invite_codes ADD COLUMN trusted BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE invite_codes ALTER COLUMN email DROP NOT NULL",
     ]
     # Estas migraciones se reejecutan en cada arranque, así que "la columna ya
     # existe" es el caso normal y se ignora. Cualquier otro fallo sí se registra:

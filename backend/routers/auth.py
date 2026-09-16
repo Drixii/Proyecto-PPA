@@ -47,8 +47,10 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
         ).first()
         if not code_row:
             raise HTTPException(status_code=400, detail="Código de invitación inválido o ya utilizado")
-        if code_row.email.lower().strip() != data.email.lower().strip():
-            raise HTTPException(status_code=400, detail="El correo no coincide con el de la invitación")
+        # El correo ya no tiene que coincidir con el de la invitacion: el codigo
+        # se le pasa a quien sea y esa persona se registra con el correo que
+        # use de verdad. Lo que decide de quien es cliente sigue siendo el
+        # codigo, que trae su super_admin_id, asi que el aislamiento no cambia.
         super_admin_id = code_row.super_admin_id
     else:
         raise HTTPException(status_code=400, detail="Se requiere un código de invitación para registrarse")
@@ -332,8 +334,8 @@ def check_invite_code(code: str, db: Session = Depends(get_db)):
         InviteCode.is_used == False,
     ).first()
     if not code_row:
-        return {"success": True, "data": {"valid": False, "email": None}, "message": ""}
-    return {"success": True, "data": {"valid": True, "email": code_row.email}, "message": ""}
+        return {"success": True, "data": {"valid": False}, "message": ""}
+    return {"success": True, "data": {"valid": True}, "message": ""}
 
 
 @router.get("/my-coverage", response_model=dict)

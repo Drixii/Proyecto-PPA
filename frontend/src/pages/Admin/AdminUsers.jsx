@@ -254,7 +254,6 @@ export default function AdminUsers() {
   const [roleTab, setRoleTab] = useState('client')
   const [createModal, setCreateModal] = useState(false)
   const [inviteModal, setInviteModal] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
   // Nace confiable: para clientes que ya se conocen fuera de la web, donde la
   // retención del primer envío solo estorba.
   const [inviteTrusted, setInviteTrusted] = useState(false)
@@ -787,22 +786,18 @@ export default function AdminUsers() {
       {inviteModal && (
         <Modal title="Invitar Cliente" onClose={() => setInviteModal(false)}>
           <div className="space-y-4">
-            <form onSubmit={e => { e.preventDefault(); inviteMutation.mutate({ email: inviteEmail, trusted: inviteTrusted }) }} className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  required
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="correo@cliente.com"
-                  className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                  style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}}
-                />
-                <button type="submit" disabled={inviteMutation.isPending}
-                  className="bg-gradient-to-r from-blue-400 to-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-60 shrink-0">
-                  {inviteMutation.isPending ? '...' : 'Generar'}
-                </button>
-              </div>
+            <form onSubmit={e => { e.preventDefault(); inviteMutation.mutate({ trusted: inviteTrusted }) }} className="space-y-3">
+              {/* Sin correo: el código ya no se ata a uno. Se genera, se le
+                  pasa a quien sea, y esa persona se registra con el correo que
+                  use de verdad. */}
+              <p className="text-xs" style={{color:'#8aa0cc', lineHeight:1.6}}>
+                Genera un código y pásaselo al cliente. Se registrará con el correo que quiera;
+                el código es lo que lo deja entrar y lo asigna a ti.
+              </p>
+              <button type="submit" disabled={inviteMutation.isPending}
+                className="w-full bg-gradient-to-r from-blue-400 to-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl disabled:opacity-60">
+                {inviteMutation.isPending ? 'Generando…' : 'Generar código'}
+              </button>
 
               <label className="flex items-start gap-2.5 cursor-pointer">
                 <input
@@ -825,7 +820,7 @@ export default function AdminUsers() {
                  que se le pasa al cliente es el código, y tener dos botones que
                  copian cosas distintas invitaba a mandar el que no era. */
               <div className="rounded-xl p-4" style={{background:'rgba(74,222,128,.06)', border:'1px solid rgba(74,222,128,.2)'}}>
-                <p className="text-xs font-semibold mb-2" style={{color:'#4ade80'}}>✓ Código generado para {inviteResult.email}</p>
+                <p className="text-xs font-semibold mb-2" style={{color:'#4ade80'}}>✓ Código generado</p>
                 <button
                   onClick={() => { navigator.clipboard.writeText(mensajeInvitacion(inviteResult.code)); setInviteCodeCopied(true); setTimeout(() => setInviteCodeCopied(false), 2500) }}
                   className="w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors"

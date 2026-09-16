@@ -8,7 +8,11 @@ class InviteCode(Base):
 
     id = Column(Integer, primary_key=True)
     code = Column(String(16), unique=True, nullable=False, index=True)
-    email = Column(String, nullable=False)
+    # Opcional. El codigo ya no se ata a un correo: se le manda a quien sea y
+    # esa persona se registra con el correo que quiera. Ataba dos cosas que no
+    # tienen por que coincidir — a quien se le pasa el codigo y con que cuenta
+    # entra — y obligaba a acertar el correo antes de conocerlo.
+    email = Column(String, nullable=True)
     super_admin_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_used = Column(Boolean, default=False)
     # Si el cliente nace marcado como confiable. Para gente que ya se conoce
