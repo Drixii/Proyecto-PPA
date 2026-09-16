@@ -40,23 +40,24 @@
     return v.toLocaleString('es-CL',{maximumFractionDigits:4});
   }
 
-  // Badge bajo la bandera: el precio y la flecha del día.
-  function badgePrecio(c,px,py,alpha){
+  // Badge bajo la bandera: el precio y la flecha del día. `fs` es el cuerpo de
+  // letra, que en la esfera va más pequeño que en la cuadrícula.
+  function badgePrecio(c,px,py,alpha,fs){
     var txt=precioCorto(c.precio);
-    if(txt==null)return;
+    if(txt==null||alpha<0.05)return;
     var sube=(c.variacion||0)>=0;
-    var flecha=c.variacion==null?'':(sube?' ▲':' ▼');
-    var pct=c.variacion==null?'':Math.abs(c.variacion).toFixed(2)+'%';
+    var pct=c.variacion==null?'':(sube?'▲ ':'▼ ')+Math.abs(c.variacion).toFixed(2)+'%';
 
     ctx.save();
     ctx.globalAlpha=alpha;
-    ctx.font='700 12px \'Space Grotesk\',system-ui,sans-serif';
+    ctx.font='700 '+fs+'px \'Space Grotesk\',system-ui,sans-serif';
     var wTxt=ctx.measureText(txt).width;
-    var wPct=pct?ctx.measureText(flecha+' '+pct).width:0;
-    var w=wTxt+wPct+(pct?8:0)+20, h=22, x=px-w/2, y=py;
+    var wPct=pct?ctx.measureText(pct).width:0;
+    var hueco=pct?fs*0.6:0;
+    var w=wTxt+wPct+hueco+fs*1.5, h=fs*1.8, x=px-w/2, y=py;
 
     ctx.beginPath();
-    if(ctx.roundRect)ctx.roundRect(x,y,w,h,11);
+    if(ctx.roundRect)ctx.roundRect(x,y,w,h,h/2);
     else ctx.rect(x,y,w,h);
     ctx.fillStyle='rgba(8,16,44,.82)';ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,.14)';ctx.lineWidth=1;ctx.stroke();
@@ -64,12 +65,34 @@
     ctx.textAlign='left';
     ctx.textBaseline='middle';
     ctx.fillStyle='#eaf2ff';
-    ctx.fillText(txt,x+10,y+h/2+0.5);
+    ctx.fillText(txt,x+fs*0.75,y+h/2+0.5);
     if(pct){
       ctx.fillStyle=sube?'#4ade80':'#f87171';
-      ctx.fillText(flecha+' '+pct,x+10+wTxt+8,y+h/2+0.5);
+      ctx.fillText(pct,x+fs*0.75+wTxt+hueco,y+h/2+0.5);
     }
     ctx.restore();
+  }
+
+  // Los países que se atienden caben casi todos en el mismo trozo de globo, y
+  // ahí las banderas se pisan unas a otras. Esto los abre en abanico: se toma
+  // el centro del grupo y cada país se aleja de él el doble de lo que estaba,
+  // sin pasar de 78°, que es donde ya empiezan a irse por el borde. Se
+  // conserva el orden —quién está al norte de quién— y solo cambia el
+  // repartido, que es lo que se pidió.
+  function repartir(){
+    var m=[0,0,0];
+    countries.forEach(function(c){ m[0]+=c.vec[0];m[1]+=c.vec[1];m[2]+=c.vec[2]; });
+    var n=Math.hypot(m[0],m[1],m[2])||1;
+    var centro=[m[0]/n,m[1]/n,m[2]/n];
+    var tope=78*Math.PI/180;
+
+    countries.forEach(function(c){
+      var d=Math.max(-1,Math.min(1,centro[0]*c.vec[0]+centro[1]*c.vec[1]+centro[2]*c.vec[2]));
+      var ang=Math.acos(d);
+      if(ang<1e-4){ c.vecGlobo=c.vec.slice(); return; }
+      var nuevo=Math.min(ang*2.1,tope);
+      c.vecGlobo=slerp(centro,c.vec,nuevo/ang);
+    });
   }
   var dots=[], arcs=[];
 
@@ -271,7 +294,8 @@
     var gr=grid();
     for(var ci=0;ci<countries.length;ci++){
       var c=countries[ci];
-      var rvc=rotY(c.vec[0],c.vec[1],c.vec[2]),cxr=rvc[0],cyr=rvc[1],czr=rvc[2];
+      var vg=c.vecGlobo||c.vec;
+      var rvc=rotY(vg[0],vg[1],vg[2]),cxr=rvc[0],cyr=rvc[1],czr=rvc[2];
       var gx=cx+cxr*R,gy=cy-cyr*R;
       var a2=clamp((czr+0.08)/1.08,0,1);
       var frG=Math.max(11,Math.round(R*0.048*(0.55+a2*0.45)));
@@ -295,8 +319,12 @@
         var flagHalf=fr*2.3*0.32;
         ctx.fillText(c.name,ppx,ppy-flagHalf-14);
         ctx.restore();
-        badgePrecio(c,ppx,ppy+flagHalf+8,clamp((morph-0.45)/0.52,0,1));
       }
+
+      // Debajo de la bandera, tanto en la esfera como en la cuadrícula. En la
+      // esfera se desvanece con la cara del globo, igual que la bandera.
+      var mediaBandera=(morph>0.45?fr*2.3*0.32:fr);
+      badgePrecio(c,ppx,ppy+mediaBandera+6,alpha,morph>0.45?12:Math.max(9,fr*0.62));
     }
 
     anim=requestAnimationFrame(frame);
@@ -329,6 +357,7 @@
       img.src='https://flagcdn.com/w640/'+c.iso+'.png';
       c.img=img;
     }
+    repartir();
     cargarPrecios();
     dots=[];
     for(var lat=-82;lat<=82;lat+=5){
@@ -337,7 +366,7 @@
       for(var k=0;k<nn;k++)dots.push([lat*Math.PI/180,(k/nn)*Math.PI*2]);
     }
     var defs=[[0,1],[1,2],[1,3],[2,3],[3,4],[3,9],[4,9],[5,8],[5,6],[6,7],[7,8],[8,9]];
-    arcs=defs.map(function(d,i){return {a:countries[d[0]].vec,b:countries[d[1]].vec,off:i/12,spd:0.055+((i*2)%6)*0.009};});
+    arcs=defs.map(function(d,i){return {a:countries[d[0]].vecGlobo,b:countries[d[1]].vecGlobo,off:i/12,spd:0.055+((i*2)%6)*0.009};});
     anim=requestAnimationFrame(frame);
   }
   init();
