@@ -1125,7 +1125,8 @@ function KoyweKeysForm() {
 //
 // Comparte la consulta con ImagenDeTasas: misma clave, así que React Query la
 // pide una vez y la tabla y el cartel enseñan exactamente lo mismo.
-function TablaRecibe({ pais }) {
+function TablaRecibe({ pais: pais_ }) {
+  const pais = pais_
   const qc = useQueryClient()
   const { data } = useQuery({
     queryKey: ['imagen-editor', pais?.name, 'recibe'],
@@ -1151,6 +1152,23 @@ function TablaRecibe({ pais }) {
     },
     onError: () => setOrdenLocal(null),
   })
+
+  // Margen que se le suma al precio de cada país en este cartel. Mientras se
+  // escribe manda el borrador local; al salir de la casilla se guarda.
+  const [margen, setMargen] = useState({})
+  const guardarMargen = useMutation({
+    mutationFn: ({ pais, porcentaje }) => api.put('/admin/commissions/imagen/recargo',
+      { pais, porcentaje }, { params: { from_country: pais_.name, sentido: 'recibe' } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['imagen-editor'] }),
+  })
+
+  const sueltaMargen = (nombre, valorPrevio) => {
+    const escrito = margen[nombre]
+    if (escrito === undefined) return
+    const pct = parseFloat(String(escrito).replace(',', '.')) || 0
+    setMargen(m => { const n = { ...m }; delete n[nombre]; return n })
+    if (pct !== valorPrevio) guardarMargen.mutate({ pais: nombre, porcentaje: pct })
+  }
 
   const base = data?.filas || []
   const filas = ordenLocal
@@ -1184,7 +1202,7 @@ function TablaRecibe({ pais }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'rgba(4,10,30,.6)' }}>
-              {['⠿ Recibe desde (arrastra para ordenar)', 'Precio'].map(h => (
+              {['⠿ Recibe desde (arrastra para ordenar)', 'Precio', 'Margen %'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 600, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -1216,6 +1234,26 @@ function TablaRecibe({ pais }) {
                 <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                   <span style={{ color: '#4ade80', fontWeight: 700 }}>{f.tasa}</span>
                   <span style={{ fontSize: 11, color: '#8aa0cc' }}> {pais?.currency} por 1 {f.currency}</span>
+                </td>
+                {/* El margen se SUMA al precio: un 3% publica ese país un 3%
+                    por encima de lo que dice la fuente. Ya va aplicado en la
+                    columna de al lado y en la imagen. */}
+                <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <input
+                      value={margen[f.name] ?? (f.recargo || '')}
+                      onChange={e => setMargen(m => ({ ...m, [f.name]: e.target.value.replace(/[^\d.,-]/g, '') }))}
+                      onBlur={() => sueltaMargen(f.name, f.recargo || 0)}
+                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                      inputMode="decimal"
+                      placeholder="0"
+                      style={{
+                        width: 64, padding: '5px 8px', borderRadius: 8, fontSize: 12.5,
+                        textAlign: 'right', background: 'rgba(6,13,40,.8)', color: '#eaf2ff',
+                        border: `1px solid ${f.recargo ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.12)'}`,
+                      }} />
+                    <span style={{ fontSize: 12, color: '#8aa0cc' }}>%</span>
+                  </div>
                 </td>
               </tr>
             ))}

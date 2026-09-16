@@ -1973,6 +1973,29 @@ def _tasa_de_ruta(db: Session, desde: Country, hacia: Country) -> Optional[float
     return tasa * (1 - pct / 100)
 
 
+def _clave_recargo(iso2: str, sentido: str = "envia") -> str:
+    from services.imagen_tasas import clave_imagen
+
+    return f"recargo_{clave_imagen(iso2, sentido)}"
+
+
+def recargos(db: Session, iso2: str, sentido: str = "envia") -> dict:
+    """Porcentaje que se le suma al precio de cada país, por cartel.
+
+    Es un margen comercial encima del precio de mercado y se escribe a mano,
+    así que vive en ajustes y no se calcula: un 3% aquí significa que ese país
+    se publica un 3% por encima de lo que dice la fuente.
+    """
+    fila = db.query(Setting).filter(Setting.key == _clave_recargo(iso2, sentido)).first()
+    if not fila or not fila.value:
+        return {}
+    try:
+        datos = json.loads(fila.value)
+        return {k: float(v) for k, v in datos.items()} if isinstance(datos, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
 def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[dict]:
     """Una fila por país del listado, con la tasa de su ruta.
 
@@ -1988,6 +2011,7 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
     from services.order_service import _get_commission
 
     recibe = sentido == "recibe"
+    margenes = recargos(db, pais.iso2 or "", sentido)
     otros = db.query(Country).filter(
         Country.active == True,
         Country.can_send == True if recibe else Country.can_receive == True,
@@ -2013,8 +2037,18 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
                     from_country=otro.name, to_country=pais.name,
                 )
                 valor, texto = None, f"{pct:g}%"
+            elif (otro.currency or "").upper() == "EUR":
+                # El euro se publica a la par a propósito. Su cambio real anda
+                # por 0,87 y el cartel diría eso, que para quien lo lee no es
+                # un precio sino un número raro; la casa lo trabaja 1 a 1.
+                valor, texto = None, "1 a 1"
             else:
                 valor = get_rate(db, "USD", otro.currency)
+
+            # El margen que se le haya puesto a ese país, encima del precio.
+            extra = margenes.get(otro.name)
+            if valor is not None and extra:
+                valor = valor * (1 + extra / 100)
         else:
             valor = _tasa_de_ruta(db, pais, otro)
 
@@ -2023,6 +2057,7 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
             "iso2": otro.iso2 or "",
             "currency": otro.currency,
             "tasa": valor,
+            "recargo": margenes.get(otro.name, 0),
             # Cuando lo que va escrito no es un número, viene ya hecho.
             "texto": texto,
         })
@@ -2074,6 +2109,46 @@ def guardar_orden_paises(
         db.add(Setting(key=CLAVE_ORDEN, value=json.dumps(orden, ensure_ascii=False)))
     db.commit()
     return {"success": True, "data": {"orden": orden}, "message": "Orden guardado"}
+
+
+class RecargoIn(BaseModel):
+    pais: str
+    porcentaje: float
+
+
+@router.put("/commissions/imagen/recargo", response_model=dict)
+def guardar_recargo(
+    data: RecargoIn,
+    from_country: str,
+    sentido: str = "envia",
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Margen que se le suma al precio de un país en ese cartel.
+
+    Cero lo quita en vez de guardar un cero: así la lista solo tiene países
+    con margen de verdad y se ve de un vistazo cuáles llevan.
+    """
+    pais = _pais_del_cartel(db, from_country, sentido)
+    guardados = recargos(db, pais.iso2 or "", sentido)
+
+    pct = round(float(data.porcentaje), 4)
+    if abs(pct) > 100:
+        raise HTTPException(status_code=400, detail="El margen no puede pasar del 100%")
+    if pct:
+        guardados[data.pais] = pct
+    else:
+        guardados.pop(data.pais, None)
+
+    clave = _clave_recargo(pais.iso2 or "", sentido)
+    fila = db.query(Setting).filter(Setting.key == clave).first()
+    texto = json.dumps(guardados, ensure_ascii=False)
+    if fila:
+        fila.value = texto
+    else:
+        db.add(Setting(key=clave, value=texto))
+    db.commit()
+    return {"success": True, "data": guardados, "message": "Margen guardado"}
 
 
 @router.get("/commissions/imagen")
