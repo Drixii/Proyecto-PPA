@@ -410,11 +410,7 @@ function CommissionMatrix({ data, onSaved }) {
       </div>
 
       {soloRecibe ? (
-        <p style={{ margin: '0 0 18px', fontSize: 12, color: '#8aa0cc', lineHeight: 1.7 }}>
-          Aquí solo se ve el cartel de lo que <strong>llega</strong> a {receptor?.name}: una fila
-          por país que le envía, con la tasa de esa ruta. Las comisiones se ponen en la
-          pestaña del país que envía.
-        </p>
+        <TablaRecibe pais={receptor} />
       ) : (<>
       {/* Per-country base commission */}
       <div style={{ background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', borderRadius: 14, padding: '14px 18px', marginBottom: 20 }}>
@@ -1073,6 +1069,62 @@ function KoyweKeysForm() {
 // cotizar al paralelo solo es correcto si la casa TAMBIÉN liquida a esa tasa.
 // Si el dinero se compra al oficial y se promete al paralelo, la diferencia la
 // paga la casa en cada orden.
+// Lo que LLEGA a un país: una fila por país que le envía y a cuánto sale esa
+// ruta. Aquí no se edita nada —la comisión de cada ruta vive en la pestaña del
+// país que envía— así que es solo lectura.
+//
+// Comparte la consulta con ImagenDeTasas: misma clave, así que React Query la
+// pide una vez y la tabla y el cartel enseñan exactamente lo mismo.
+function TablaRecibe({ pais }) {
+  const { data } = useQuery({
+    queryKey: ['imagen-editor', pais?.name, 'recibe'],
+    queryFn: () => api.get('/admin/commissions/imagen/editor', {
+      params: { from_country: pais.name, sentido: 'recibe' },
+    }).then(r => r.data.data),
+    enabled: !!pais?.name,
+  })
+  const filas = data?.filas || []
+
+  return (
+    <>
+      <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#8aa0cc', lineHeight: 1.7 }}>
+        Quién le envía a <strong style={{ color: '#eaf2ff' }}>{pais?.name}</strong> y a qué precio,
+        con la comisión de cada ruta ya descontada. Para cambiar una comisión, entra en la
+        pestaña del país que envía.
+      </p>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: 'rgba(4,10,30,.6)' }}>
+              {['Recibe desde', 'Precio'].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 600, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map(f => (
+              <tr key={f.name} style={{ borderTop: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Bandera iso2={f.iso2} ancho={18} alto={13} />
+                    <span style={{ color: '#eaf2ff', fontWeight: 600 }}>{f.name}</span>
+                    <span style={{ fontSize: 11, color: '#8aa0cc' }}>{f.currency}</span>
+                  </div>
+                </td>
+                <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: '#4ade80', fontWeight: 700 }}>{f.tasa}</span>
+                  <span style={{ fontSize: 11, color: '#8aa0cc' }}> {pais?.currency} por 1 {f.currency}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 // Editor de la imagen de tasas de un país.
 //
 // Se sube una imagen ya terminada —fondo y todas sus letras, hecha en el
@@ -1329,24 +1381,6 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
         genera la versión automática.
       </p>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {[
-          { clave: 'pais', texto: 'Nombre del país', ayuda: 'ESTADOS UNIDOS' },
-          { clave: 'abrev', texto: 'Abreviado', ayuda: 'EEUU' },
-          { clave: 'divisa', texto: 'Divisa', ayuda: 'USD, con el país debajo en pequeño' },
-        ].map(({ clave, texto, ayuda }) => (
-          <button key={clave} onClick={() => cambiaEtiqueta(clave)} title={ayuda}
-            style={{
-              padding: '7px 14px', borderRadius: 999, fontSize: 12.5, fontWeight: 700,
-              cursor: 'pointer', border: 'none',
-              background: etiqueta === clave ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.06)',
-              color: etiqueta === clave ? '#eaf2ff' : '#8aa0cc',
-              outline: etiqueta === clave ? '1px solid rgba(56,189,248,.4)' : 'none',
-            }}>
-            {texto}
-          </button>
-        ))}
-      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <input
@@ -1482,7 +1516,28 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
                 </span>
               </label>
             ))}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 8 }}>
+              <span style={{ width: 42, fontSize: 11, fontWeight: 700, color: '#8aa0cc', paddingTop: 7 }}>Texto</span>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', flex: 1 }}>
+                {[
+                  { clave: 'pais', texto: 'Nombre del país', ayuda: 'ESTADOS UNIDOS' },
+                  { clave: 'abrev', texto: 'Abreviado', ayuda: 'EEUU' },
+                  { clave: 'divisa', texto: 'Divisa', ayuda: 'USD, con el país debajo en pequeño' },
+                ].map(({ clave, texto, ayuda }) => (
+                  <button key={clave} onClick={() => cambiaEtiqueta(clave)} title={ayuda}
+                    style={{
+                      padding: '5px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 700,
+                      cursor: 'pointer', border: 'none',
+                      background: etiqueta === clave ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.06)',
+                      color: etiqueta === clave ? '#eaf2ff' : '#8aa0cc',
+                      outline: etiqueta === clave ? '1px solid rgba(56,189,248,.4)' : 'none',
+                    }}>
+                    {texto}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 8 }}>
               <span style={{ width: 42, fontSize: 11, fontWeight: 700, color: '#8aa0cc' }}>Negrita</span>
               <button
                 onClick={cambiaNegrita}
