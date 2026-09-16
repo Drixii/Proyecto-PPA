@@ -309,7 +309,7 @@ export default function AdminUsers() {
   })
 
   const inviteMutation = useMutation({
-    mutationFn: ({ email, trusted }) => api.post('/admin/invite-codes', { email, trusted }),
+    mutationFn: ({ trusted }) => api.post('/admin/invite-codes', { trusted }),
     onSuccess: (res) => {
       setInviteResult(res.data.data)
       qc.invalidateQueries({ queryKey: ['admin-users', 'client'] })
@@ -476,7 +476,6 @@ export default function AdminUsers() {
               <button
                 onClick={() => {
                   if (roleTab === 'client') {
-                    setInviteEmail('')
                     setInviteResult(null)
                     setInviteModal(true)
                   } else {
