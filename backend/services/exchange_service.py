@@ -469,8 +469,14 @@ def _upsert_rate(db: Session, from_cur: str, to_cur: str, rate: float, auto: boo
         # No sobreescribir si admin lo puso manual y la actualización es automática
         if auto and str(existing.is_manual).lower() == "true":
             return
+        ahora = datetime.now(timezone.utc)
+        # La referencia con la que se compara se renueva una vez al dia: guarda
+        # la tasa que habia justo antes de pisarla.
+        if existing.ref_at is None or (ahora - existing.ref_at).total_seconds() >= 86400:
+            existing.ref_rate = existing.rate
+            existing.ref_at = ahora
         existing.rate = rate
-        existing.updated_at = datetime.now(timezone.utc)
+        existing.updated_at = ahora
     else:
         db.add(ExchangeRate(
             from_currency=from_cur,

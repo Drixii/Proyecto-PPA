@@ -73,6 +73,50 @@ def get_countries(db: Session = Depends(get_db)):
     return {"success": True, "data": data, "message": ""}
 
 
+@router.get("/cinta", response_model=dict)
+def cinta_de_tasas(db: Session = Depends(get_db)):
+    """Las tasas para la cinta de la portada. Pública: no lleva sesión.
+
+    Una entrada por país que recibe: a cuánto está su moneda contra el dólar y
+    cuánto se ha movido en el día. La variación sale de `ref_rate`, que se
+    congela cada 24 h; mientras no haya referencia, la entrada va sin flecha en
+    vez de inventarse un 0,00%.
+    """
+    from services.imagen_tasas import abrevia
+
+    paises = (
+        db.query(Country)
+        .filter(Country.active == True, Country.can_receive == True,
+                Country.currency != None, Country.currency != "USD")
+        .order_by(Country.name)
+        .all()
+    )
+
+    filas = []
+    for pais in paises:
+        fila = db.query(ExchangeRate).filter(
+            ExchangeRate.from_currency == "USD",
+            ExchangeRate.to_currency == pais.currency,
+        ).first()
+        if not fila or not fila.rate:
+            continue
+
+        variacion = None
+        if fila.ref_rate:
+            variacion = (fila.rate - fila.ref_rate) / fila.ref_rate * 100
+
+        filas.append({
+            "par": f"USD a {abrevia(pais.name).upper()}",
+            "country": pais.name,
+            "currency": pais.currency,
+            "iso2": pais.iso2 or "",
+            "rate": fila.rate,
+            "variacion": variacion,
+        })
+
+    return {"success": True, "data": filas, "message": ""}
+
+
 @router.get("", response_model=dict)
 def get_all_rates(db: Session = Depends(get_db)):
     rates = db.query(ExchangeRate).all()

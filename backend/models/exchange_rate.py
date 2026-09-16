@@ -18,3 +18,9 @@ class ExchangeRate(Base):
     rate = Column(Float, nullable=False)
     is_manual = Column(String, default=False)  # True para VES y monedas sin API
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Con que tasa se compara para decir si subio o bajo. Se congela y se
+    # renueva cada 24 h, asi que la cinta de la portada enseña la variacion del
+    # dia y no la del ultimo refresco, que son decimales sin interes.
+    ref_rate = Column(Float, nullable=True)
+    ref_at = Column(DateTime(timezone=True), nullable=True)

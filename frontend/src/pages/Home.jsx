@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
+import CintaDeTasas from '../components/CintaDeTasas'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { useCountries } from '../hooks/useCountries'
@@ -326,6 +327,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="hero-calc">
+                <CintaDeTasas />
                 <CalculatorDark onSend={handleSend} />
               </div>
               <div className="mob-scroll-hint" onClick={handleTocaAqui}>

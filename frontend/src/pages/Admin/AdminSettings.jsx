@@ -1576,6 +1576,10 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
   )
 }
 
+// Cada cuánto se vuelven a pedir las tasas de esta pantalla. El contador de
+// la cuenta atrás lee de aquí, así que los dos no se pueden descuadrar.
+const REFRESCO_PARALELO = 60000
+
 function MercadoParalelo() {
   const qc = useQueryClient()
   const [msg, setMsg] = useState('')
@@ -1617,13 +1621,24 @@ function MercadoParalelo() {
   // Una moneda cada vez: cada consulta sale a fuentes externas, y pedirlas
   // todas de golpe tardaría decenas de segundos en abrir la pantalla.
   const moneda = seleccion?.currency
-  const { data: m, isLoading, isFetching } = useQuery({
+  const { data: m, isLoading, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ['tasa-paralelo', moneda],
     queryFn: () => api.get(`/rates/parallel/${moneda}`).then(r => r.data.data),
     enabled: !!moneda,
-    refetchInterval: 60000,
+    refetchInterval: REFRESCO_PARALELO,
     staleTime: 30000,
   })
+
+  // Un tic por segundo solo para la cuenta atrás. No pide nada al
+  // servidor: de eso ya se encarga refetchInterval.
+  const [ahora, setAhora] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setAhora(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const restan = dataUpdatedAt
+    ? Math.max(0, Math.ceil((dataUpdatedAt + REFRESCO_PARALELO - ahora) / 1000))
+    : null
 
   const cambiar = useMutation({
     mutationFn: (body) => api.post('/rates/parallel', body),
@@ -1751,6 +1766,23 @@ function MercadoParalelo() {
               <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.paralelo == null ? '#64748b' : '#eaf2ff' }}>
                 {m.paralelo == null ? 'Sin datos' : num(comoSeLee(m.paralelo), 4)}
               </p>
+            </div>
+
+            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              <p style={etiqueta}>Se actualiza en</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: isFetching ? '#38bdf8' : '#aebfe2', fontVariantNumeric: 'tabular-nums' }}>
+                  {isFetching ? 'ahora…' : `${restan ?? '—'} s`}
+                </span>
+                <button onClick={() => refetch()} disabled={isFetching} title="Actualizar ya"
+                  style={{
+                    padding: '4px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700,
+                    cursor: isFetching ? 'wait' : 'pointer', color: '#8aa0cc',
+                    background: 'transparent', border: '1px solid rgba(255,255,255,.12)',
+                  }}>
+                  ↻
+                </button>
+              </div>
             </div>
           </div>
 
