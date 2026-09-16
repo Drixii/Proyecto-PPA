@@ -191,6 +191,13 @@ export default function Home() {
         .nav-inner{max-width:1200px;margin:0 auto;padding:0 24px;height:70px;display:flex;align-items:center;justify-content:space-between;}
         .nav-text-link{padding:9px 14px;font-size:14px;font-weight:500;color:#b9c8ec;text-decoration:none;border-radius:10px;}
         .hero-text{flex:1 1 340px;min-width:0;}
+        /* Entrada del hero: cada pieza aparece un poco despues que la anterior,
+           con el retardo en --d. Nace en opacity:0, asi que si el navegador no
+           anima —o el usuario pidio menos movimiento— hay que devolverla a la
+           vista a mano; de eso se encarga la regla de prefers-reduced-motion. */
+        @keyframes heroEntra{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+        .hero-in{opacity:0;animation:heroEntra .72s cubic-bezier(.16,1,.3,1) both;animation-delay:var(--d,0s);}
+        @media (prefers-reduced-motion: reduce){.hero-in{opacity:1;animation:none;}}
         .hero-calc{flex:0 1 420px;min-width:0;animation:floaty 7s ease-in-out infinite;}
         .hero-buttons{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:36px;}
         .stats-row{display:flex;flex-wrap:wrap;gap:28px;}
@@ -292,19 +299,19 @@ export default function Home() {
           <div id="hero-content" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', alignItems: 'center' }}>
             <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 48 }}>
               <div className="hero-text">
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 14px', borderRadius: 999, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.14)', marginBottom: 26 }}>
+                <div className="hero-in" style={{ '--d': '.05s', display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 14px', borderRadius: 999, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.14)', marginBottom: 26 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38e1ff', animation: 'pulseDot 2s infinite' }} />
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: '#bfe4ff' }}>Tasas en vivo · +50 países · 24/7</span>
                 </div>
-                <h1 style={{ margin: '0 0 20px', fontSize: 'clamp(40px,5.4vw,68px)', lineHeight: 1.02, fontWeight: 700, letterSpacing: '-.025em', color: '#fff' }}>
+                <h1 className="hero-in" style={{ '--d': '.18s', margin: '0 0 20px', fontSize: 'clamp(40px,5.4vw,68px)', lineHeight: 1.02, fontWeight: 700, letterSpacing: '-.025em', color: '#fff' }}>
                   Bienvenido a la<br />
                   <span style={{ background: 'linear-gradient(120deg,#38bdf8 0%,#7dd3fc 40%,#818cf8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 20px rgba(56,189,248,.55))' }}>Evolución</span><br />
                   financiera
                 </h1>
-                <p className="hero-hide-mobile" style={{ margin: '0 0 32px', fontSize: 18, lineHeight: 1.65, color: '#aebfe2', maxWidth: 460 }}>
+                <p className="hero-hide-mobile hero-in" style={{ '--d': '.31s', margin: '0 0 32px', fontSize: 18, lineHeight: 1.65, color: '#aebfe2', maxWidth: 460 }}>
                   Transferencias internacionales en minutos con tasas en tiempo real y cero comisiones ocultas.
                 </p>
-                <div className="hero-buttons">
+                <div className="hero-buttons hero-in" style={{ '--d': '.42s' }}>
                   {user ? (
                     <button onClick={() => navigate('/new-transfer')} style={{ padding: '16px 28px', fontSize: 16, fontWeight: 600, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8)', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 14px 38px rgba(56,189,248,.45)' }}>Enviar ahora →</button>
                   ) : (
@@ -316,7 +323,7 @@ export default function Home() {
                 </div>
                 <div className="stats-row hero-hide-mobile">
                   {[['2 min', 'tiempo promedio'], ['+50', 'países conectados'], ['0%', 'comisiones ocultas']].map(([val, label], i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                    <div key={i} className="hero-in" style={{ '--d': `${.54 + i * .09}s`, display: 'flex', alignItems: 'center', gap: 20 }}>
                       {i > 0 && <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,.14)' }} />}
                       <div>
                         <p style={{ margin: 0, fontFamily: "'JetBrains Mono',monospace", fontSize: 26, fontWeight: 700, color: '#fff' }}>{val}</p>
@@ -326,9 +333,11 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+              {/* La entrada va en envoltorios, no en .hero-calc: ese ya tiene su
+                  propia animación de flotado y una segunda la pisaría. */}
               <div className="hero-calc">
-                <CintaDeTasas />
-                <CalculatorDark onSend={handleSend} />
+                <div className="hero-in" style={{ '--d': '.62s' }}><CintaDeTasas /></div>
+                <div className="hero-in" style={{ '--d': '.74s' }}><CalculatorDark onSend={handleSend} /></div>
               </div>
               <div className="mob-scroll-hint" onClick={handleTocaAqui}>
                 <span style={{ fontSize: 11, color: 'rgba(191,228,255,0.8)', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>TOCA AQUÍ para más información</span>
