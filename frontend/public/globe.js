@@ -20,6 +20,12 @@
     { iso:'es', name:'España',    lat:40.4,  lon:-3.7   }
   ];
 
+  // La bandera del globo y la fila que manda el servidor no siempre llevan el
+  // mismo código: en la tabla de países el euro está dado de alta como EURO
+  // (eu), no como España, así que sin esto la bandera española se quedaba sin
+  // badge.
+  var ALIAS={ es:'eu' };
+
   // Precio de cada moneda contra el dólar y cuánto se movió hoy. Si la
   // petición falla el globo sigue igual, solo sin los badges.
   function cargarPrecios(){
@@ -27,7 +33,7 @@
       var porIso={};
       (j.data||[]).forEach(function(f){ if(f.iso2) porIso[f.iso2.toLowerCase()]=f; });
       countries.forEach(function(c){
-        var f=porIso[c.iso];
+        var f=porIso[ALIAS[c.iso]||c.iso];
         if(f){ c.precio=f.rate; c.variacion=f.variacion; }
       });
     }).catch(function(){});
@@ -43,10 +49,15 @@
   // Badge bajo la bandera: el precio y la flecha del día. `fs` es el cuerpo de
   // letra, que en la esfera va más pequeño que en la cuadrícula.
   function badgePrecio(c,px,py,alpha,fs){
-    var txt=precioCorto(c.precio);
-    if(txt==null||alpha<0.05)return;
+    if(alpha<0.05)return;
+    // El dólar es la base de todas las tasas: "USD contra USD" es 1 y no dice
+    // nada, así que el servidor no lo manda. En vez de dejar a EE.UU. sin
+    // badge, ahí se dice justo eso.
+    var base=c.iso==='us';
+    var txt=base?'USD base':precioCorto(c.precio);
+    if(txt==null)return;
     var sube=(c.variacion||0)>=0;
-    var pct=c.variacion==null?'':(sube?'▲ ':'▼ ')+Math.abs(c.variacion).toFixed(2)+'%';
+    var pct=(base||c.variacion==null)?'':(sube?'▲ ':'▼ ')+Math.abs(c.variacion).toFixed(2)+'%';
 
     ctx.save();
     ctx.globalAlpha=alpha;
