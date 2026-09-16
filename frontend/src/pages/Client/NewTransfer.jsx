@@ -18,7 +18,7 @@ const INTEGER_CURRENCIES = ['CLP', 'COP', 'VES', 'ARS', 'PYG']
 
 const COUNTRY_PHONE_PREFIX = {
   'Colombia': '+57 ', 'Chile': '+56 ', 'Estados Unidos': '+1 ', 'México': '+52 ',
-  'Brasil': '+55 ', 'España': '+34 ', 'Perú': '+51 ', 'Argentina': '+54 ',
+  'Brasil': '+55 ', 'España': '+34 ', 'EURO': '+34 ', 'Perú': '+51 ', 'Argentina': '+54 ',
   'Canadá': '+1 ', 'Venezuela': '+58 ',
 }
 
@@ -29,6 +29,7 @@ const COUNTRY_ID_TYPES = {
   'Brasil': ['CPF', 'CNPJ', 'Pasaporte'],
   'México': ['CURP', 'INE', 'RFC', 'Pasaporte'],
   'España': ['DNI', 'NIE', 'Pasaporte'],
+  'EURO': ['DNI', 'NIE', 'Pasaporte'],
   'Argentina': ['DNI', 'CUIL/CUIT', 'Pasaporte'],
   'Estados Unidos': ['SSN', 'Pasaporte', 'Otro'],
   'Canadá': ['SIN', 'Pasaporte', 'Otro'],
@@ -42,6 +43,7 @@ const COUNTRY_ACCOUNT_HINT = {
   'Brasil': 'Conta Corrente / Poupança + Agência',
   'México': 'CLABE (18 dígitos)',
   'España': 'IBAN (ES + 22 dígitos)',
+  'EURO': 'IBAN',
   'Argentina': 'CBU o CVU (22 dígitos) / Alias',
   'Estados Unidos': 'Account + Routing Number',
   'Canadá': 'Account + Transit Number',
@@ -53,7 +55,7 @@ const COUNTRY_CODE = {
   'Uruguay': 'uy', 'México': 'mx', 'Brasil': 'br', 'Panamá': 'pa',
   'Costa Rica': 'cr', 'Guatemala': 'gt', 'Honduras': 'hn',
   'Nicaragua': 'ni', 'El Salvador': 'sv', 'Cuba': 'cu',
-  'República Dominicana': 'do', 'Estados Unidos': 'us', 'España': 'es',
+  'República Dominicana': 'do', 'Estados Unidos': 'us', 'España': 'es', 'EURO': 'eu',
   'Peru': 'pe',
 }
 

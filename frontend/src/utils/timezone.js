@@ -17,6 +17,7 @@ export const COUNTRY_TZ = {
   'Brazil': 'America/Sao_Paulo',
   'Cuba': 'America/Havana',
   'España': 'Europe/Madrid',
+  'EURO': 'Europe/Madrid',
   'Estados Unidos': 'America/New_York',
   'Costa Rica': 'America/Costa_Rica',
   'Guatemala': 'America/Guatemala',

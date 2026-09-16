@@ -28,7 +28,7 @@ COUNTRIES_CURRENCIES = {
     "Perú": {"currency": "PEN", "flag": "🇵🇪"},
     "Brasil": {"currency": "BRL", "flag": "🇧🇷"},
     "México": {"currency": "MXN", "flag": "🇲🇽"},
-    "España": {"currency": "EUR", "flag": "🇪🇸"},
+    "EURO": {"currency": "EUR", "flag": "🇪🇺"},
     "Bolivia": {"currency": "BOB", "flag": "🇧🇴"},
     "Paraguay": {"currency": "PYG", "flag": "🇵🇾"},
     "Uruguay": {"currency": "UYU", "flag": "🇺🇾"},

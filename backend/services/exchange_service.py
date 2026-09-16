@@ -55,21 +55,34 @@ async def _binance_p2p(fiat: str) -> float | None:
     se descartan las que no llegan a VOLUMEN_MINIMO_USDT.
     """
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
-    payload = {
-        "asset": "USDT",
-        "fiat": fiat,
-        "tradeType": "SELL",
-        "page": 1,
-        "rows": 10,
-        "payTypes": [],
-        "merchantCheck": False,
-        "publisherType": None,
-    }
+
+    def cuerpo(solo_comercios: bool) -> dict:
+        return {
+            "asset": "USDT",
+            "fiat": fiat,
+            "tradeType": "SELL",
+            "page": 1,
+            "rows": 10,
+            "payTypes": [],
+            "merchantCheck": False,
+            # Comercios verificados, que es lo que la app muestra por defecto.
+            # Sin este filtro salen anuncios de particulares que no aceptan una
+            # operacion de tamano normal: en COP daban 3.091 frente a los 3.080
+            # que se ven en el telefono, y esa diferencia se prometia al cliente.
+            "publisherType": "merchant" if solo_comercios else None,
+        }
+
     headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
     try:
         async with httpx.AsyncClient(timeout=12) as client:
-            r = await client.post(url, json=payload, headers=headers)
-        if r.status_code != 200:
+            r = await client.post(url, json=cuerpo(True), headers=headers)
+            datos = (r.json().get("data") or []) if r.status_code == 200 else []
+            # Mercados finos donde no hay comercios: antes que quedarse sin
+            # tasa, se miran todos los anuncios.
+            if len(datos) < 3:
+                r = await client.post(url, json=cuerpo(False), headers=headers)
+                datos = (r.json().get("data") or []) if r.status_code == 200 else []
+        if not datos:
             return None
 
         # Se descartan los anuncios sin volumen. Los primeros de la lista suelen
@@ -78,7 +91,7 @@ async def _binance_p2p(fiat: str) -> float | None:
         # eso eran ~3.089 frente a ~3.085 reales, siempre a favor del cliente y
         # en contra de la casa.
         grandes, todos = [], []
-        for ad in (r.json().get("data") or []):
+        for ad in datos:
             try:
                 precio = float(ad["adv"]["price"])
                 disponible = float(ad["adv"].get("tradableQuantity") or 0)

@@ -81,8 +81,8 @@ PAISES = {
         ],
     },
     "EUR": {
-        "pais": "Espana",
-        "bandera": "es",
+        "pais": "EURO",
+        "bandera": "eu",
         "campos": [
             _campo("banco", "Banco"),
             _TITULAR,

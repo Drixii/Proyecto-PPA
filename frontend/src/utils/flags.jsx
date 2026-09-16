@@ -7,7 +7,7 @@ export const COUNTRY_CODE = {
   'Brasil': 'br', 'Brazil': 'br', 'Panamá': 'pa', 'Panama': 'pa',
   'Costa Rica': 'cr', 'Guatemala': 'gt', 'Honduras': 'hn',
   'Nicaragua': 'ni', 'El Salvador': 'sv', 'Cuba': 'cu',
-  'República Dominicana': 'do', 'Estados Unidos': 'us', 'España': 'es',
+  'República Dominicana': 'do', 'Estados Unidos': 'us', 'España': 'es', 'EURO': 'eu',
   // Faltaban: están en la tabla de países y se quedaban sin bandera en las
   // pantallas que solo tienen el nombre y no el iso2.
   'Canadá': 'ca', 'Canada': 'ca', 'China': 'cn', 'Japón': 'jp', 'Japon': 'jp',

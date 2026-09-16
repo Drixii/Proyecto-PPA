@@ -15,7 +15,7 @@ DEFAULT_COUNTRIES = [
     ("Chile",                "CLP", "cl", True,  True),
     ("Colombia",             "COP", "co", True,  True),
     ("Estados Unidos",       "USD", "us", True,  True),
-    ("España",               "EUR", "es", True,  True),
+    ("EURO",                 "EUR", "eu", True,  True),
     ("Perú",                 "PEN", "pe", True,  True),
     ("Brasil",               "BRL", "br", True,  True),
     ("México",               "MXN", "mx", True,  True),

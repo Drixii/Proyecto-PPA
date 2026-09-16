@@ -1050,6 +1050,10 @@ function MercadoParalelo() {
   const num = (v, d = 2) =>
     v == null ? '—' : Number(v).toLocaleString('es-CL', { maximumFractionDigits: d })
 
+  // Invierte las monedas que valen mas que el dolar, para leerlas como se
+  // consultan: el euro se mira como 1,15 dolares, no como 0,87 euros.
+  const comoSeLee = (v) => (v == null ? null : (m?.oficial && m.oficial < 1 ? 1 / v : v))
+
   const NOMBRE_FUENTE = {
     binance_p2p: 'Binance P2P', yadio: 'Yadio', dolarapi: 'DolarAPI', dolarapi_cripto: 'DolarAPI cripto',
   }
@@ -1123,7 +1127,14 @@ function MercadoParalelo() {
       {m && m.moneda === moneda && (
         <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(4,10,30,.5)', border: '1px solid rgba(255,255,255,.07)', opacity: isFetching ? 0.7 : 1, transition: 'opacity .2s' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-            <strong style={{ fontSize: 13, color: '#eaf2ff' }}>1 USD en {m.moneda}</strong>
+            {/* Las monedas mas fuertes que el dolar se leen al reves: "1 USD =
+                0,87 EUR" no le dice nada a nadie, y en Google se ve 1,15. Se
+                invierte para mostrarlo como se consulta de verdad. */}
+            <strong style={{ fontSize: 13, color: '#eaf2ff' }}>
+              {(m.oficial && m.oficial < 1)
+                ? `1 ${m.moneda} en USD`
+                : `1 USD en ${m.moneda}`}
+            </strong>
             {m.configurable && (
               <span style={{
                 fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
@@ -1143,12 +1154,12 @@ function MercadoParalelo() {
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 10 }}>
             <div>
               <p style={etiqueta}>Oficial</p>
-              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: '#8aa0cc' }}>{num(m.oficial)}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: '#8aa0cc' }}>{num(comoSeLee(m.oficial), 4)}</p>
             </div>
             <div>
               <p style={etiqueta}>Paralelo</p>
               <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.paralelo == null ? '#64748b' : '#eaf2ff' }}>
-                {m.paralelo == null ? 'Sin datos' : num(m.paralelo)}
+                {m.paralelo == null ? 'Sin datos' : num(comoSeLee(m.paralelo), 4)}
               </p>
             </div>
           </div>
@@ -1156,7 +1167,7 @@ function MercadoParalelo() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {(m.fuentes || []).map(f => (
               <span key={f.nombre} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 8, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.07)', color: f.creible ? '#aebfe2' : '#64748b' }}>
-                {NOMBRE_FUENTE[f.nombre] || f.nombre}: {f.valor == null ? 'sin respuesta' : num(f.valor)}
+                {NOMBRE_FUENTE[f.nombre] || f.nombre}: {f.valor == null ? 'sin respuesta' : num(comoSeLee(f.valor), 4)}
                 {f.valor != null && !f.creible && ' (descartada)'}
               </span>
             ))}
