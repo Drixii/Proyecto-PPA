@@ -392,7 +392,7 @@ def _pie(d: ImageDraw.ImageDraw) -> int:
 
 def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
                   izq: int, arriba: int, der: int, abajo: int,
-                  letra: float = 1.0) -> None:
+                  letra: float = 1.0, negrita: bool = True) -> None:
     """Pinta la tabla dentro del rectangulo dado.
 
     Va aparte porque las filas son lo unico que no cambia: se dibujan igual en
@@ -401,7 +401,11 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
 
     `letra` agranda o encoge el texto SIN tocar la pastilla: el alto de la fila
     y el hueco alrededor siguen igual, solo cambia el cuerpo de la fuente.
+
+    `negrita` elige el grosor. Sin ella no se pasa a fina del todo: se baja un
+    par de pesos, que es lo que se lee bien a este tamano.
     """
+    peso_pais, peso_tasa = ("bold", "extra") if negrita else ("medium", "semi")
     # El rectangulo manda, asi que las filas se reparten su alto. Con muchos
     # destinos salen mas juntas, pero entran todas: preferible a cortar la
     # lista o a que la imagen cambie de tamano.
@@ -429,14 +433,14 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
         borde_tasa = der - int(alto_fila * 0.45)
 
         texto_tasa = formatea_tasa(fila.get("tasa"))
-        f_tasa = _encaja("extra", texto_tasa,
+        f_tasa = _encaja(peso_tasa, texto_tasa,
                          max(int(alto_fila * 0.42 * letra), 10 * ESCALA),
                          borde_tasa - x_nombre)
         d.text((borde_tasa, y + alto_fila // 2), texto_tasa,
                font=f_tasa, fill=TEXTO_PAIS, anchor="rm")
 
         hueco = borde_tasa - _ancho(texto_tasa, f_tasa) - int(10 * ESCALA) - x_nombre
-        f_nombre = _encaja("bold", fila["name"].upper(),
+        f_nombre = _encaja(peso_pais, fila["name"].upper(),
                            max(int(alto_fila * 0.33 * letra), 9 * ESCALA), hueco)
         d.text((x_nombre, y + alto_fila // 2), fila["name"].upper(),
                font=f_nombre, fill=TEXTO_PAIS, anchor="lm")
@@ -451,7 +455,9 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
 # El ancho no llega a los bordes a proposito: a lo ancho del lienzo entero
 # quedaba un vacio enorme entre el nombre del pais y su tasa. Con 340 el
 # nombre y el numero quedan cerca, como en el arte de referencia.
-POSICION_POR_DEFECTO = {"x": 110, "y": 215, "ancho": 340, "alto": 550, "letra": 100}
+POSICION_POR_DEFECTO = {
+    "x": 110, "y": 215, "ancho": 340, "alto": 550, "letra": 100, "negrita": True,
+}
 
 
 def ruta_fondo(iso2: str) -> str | None:
@@ -508,7 +514,8 @@ def generar(origen: dict, filas: list[dict], posicion: dict | None = None) -> by
                       izq, arriba,
                       izq + int(p["ancho"]) * ESCALA,
                       arriba + int(p["alto"]) * ESCALA,
-                      letra=int(p.get("letra") or 100) / 100)
+                      letra=int(p.get("letra") or 100) / 100,
+                      negrita=p.get("negrita", True) is not False)
         return _a_tamano_final(img)
 
     img = _lienzo_de_fondo(origen).convert("RGB")

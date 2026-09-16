@@ -1097,7 +1097,7 @@ function ImagenDeTasas({ origen }) {
 
   const lienzo = editor?.lienzo || { ancho: 560, alto: 827 }
   const filas = editor?.filas || []
-  const posicion = pos || editor?.posicion || { x: 110, y: 215, ancho: 340, alto: 550, letra: 100 }
+  const posicion = pos || editor?.posicion || { x: 110, y: 215, ancho: 340, alto: 550, letra: 100, negrita: true }
 
   // La posición vuelve a mandarla el servidor al cambiar de país; el estado
   // local solo existe mientras se arrastra.
@@ -1253,6 +1253,13 @@ function ImagenDeTasas({ origen }) {
   const { altoFila, desde } = reparteFilas(filas.length, posicion.alto)
   const escalaVista = anchoVista / lienzo.ancho
   const factorLetra = (posicion.letra || 100) / 100
+  const negrita = posicion.negrita !== false
+
+  const cambiaNegrita = () => {
+    const siguiente = { ...posicion, negrita: !negrita }
+    setPos(siguiente)
+    guardarPosicion(siguiente)
+  }
   const botonBase = {
     padding: '9px 16px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
     cursor: 'pointer', border: '1px solid rgba(255,255,255,.12)',
@@ -1336,7 +1343,7 @@ function ImagenDeTasas({ origen }) {
                   background: '#fff', borderRadius: 999,
                   display: 'flex', alignItems: 'center', gap: '3%',
                   padding: '0 2.5%', boxSizing: 'border-box',
-                  color: '#0a1e58', fontWeight: 800, overflow: 'hidden',
+                  color: '#0a1e58', fontWeight: negrita ? 800 : 500, overflow: 'hidden',
                 }}>
                   {f.iso2 && (
                     <img src={`https://flagcdn.com/w80/${f.iso2.toLowerCase()}.png`} alt=""
@@ -1377,6 +1384,20 @@ function ImagenDeTasas({ origen }) {
                 </span>
               </label>
             ))}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 2 }}>
+              <span style={{ width: 42, fontSize: 11, fontWeight: 700, color: '#8aa0cc' }}>Negrita</span>
+              <button
+                onClick={cambiaNegrita}
+                title={negrita ? 'Quitar negrita' : 'Poner negrita'}
+                style={{
+                  width: 42, height: 24, borderRadius: 999, border: 'none', padding: 3,
+                  cursor: 'pointer', flexShrink: 0,
+                  background: negrita ? 'rgba(74,222,128,.28)' : 'rgba(255,255,255,.12)',
+                  display: 'flex', justifyContent: negrita ? 'flex-end' : 'flex-start',
+                }}>
+                <span style={{ width: 18, height: 18, borderRadius: 999, background: negrita ? '#4ade80' : '#64748b' }} />
+              </button>
+            </label>
           </div>
           <p style={{ margin: '6px 0 0', fontSize: 11, color: '#64748b' }}>
             Arrastra el bloque para moverlo. Se guarda solo al soltar. — x {posicion.x}, y {posicion.y}

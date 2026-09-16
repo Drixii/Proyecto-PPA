@@ -2095,6 +2095,7 @@ class PosicionTablaIn(BaseModel):
     ancho: Optional[int] = None
     alto: Optional[int] = None
     letra: Optional[int] = None
+    negrita: Optional[bool] = None
 
 
 @router.put("/commissions/imagen/tabla", response_model=dict)
@@ -2124,6 +2125,9 @@ def mover_tabla(
         # Tamaño de letra en %. El dibujo no deja que desborde la pastilla,
         # así que pasarse solo significa que deja de crecer.
         "letra": max(50, min(letra, 220)),
+        # `or` no vale aquí: apagar la negrita manda False y se perdería.
+        "negrita": (data.negrita if data.negrita is not None
+                    else actual.get("negrita", True)),
     }
 
     clave = _clave_posicion(origen.iso2)
