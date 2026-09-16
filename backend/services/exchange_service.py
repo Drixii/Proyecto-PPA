@@ -39,15 +39,17 @@ SUPPORTED_CURRENCIES = {
 VOLUMEN_MINIMO_USDT = 500
 
 
-async def _binance_p2p(fiat: str) -> float | None:
-    """Promedio de las 5 mejores ofertas SELL con volumen real.
+async def _binance_p2p(fiat: str, lado: str = "SELL") -> float | None:
+    """Promedio de las 5 mejores ofertas con volumen real.
 
-    SELL y no BUY: es el lado que hace la casa. Para entregarle bolívares al
-    destinatario hay que VENDER el USDT, así que ese es el precio al que se
-    convierte de verdad. Con BUY se cotizaba el lado contrario —lo que cuesta
-    comprar el USDT— y se prometía algo más de moneda local por dólar de la que
-    se iba a recibir al cambiarlo. La diferencia entre ambos lados es pequeña
-    (0,05% en VES el 2026-09-15), pero va siempre en contra de la casa.
+    `lado` es el de la casa, no el del cliente: SELL es vender USDT para
+    entregar moneda local —lo que se hace en cada envio— y BUY es comprarlo.
+    Se cotiza con SELL: para entregarle bolivares al destinatario hay que
+    VENDER el USDT, asi que ese es el precio al que se convierte de verdad.
+    Cotizando con BUY se prometia algo mas de moneda local por dolar de la que
+    se iba a recibir al cambiarlo. La diferencia entre ambos lados es pequena
+    (0,05% en VES el 2026-09-15), pero va siempre en contra de la casa. BUY se
+    pide solo para ensenar los dos precios en Ajustes, como en la app.
 
     Endpoint no oficial pero es donde está el volumen. Se promedian cinco y no
     se toma la primera porque la mejor oferta suele ser de monto mínimo y no
@@ -60,7 +62,7 @@ async def _binance_p2p(fiat: str) -> float | None:
         return {
             "asset": "USDT",
             "fiat": fiat,
-            "tradeType": "SELL",
+            "tradeType": lado,
             "page": 1,
             "rows": 10,
             "payTypes": [],
@@ -271,9 +273,18 @@ async def comparar_fuentes(moneda: str) -> dict:
         pass
 
     usable = next((f["valor"] for f in fuentes if f["creible"]), None)
+    # Los dos lados de Binance, para ensenarlos junto a las fuentes propias
+    # de esta moneda. Aqui no deciden nada: la tasa sigue saliendo de sus
+    # fuentes configuradas.
+    venta, compra = await asyncio.gather(
+        _binance_p2p(moneda, "SELL"),
+        _binance_p2p(moneda, "BUY"),
+    )
     return {
         "moneda": moneda,
         "soportada": True,
+        "compra": compra,
+        "venta": venta,
         "oficial": oficial,
         "paralelo": usable,
         "diferencia_pct": ((usable / oficial - 1) * 100) if (usable and oficial) else None,
@@ -298,7 +309,13 @@ async def comparar_moneda(moneda: str) -> dict:
         datos["configurable"] = True
         return datos
 
-    valor = await _binance_p2p(moneda)
+    # Los dos lados a la vez: uno detras de otro son dos viajes a Binance
+    # cada vez que se abre el desplegable de Ajustes.
+    venta, compra = await asyncio.gather(
+        _binance_p2p(moneda, "SELL"),
+        _binance_p2p(moneda, "BUY"),
+    )
+    valor = venta
     oficial = None
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -318,6 +335,10 @@ async def comparar_moneda(moneda: str) -> dict:
         "configurable": False,
         "oficial": oficial,
         "paralelo": valor if creible else None,
+        # Los dos precios de Binance, que es lo que se ensena en Ajustes.
+        # La casa cobra al de venta: es el lado que hace de verdad.
+        "compra": compra,
+        "venta": venta,
         "diferencia_pct": ((valor / oficial - 1) * 100) if (creible and oficial) else None,
         "fuentes": [{"nombre": "binance_p2p", "valor": valor, "creible": creible}],
     }

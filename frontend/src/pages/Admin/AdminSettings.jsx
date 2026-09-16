@@ -1757,15 +1757,20 @@ function MercadoParalelo() {
           </div>
 
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 10 }}>
+            {/* Los dos lados de Binance, como se ven en la app. La casa cobra
+                al de venta: es el que hace de verdad en cada envío. */}
             <div>
-              <p style={etiqueta}>Oficial</p>
-              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: '#8aa0cc' }}>{num(comoSeLee(m.oficial), 4)}</p>
+              <p style={etiqueta}>Compra (Binance)</p>
+              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.compra == null ? '#64748b' : '#8aa0cc' }}>
+                {m.compra == null ? 'Sin datos' : num(comoSeLee(m.compra), 4)}
+              </p>
             </div>
             <div>
-              <p style={etiqueta}>Paralelo</p>
-              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.paralelo == null ? '#64748b' : '#eaf2ff' }}>
-                {m.paralelo == null ? 'Sin datos' : num(comoSeLee(m.paralelo), 4)}
+              <p style={etiqueta}>Venta (Binance)</p>
+              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.venta == null ? '#64748b' : '#eaf2ff' }}>
+                {m.venta == null ? 'Sin datos' : num(comoSeLee(m.venta), 4)}
               </p>
+              <p style={{ margin: '2px 0 0', fontSize: 10.5, color: '#64748b' }}>la que se cobra</p>
             </div>
 
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
