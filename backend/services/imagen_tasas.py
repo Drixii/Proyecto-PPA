@@ -21,11 +21,6 @@ LOGO = os.path.join(ASSETS, "logo.png")
 REFERENCIA = os.path.join(ASSETS, "referencia.jpg")
 CACHE_FONDOS = os.path.join(ASSETS, "fondos_cache")
 
-# Franja del alto donde va la tabla en el arte de la IA, en tanto por uno. Es
-# la zona que la instruccion le pide dejar limpia: debajo de la cabecera y por
-# encima de la barra del pie.
-ZONA_TABLA = (0.34, 0.895)
-
 # Montserrat va con el logo. Si faltara el fichero se cae a DejaVu, que es lo
 # unico que trae el sistema: fea pero legible, mejor que no generar la imagen.
 DEJAVU = "/usr/share/fonts/truetype/dejavu"
@@ -295,7 +290,11 @@ def _lienzo_de_fondo(origen: dict) -> Image.Image:
             dd.line([(0, y), (ANCHO, y)],
                     fill=tuple(int(a + (b - a) * p) for a, b in zip(AZUL, AZUL_HONDO)))
         return fondo
+    return _velo(fondo)
 
+
+def _velo(fondo: Image.Image) -> Image.Image:
+    """El azul de la marca por encima de la foto, para que se lea lo de arriba."""
     velo = Image.new("RGBA", (ANCHO, ALTO))
     dv = ImageDraw.Draw(velo)
     for y in range(ALTO):
@@ -517,23 +516,13 @@ INSTRUCCION_POR_DEFECTO = (
     "iluminación, estilo corporativo y distribución general.\n\n"
     "El fondo debe mostrar {escena}, con banderas de {pais} integradas "
     "naturalmente en la escena.\n\n"
-    "Incluye solamente estos textos, exactamente como están escritos:\n\n"
-    "“DESDE”\n"
-    "“{PAIS}”\n"
-    "“TASAS DE CAMBIO”\n"
-    "“ACTUALIZADAS HOY”\n"
-    "“SEGURIDAD • CONFIANZA • MEJORES TASAS”\n\n"
-    "No agregues otros textos, monedas, países, tasas, cifras, tablas ni "
-    "información inventada.\n\n"
-    "Deja completamente libre la zona central destinada a la tabla de tasas. "
-    "Mantén esa zona visualmente limpia, con fondo azul de bajo contraste, "
-    "para que posteriormente pueda incorporarse contenido mediante "
-    "programación.\n\n"
-    "Reparto vertical, obligatorio: «DESDE», «{PAIS}», «TASAS DE CAMBIO» y "
-    "«ACTUALIZADAS HOY» van TODOS dentro del 30% superior de la imagen. "
-    "«SEGURIDAD • CONFIANZA • MEJORES TASAS» va dentro del 10% inferior. "
-    "Entre el 32% y el 88% de la altura no puede haber ni una sola letra ni "
-    "ningún elemento gráfico destacado: solo el fondo.\n\n"
+    "NO escribas ningún texto: ni «DESDE», ni el nombre del país, ni «TASAS DE "
+    "CAMBIO», ni logotipos, ni letras de ningún tipo. Tampoco monedas, países, "
+    "tasas, cifras, tablas ni información inventada. Solo la escena. Todos los "
+    "textos y la tabla se añaden después por programación, encima de tu "
+    "imagen; si los dibujas tú, quedan uno encima del otro.\n\n"
+    "Deja el centro de la imagen limpio y de bajo contraste, sin elementos "
+    "llamativos entre el 30% y el 90% de la altura: ahí va la tabla.\n\n"
     "Formato vertical 2:3, preferentemente 1024 × 1536 px. El resultado debe "
     "sentirse como parte de una misma colección gráfica y no como un diseño "
     "completamente diferente."
@@ -608,19 +597,13 @@ def generar_con_ia(
 
     # El arte llega a 1024x1536; se lleva al lienzo de trabajo y se le pinta la
     # tabla encima, en la franja que la instruccion le pidio dejar libre.
+    # El arte llega a 1024x1536 y solo trae la escena. Encima va exactamente lo
+    # mismo que en la version dibujada —cabecera, tabla y pie—, asi que las dos
+    # salen identicas salvo por el fondo, y los numeros son siempre los buenos.
     arte = Image.open(io.BytesIO(crudo)).convert("RGB").resize((ANCHO, ALTO), Image.LANCZOS)
+    arte = _velo(arte)
     d = ImageDraw.Draw(arte)
-
-    arriba = int(ALTO * ZONA_TABLA[0])
-    # El importe tambien lo pone el codigo: a la IA no se le pide ninguna cifra,
-    # y sin esta linea la columna de la derecha no se puede comprobar contra la
-    # calculadora.
-    monto = origen.get("monto")
-    if monto:
-        _escribe(d, (ANCHO // 2, arriba - int(6 * ESCALA)),
-                 f"POR CADA {formatea_monto(monto)} {origen.get('currency', '')}".strip(),
-                 _fuente("bold", int(12 * ESCALA)), TEXTO_TITULO, int(1 * ESCALA),
-                 anchor="md", sombra=True)
-
-    _dibuja_filas(arte, d, filas, arriba, int(ALTO * ZONA_TABLA[1]))
+    arriba = _cabecera(arte, d, origen)
+    abajo = _pie(d) - int(12 * ESCALA)
+    _dibuja_filas(arte, d, filas, arriba, abajo)
     return _a_tamano_final(arte)
