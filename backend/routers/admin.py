@@ -2209,6 +2209,8 @@ def editor_de_imagen(
                     "name": f["name"], "iso2": f["iso2"], "currency": f["currency"],
                     "abrev": abrevia(f["name"]),
                     "tasa": f["texto"] or formatea_tasa(f["tasa"]),
+                    # Para que la casilla del margen enseñe lo que hay guardado.
+                    "recargo": f.get("recargo") or 0,
                 }
                 for f in _filas_de_tasas(db, pais, sentido)
             ],
