@@ -90,6 +90,31 @@ def _encaja(peso: str, texto: str, tam: int, maximo: int, espaciado: int = 0):
     return _fuente(peso, 8)
 
 
+def reparte_filas(cuantas: int, arriba: int, abajo: int, letra: float = 1.0):
+    """Alto de cada pastilla y la `y` de la primera.
+
+    El rectangulo del editor reparte su alto entre las filas, pero `letra` lo
+    multiplica: subir la letra engorda la pastilla, no solo el texto. Cuando la
+    lista ya no cabe en el rectangulo, crece hacia ARRIBA —el borde de abajo se
+    queda quieto— porque debajo suele estar el pie del cartel y ahi no se puede
+    invadir.
+
+    Lo replica el editor en pantalla; si cambia aqui, cambia alli.
+    """
+    n = max(cuantas, 1)
+    base = max(int((abajo - arriba) / n) - ESPACIO, 16 * ESCALA)
+    # Con pocos destinos no tiene sentido estirarlas hasta parecer botones.
+    base = min(base, int(42 * ESCALA))
+    alto_fila = max(int(base * max(letra, 0.5)), 12 * ESCALA)
+
+    total = (alto_fila + ESPACIO) * n - ESPACIO
+    hueco = abajo - arriba
+    if total <= hueco:
+        # Sobra sitio: la lista se centra, que si no queda coja.
+        return alto_fila, arriba + (hueco - total) // 2
+    return alto_fila, max(abajo - total, 0)
+
+
 SOMBRA = (6, 16, 46)
 
 
@@ -406,17 +431,12 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
     par de pesos, que es lo que se lee bien a este tamano.
     """
     peso_pais, peso_tasa = ("bold", "extra") if negrita else ("medium", "semi")
-    # El rectangulo manda, asi que las filas se reparten su alto. Con muchos
-    # destinos salen mas juntas, pero entran todas: preferible a cortar la
-    # lista o a que la imagen cambie de tamano.
-    n = max(len(filas), 1)
-    alto_fila = max(int((abajo - arriba) / n) - ESPACIO, 16 * ESCALA)
-    # Con pocos destinos no tiene sentido estirarlas hasta parecer botones;
-    # entonces sobra sitio y la lista se centra, que si no queda coja.
-    alto_fila = min(alto_fila, int(42 * ESCALA))
-    sobra = (abajo - arriba) - (alto_fila + ESPACIO) * n + ESPACIO
+    alto_fila, y = reparte_filas(len(filas), arriba, abajo, letra)
 
-    y = arriba + max(sobra, 0) // 2
+    # Los huecos de dentro de la pastilla no crecen con la letra, la dividen:
+    # asi el texto se lleva el sitio que antes era aire. Es lo que se pidio,
+    # pastillas mas apretadas a cambio de numeros mas grandes.
+    holgura = max(letra, 1.0)
     for fila in filas:
         d.rounded_rectangle([(izq, y), (der, y + alto_fila)],
                             radius=alto_fila // 2, fill=PILDORA)
@@ -429,19 +449,19 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
         # La tasa manda: se dibuja primero y el nombre usa lo que sobre. Las
         # dos pasan por _encaja, asi que subir la letra nunca desborda la
         # pastilla: cuando ya no cabe, deja de crecer.
-        x_nombre = izq + lado + int(alto_fila * 0.40)
-        borde_tasa = der - int(alto_fila * 0.45)
+        x_nombre = izq + lado + int(alto_fila * 0.34 / holgura)
+        borde_tasa = der - int(alto_fila * 0.34 / holgura)
 
         texto_tasa = formatea_tasa(fila.get("tasa"))
         f_tasa = _encaja(peso_tasa, texto_tasa,
-                         max(int(alto_fila * 0.42 * letra), 10 * ESCALA),
+                         max(int(alto_fila * 0.50), 10 * ESCALA),
                          borde_tasa - x_nombre)
         d.text((borde_tasa, y + alto_fila // 2), texto_tasa,
                font=f_tasa, fill=TEXTO_PAIS, anchor="rm")
 
-        hueco = borde_tasa - _ancho(texto_tasa, f_tasa) - int(10 * ESCALA) - x_nombre
+        hueco = borde_tasa - _ancho(texto_tasa, f_tasa) - int(8 * ESCALA) - x_nombre
         f_nombre = _encaja(peso_pais, fila["name"].upper(),
-                           max(int(alto_fila * 0.33 * letra), 9 * ESCALA), hueco)
+                           max(int(alto_fila * 0.40), 9 * ESCALA), hueco)
         d.text((x_nombre, y + alto_fila // 2), fila["name"].upper(),
                font=f_nombre, fill=TEXTO_PAIS, anchor="lm")
 

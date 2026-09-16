@@ -1065,13 +1065,18 @@ const ESPACIO_FILA = 5
 const ALTO_FILA_MIN = 16
 const ALTO_FILA_MAX = 42
 
-// Reparte las filas dentro del bloque igual que _dibuja_filas en el servidor.
-function reparteFilas(n, alto) {
+// Espejo de reparte_filas en services/imagen_tasas.py. Si cambia allí, cambia
+// aquí: lo que se arrastra dejaría de coincidir con lo que se genera.
+function reparteFilas(n, alto, letra = 1) {
   const cuantas = Math.max(n, 1)
-  let altoFila = Math.max(Math.floor(alto / cuantas) - ESPACIO_FILA, ALTO_FILA_MIN)
-  altoFila = Math.min(altoFila, ALTO_FILA_MAX)
-  const sobra = alto - (altoFila + ESPACIO_FILA) * cuantas + ESPACIO_FILA
-  return { altoFila, desde: Math.max(sobra, 0) / 2 }
+  let base = Math.max(Math.floor(alto / cuantas) - ESPACIO_FILA, ALTO_FILA_MIN)
+  base = Math.min(base, ALTO_FILA_MAX)
+  const altoFila = Math.max(Math.floor(base * Math.max(letra, 0.5)), 6)
+
+  const total = (altoFila + ESPACIO_FILA) * cuantas - ESPACIO_FILA
+  // Si ya no cabe, la lista crece hacia arriba: abajo suele estar el pie.
+  const desde = total <= alto ? (alto - total) / 2 : alto - total
+  return { altoFila, desde, total }
 }
 
 function ImagenDeTasas({ origen }) {
@@ -1083,6 +1088,7 @@ function ImagenDeTasas({ origen }) {
   const [mensaje, setMensaje] = useState('')
   const [pos, setPos] = useState(null)
   const [anchoVista, setAnchoVista] = useState(340)
+  const [encima, setEncima] = useState(false)
   const lienzoRef = useRef(null)
   const arrastreRef = useRef(null)
   const ficheroRef = useRef(null)
@@ -1250,7 +1256,7 @@ function ImagenDeTasas({ origen }) {
     return () => window.removeEventListener('resize', medir)
   }, [editor?.tiene_fondo, fondoUrl])
 
-  const { altoFila, desde } = reparteFilas(filas.length, posicion.alto)
+  const { altoFila, desde } = reparteFilas(filas.length, posicion.alto, (posicion.letra || 100) / 100)
   const escalaVista = anchoVista / lienzo.ancho
   const factorLetra = (posicion.letra || 100) / 100
   const negrita = posicion.negrita !== false
@@ -1259,6 +1265,19 @@ function ImagenDeTasas({ origen }) {
     const siguiente = { ...posicion, negrita: !negrita }
     setPos(siguiente)
     guardarPosicion(siguiente)
+  }
+
+  // Arrastrar y soltar el fichero. dragover hay que cancelarlo o el navegador
+  // abre la imagen en la pestaña y se pierde lo que hubiera en pantalla.
+  const alArrastrarEncima = (e) => { e.preventDefault(); setEncima(true) }
+  const alSalir = (e) => { e.preventDefault(); setEncima(false) }
+  const alSoltarArchivo = (e) => {
+    e.preventDefault()
+    setEncima(false)
+    const archivo = Array.from(e.dataTransfer?.files || [])
+      .find(f => f.type.startsWith('image/'))
+    if (archivo) subirFondo(archivo)
+    else setError('Eso no es una imagen')
   }
   const botonBase = {
     padding: '9px 16px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
@@ -1284,15 +1303,6 @@ function ImagenDeTasas({ origen }) {
           accept="image/*"
           onChange={e => subirFondo(e.target.files?.[0])}
           style={{ display: 'none' }} />
-        <button onClick={() => ficheroRef.current?.click()} disabled={subiendo || !origen}
-          style={{
-            ...botonBase, border: 'none', color: '#fff',
-            background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
-            cursor: subiendo ? 'wait' : 'pointer',
-          }}>
-          {subiendo ? 'Subiendo…' : (editor?.tiene_fondo ? 'Cambiar imagen de fondo' : 'Subir imagen de fondo')}
-        </button>
-
         {editor?.tiene_fondo && (
           <>
             <button onClick={quitarFondo} style={botonBase}>Quitar imagen</button>
@@ -1308,6 +1318,31 @@ function ImagenDeTasas({ origen }) {
           }}>
           {cargando ? 'Generando…' : 'Generar imagen'}
         </button>
+      </div>
+
+      <div
+        onClick={() => !subiendo && ficheroRef.current?.click()}
+        onDragOver={alArrastrarEncima}
+        onDragEnter={alArrastrarEncima}
+        onDragLeave={alSalir}
+        onDrop={alSoltarArchivo}
+        style={{
+          maxWidth: 340, marginBottom: 14, padding: '18px 16px', borderRadius: 14,
+          textAlign: 'center', cursor: subiendo ? 'wait' : 'pointer',
+          border: `1.5px dashed ${encima ? 'rgba(56,189,248,.85)' : 'rgba(255,255,255,.16)'}`,
+          background: encima ? 'rgba(56,189,248,.10)' : 'rgba(6,13,40,.45)',
+          transition: 'background .15s, border-color .15s',
+        }}>
+        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: encima ? '#38bdf8' : '#c3d2ee' }}>
+          {subiendo
+            ? 'Subiendo…'
+            : (encima
+              ? 'Suelta la imagen aquí'
+              : (editor?.tiene_fondo ? 'Cambiar imagen de fondo' : 'Subir imagen de fondo'))}
+        </p>
+        <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>
+          Arrástrala hasta aquí o haz clic para elegirla. JPG, PNG, WEBP o HEIC.
+        </p>
       </div>
 
       {editor?.tiene_fondo && (
@@ -1341,8 +1376,8 @@ function ImagenDeTasas({ origen }) {
                   top: `${((desde + i * (altoFila + ESPACIO_FILA)) / posicion.alto) * 100}%`,
                   height: `${(altoFila / posicion.alto) * 100}%`,
                   background: '#fff', borderRadius: 999,
-                  display: 'flex', alignItems: 'center', gap: '3%',
-                  padding: '0 2.5%', boxSizing: 'border-box',
+                  display: 'flex', alignItems: 'center', gap: `${3 / Math.max(factorLetra, 1)}%`,
+                  padding: `0 ${2.5 / Math.max(factorLetra, 1)}%`, boxSizing: 'border-box',
                   color: '#0a1e58', fontWeight: negrita ? 800 : 500, overflow: 'hidden',
                 }}>
                   {f.iso2 && (
@@ -1353,12 +1388,12 @@ function ImagenDeTasas({ origen }) {
                       }} />
                   )}
                   <span style={{
-                    flex: 1, minWidth: 0, fontSize: Math.max(altoFila * 0.30 * factorLetra * escalaVista, 5),
+                    flex: 1, minWidth: 0, fontSize: Math.max(altoFila * 0.36 * escalaVista, 5),
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
                     {f.name.toUpperCase()}
                   </span>
-                  <span style={{ fontSize: Math.max(altoFila * 0.36 * factorLetra * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
+                  <span style={{ fontSize: Math.max(altoFila * 0.44 * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
                 </div>
               ))}
             </div>
