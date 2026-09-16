@@ -73,6 +73,16 @@ export default function Home() {
   }, [])
 
   const [showHint, setShowHint] = useState(false)
+
+  // La entrada escalonada del hero dura poco mas de un segundo. Cuando
+  // acaba se retira, porque un elemento con animation puesta sigue siendo
+  // bloque contenedor y eso deja sin efecto el backdrop-filter de la
+  // calculadora, que se veia sin su cristal esmerilado.
+  const [heroListo, setHeroListo] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setHeroListo(true), 1800)
+    return () => clearTimeout(t)
+  }, [])
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
 
   const handleInstall = async () => {
@@ -197,6 +207,11 @@ export default function Home() {
            vista a mano; de eso se encarga la regla de prefers-reduced-motion. */
         @keyframes heroEntra{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
         .hero-in{opacity:0;animation:heroEntra .72s cubic-bezier(.16,1,.3,1) both;animation-delay:var(--d,0s);}
+        /* Terminada la entrada se quita la animacion. Mientras esta puesta,
+           aunque sea solo rellenando el ultimo fotograma, el envoltorio hace
+           de bloque contenedor y el backdrop-filter de la calculadora deja de
+           ver lo que hay detras: el cristal esmerilado se veia plano. */
+        .hero-fin .hero-in{animation:none!important;opacity:1;transform:none;}
         @media (prefers-reduced-motion: reduce){.hero-in{opacity:1;animation:none;}}
         .hero-calc{flex:0 1 420px;min-width:0;animation:floaty 7s ease-in-out infinite;}
         .hero-buttons{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:36px;}
@@ -297,7 +312,7 @@ export default function Home() {
 
           {/* Hero — globe.js lo desvanece al hacer scroll */}
           <div id="hero-content" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', alignItems: 'center' }}>
-            <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 48 }}>
+            <div className={heroListo ? 'hero-fin' : undefined} style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 48 }}>
               <div className="hero-text">
                 <div className="hero-in" style={{ '--d': '.05s', display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 14px', borderRadius: 999, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.14)', marginBottom: 26 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38e1ff', animation: 'pulseDot 2s infinite' }} />
