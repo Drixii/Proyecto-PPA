@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 from sqlalchemy.orm import Session
 from models.exchange_rate import ExchangeRate
@@ -338,14 +339,39 @@ async def fetch_and_store_rates(db: Session):
 
     db.commit()
 
+    # Se piden UNA vez por moneda y se reutilizan para todos los cruces. Antes
+    # cada par de monedas paralelas volvia a consultar la fuente: con todas las
+    # monedas en paralelo eran cientos de llamadas por pasada, y el arranque
+    # tardaba mas de un minuto — el despliegue se daba por fallido y revertia.
+    monedas = sorted(al_paralelo)
+    # A la vez y no una tras otra: cada consulta tarda un segundo o dos, y en
+    # serie el arranque del servicio se iba a mas de un minuto.
+    resultados = await asyncio.gather(
+        *(fetch_parallel_rate(m) for m in monedas), return_exceptions=True
+    )
+    paralelas = {}
+    for moneda, res in zip(monedas, resultados):
+        if isinstance(res, Exception):
+            print(f"[exchange] {moneda}: fallo al consultar el paralelo — {res}")
+            continue
+        rate, fuente = res
+        if rate and rate > 0:
+            paralelas[moneda] = (rate, fuente)
+
     for moneda in sorted(al_paralelo):
-        await _guardar_paralelo(db, moneda, rates_usd, al_paralelo)
+        await _guardar_paralelo(db, moneda, rates_usd, al_paralelo, paralelas)
 
     return True
 
 
-async def _guardar_paralelo(db: Session, moneda: str, rates_usd: dict, al_paralelo: set):
-    """Guarda una moneda de mercado paralelo y sus cruces."""
+async def _guardar_paralelo(db: Session, moneda: str, rates_usd: dict, al_paralelo: set,
+                            paralelas: dict | None = None):
+    """Guarda una moneda de mercado paralelo y sus cruces.
+
+    `paralelas` trae {moneda: (tasa, fuente)} ya consultado en esta pasada, para
+    no volver a salir a la red en cada cruce.
+    """
+    paralelas = paralelas or {}
     registro = db.query(ExchangeRate).filter(
         ExchangeRate.from_currency == "USD",
         ExchangeRate.to_currency == moneda,
@@ -354,6 +380,8 @@ async def _guardar_paralelo(db: Session, moneda: str, rates_usd: dict, al_parale
     # Un valor puesto a mano por el admin manda sobre cualquier fuente.
     if registro and str(registro.is_manual).lower() == "true":
         rate, fuente = registro.rate, "manual_override"
+    elif moneda in paralelas:
+        rate, fuente = paralelas[moneda]
     else:
         rate, fuente = await fetch_parallel_rate(moneda)
 
@@ -383,7 +411,9 @@ async def _guardar_paralelo(db: Session, moneda: str, rates_usd: dict, al_parale
         if cur in al_paralelo:
             # Cruce entre dos monedas paralelas (VES↔ARS): se pasa por el
             # dólar de cada una, no por el oficial de ninguna.
-            otra, _ = await fetch_parallel_rate(cur)
+            otra = paralelas.get(cur, (None, None))[0]
+            if not otra:
+                otra, _ = await fetch_parallel_rate(cur)
             if not otra or otra <= 0:
                 continue
             _upsert_rate(db, cur, moneda, rate / otra, auto=True)
