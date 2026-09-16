@@ -1097,7 +1097,7 @@ function ImagenDeTasas({ origen }) {
 
   const lienzo = editor?.lienzo || { ancho: 560, alto: 827 }
   const filas = editor?.filas || []
-  const posicion = pos || editor?.posicion || { x: 24, y: 215, ancho: 512, alto: 550 }
+  const posicion = pos || editor?.posicion || { x: 110, y: 215, ancho: 340, alto: 550 }
 
   // La posición vuelve a mandarla el servidor al cambiar de país; el estado
   // local solo existe mientras se arrastra.
@@ -1355,8 +1355,27 @@ function ImagenDeTasas({ origen }) {
               ))}
             </div>
           </div>
-          <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748b' }}>
-            Arrastra el bloque. Se guarda solo al soltarlo. — x {posicion.x}, y {posicion.y}
+          <div style={{ maxWidth: 340, marginTop: 10 }}>
+            {[
+              { campo: 'ancho', texto: 'Ancho', min: 160, max: lienzo.ancho },
+              { campo: 'alto', texto: 'Alto', min: 100, max: lienzo.alto },
+            ].map(({ campo, texto, min, max }) => (
+              <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
+                <span style={{ width: 42, fontSize: 11, fontWeight: 700, color: '#8aa0cc' }}>{texto}</span>
+                <input
+                  type="range" min={min} max={max} value={posicion[campo]}
+                  onChange={e => setPos({ ...posicion, [campo]: Number(e.target.value) })}
+                  onPointerUp={() => guardarPosicion(posicion)}
+                  onKeyUp={() => guardarPosicion(posicion)}
+                  style={{ flex: 1, accentColor: '#38bdf8' }} />
+                <span style={{ width: 30, fontSize: 11, color: '#64748b', textAlign: 'right' }}>
+                  {posicion[campo]}
+                </span>
+              </label>
+            ))}
+          </div>
+          <p style={{ margin: '6px 0 0', fontSize: 11, color: '#64748b' }}>
+            Arrastra el bloque para moverlo. Se guarda solo al soltar. — x {posicion.x}, y {posicion.y}
           </p>
         </>
       )}

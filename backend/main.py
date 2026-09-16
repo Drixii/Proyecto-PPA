@@ -14,6 +14,9 @@ os.makedirs("uploads/proofs", exist_ok=True)
 os.makedirs("uploads/completions", exist_ok=True)
 os.makedirs("uploads/avatars", exist_ok=True)
 os.makedirs("uploads/rewards", exist_ok=True)
+# Fondos de la imagen de tasas, uno por pais. Van en uploads/ para que un
+# deploy no se los lleve: ahi solo hay ficheros subidos, nada de git.
+os.makedirs("uploads/fondos", exist_ok=True)
 from services.scheduler import start_scheduler, stop_scheduler
 from services.exchange_service import fetch_and_store_rates
 from database import SessionLocal

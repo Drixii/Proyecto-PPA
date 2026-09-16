@@ -435,9 +435,13 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
 
 
 # Donde va el bloque de la tabla sobre una imagen subida, en pixeles de la
-# imagen final (560x827). Es lo que mueve el editor; este es el punto de
-# partida, mas o menos donde cae en la version automatica.
-POSICION_POR_DEFECTO = {"x": 24, "y": 215, "ancho": 512, "alto": 550}
+# imagen final (560x827). Es lo que coloca el editor; esto es el punto de
+# partida.
+#
+# El ancho no llega a los bordes a proposito: a lo ancho del lienzo entero
+# quedaba un vacio enorme entre el nombre del pais y su tasa. Con 340 el
+# nombre y el numero quedan cerca, como en el arte de referencia.
+POSICION_POR_DEFECTO = {"x": 110, "y": 215, "ancho": 340, "alto": 550}
 
 
 def ruta_fondo(iso2: str) -> str | None:
