@@ -1037,7 +1037,9 @@ function MercadoParalelo() {
   const { data: paises = [] } = useQuery({
     queryKey: ['countries'],
     queryFn: () => api.get('/rates/countries').then(r => r.data.data),
+    // La lista de países cambia cuando alguien la edita, no sola.
     staleTime: 60000,
+    refetchInterval: false,
   })
   const opciones = paises
     .filter(p => p.currency && p.currency !== 'USD')
@@ -2021,7 +2023,7 @@ export default function AdminSettings() {
   const qc = useQueryClient()
   const [section, setSection] = useState(null)
 
-  const { data: commData, isLoading } = useQuery({
+  const { data: commData, isLoading, isError, refetch: reintentarComisiones } = useQuery({
     queryKey: ['admin-commissions'],
     queryFn: () => api.get('/admin/commissions').then(r => r.data.data),
     enabled: section === 'tasas',
@@ -2075,6 +2077,25 @@ export default function AdminSettings() {
         {section === 'tasas' && (
           isLoading ? (
             <div style={{ height: 200, borderRadius: 22, background: 'rgba(255,255,255,.04)' }} />
+          ) : isError ? (
+            /* Antes, si la consulta fallaba, la sección salía vacía sin decir
+               nada y había que recargar a mano — pasaba sobre todo justo
+               después de un despliegue, mientras la API reinicia. */
+            <div style={{ ...GLASS, padding: '28px 24px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fcd34d' }}>
+                No se pudieron cargar las tasas y comisiones
+              </p>
+              <p style={{ margin: '6px 0 14px', fontSize: 12.5, color: '#8aa0cc' }}>
+                Puede ser un corte momentáneo. Vuelve a intentarlo sin recargar la página.
+              </p>
+              <button onClick={() => reintentarComisiones()}
+                style={{
+                  padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  border: 'none', background: 'rgba(56,189,248,.16)', color: '#38bdf8', cursor: 'pointer',
+                }}>
+                Reintentar
+              </button>
+            </div>
           ) : (
             <>
               <MercadoParalelo />
@@ -2121,6 +2142,9 @@ function CuentasPropiasForm() {
   const { data } = useQuery({
     queryKey: ['cuentas-propias'],
     queryFn: () => api.get('/admin/cuentas-propias').then(r => r.data.data),
+    // Más espaciada que el resto: por dentro pregunta a Koywe por el estado de
+    // sus cuentas, y al ritmo general serían cientos de llamadas por hora.
+    refetchInterval: 120000,
   })
 
   const catalogo = data?.catalogo || {}
