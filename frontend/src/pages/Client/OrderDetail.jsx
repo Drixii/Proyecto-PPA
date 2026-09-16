@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../../services/api'
 import StatusBadge from '../../components/StatusBadge'
@@ -14,6 +15,43 @@ const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(25
 export default function OrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [compartiendo, setCompartiendo] = useState(false)
+  const [avisoCompartir, setAvisoCompartir] = useState('')
+
+  // Compartir el comprobante.
+  //
+  // El PNG lo dibuja el servidor y no el navegador: sale igual en todos los
+  // teléfonos y lo que se comparte es una imagen de verdad, no una captura.
+  //
+  // navigator.share con ficheros solo existe en móvil y bajo HTTPS; donde no
+  // esté, se descarga, que es lo que la gente hace después de todas formas.
+  const compartirComprobante = async () => {
+    setCompartiendo(true)
+    setAvisoCompartir('')
+    try {
+      const r = await api.get(`/orders/${id}/comprobante`, { responseType: 'blob' })
+      const archivo = new File([r.data], `comprobante-${id}.png`, { type: 'image/png' })
+
+      if (navigator.canShare?.({ files: [archivo] })) {
+        await navigator.share({ files: [archivo], title: 'Comprobante de envío' })
+        return
+      }
+
+      const url = URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `comprobante-${id}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+      setAvisoCompartir('Comprobante descargado')
+    } catch (e) {
+      // Cancelar el menú de compartir lanza AbortError: no es un fallo.
+      if (e?.name !== 'AbortError') setAvisoCompartir('No se pudo generar el comprobante')
+    } finally {
+      setCompartiendo(false)
+      setTimeout(() => setAvisoCompartir(''), 4000)
+    }
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['order', id],
@@ -102,6 +140,31 @@ export default function OrderDetail() {
               <span className="font-bold text-lg" style={{color:'#38bdf8'}}>{data.amount_received.toLocaleString()} {data.currency_to}</span>
             </div>
           </div>
+        </div>
+
+        {/* Compartir */}
+        <div className="rounded-xl p-6" style={GLASS}>
+          <button
+            onClick={compartirComprobante}
+            disabled={compartiendo}
+            className="w-full font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm"
+            style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', color:'#fff',
+                    cursor: compartiendo ? 'wait' : 'pointer', opacity: compartiendo ? .7 : 1}}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+            {compartiendo ? 'Preparando…' : 'Compartir comprobante'}
+          </button>
+          <p className="text-[11px] text-center mt-2.5 leading-relaxed" style={{color:'#64748b'}}>
+            Se comparte como imagen. No incluye el número de cuenta completo del
+            destinatario ni su teléfono.
+          </p>
+          {avisoCompartir && (
+            <p className="text-xs text-center mt-2" style={{color:'#4ade80'}}>{avisoCompartir}</p>
+          )}
         </div>
 
         {/* Receptor */}

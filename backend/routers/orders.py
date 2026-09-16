@@ -114,6 +114,32 @@ def get_order(order_id: int, db: Session = Depends(get_db), current_user: User =
     return {"success": True, "data": _sin_comision(OrderOut.model_validate(order).model_dump()), "message": ""}
 
 
+@router.get("/{order_id}/comprobante")
+def comprobante_de_orden(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El comprobante del envío en imagen, para compartir.
+
+    Solo la ve su dueño. Va sin el número de cuenta completo del destinatario y
+    sin su teléfono: esto se manda por WhatsApp y acaba reenviado.
+    """
+    from fastapi.responses import Response
+    from services import comprobante
+
+    orden = db.query(Order).filter(
+        Order.id == order_id, Order.client_id == current_user.id
+    ).first()
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    png = comprobante.generar(orden, current_user)
+    return Response(content=png, media_type="image/png", headers={
+        "Content-Disposition": f'inline; filename="{orden.order_number}.png"',
+    })
+
+
 # def (no async): el endpoint lee el archivo, lo convierte con Pillow y escribe
 # a disco — todo bloqueante. En async def eso congela el event loop y con él
 # TODAS las demás peticiones y los WebSocket del chat. Como def normal, FastAPI
