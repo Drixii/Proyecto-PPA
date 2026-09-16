@@ -90,12 +90,12 @@ export default function AdminOrders() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/admin/orders/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries(['admin-orders-filtered']); refetch() },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-orders-filtered'] }); refetch() },
   })
 
   const restoreMutation = useMutation({
     mutationFn: (id) => api.post(`/admin/orders/${id}/restore`),
-    onSuccess: () => { queryClient.invalidateQueries(['admin-orders-trash']); refetchTrash() },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-orders-trash'] }); refetchTrash() },
   })
 
   const isFiltered = filterMode.type !== 'none'

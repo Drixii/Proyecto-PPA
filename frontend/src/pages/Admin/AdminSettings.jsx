@@ -330,7 +330,7 @@ function CommissionMatrix({ data, onSaved }) {
       })
       setEditMap(m => { const n = {...m}; delete n[key]; return n })
       showMsg(key, '✓ Guardado')
-      qc.invalidateQueries(['admin-commissions'])
+      qc.invalidateQueries({ queryKey: ['admin-commissions'] })
       onSaved()
     } catch { showMsg(key, '✗ Error') }
     finally { setSaving(s => ({ ...s, [key]: false })) }
@@ -341,7 +341,7 @@ function CommissionMatrix({ data, onSaved }) {
     try {
       await api.delete('/admin/commissions', { data: { from_currency: fromCur, to_currency: tc } })
       showMsg(key, '↩ Reseteado')
-      qc.invalidateQueries(['admin-commissions'])
+      qc.invalidateQueries({ queryKey: ['admin-commissions'] })
       onSaved()
     } catch {}
   }
@@ -355,7 +355,7 @@ function CommissionMatrix({ data, onSaved }) {
       setBaseEdit('')
       setBaseMsg('✓ Base guardada')
       setTimeout(() => setBaseMsg(''), 2500)
-      qc.invalidateQueries(['admin-commissions'])
+      qc.invalidateQueries({ queryKey: ['admin-commissions'] })
       onSaved()
     } catch { setBaseMsg('✗ Error') }
     finally { setBaseSaving(false) }
@@ -2075,7 +2075,10 @@ export default function AdminSettings() {
     enabled: section === 'tasas',
   })
 
-  const refresh = useCallback(() => qc.invalidateQueries(['admin-commissions']), [qc])
+  // Con objeto y no con el array suelto: la firma vieja de React Query no
+  // coincide con nada en la versión actual, así que la invalidación se perdía
+  // en silencio y la tabla seguía mostrando los valores anteriores.
+  const refresh = useCallback(() => qc.invalidateQueries({ queryKey: ['admin-commissions'] }), [qc])
 
   const actual = SECTIONS.find(s => s.key === section)
 
