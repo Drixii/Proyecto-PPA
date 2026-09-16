@@ -119,12 +119,32 @@ function CurrencyPopup({ label, value, onChange, options, ratesFrom }) {
 }
 
 // ── Live Rate Tester (PRIMERO) ────────────────────────────────────────────────
+// Monedas sin céntimos: mostrar "1.000,00 CLP" es ruido, nadie escribe pesos
+// con decimales.
+const MONEDAS_ENTERAS = ['CLP', 'COP', 'VES', 'ARS', 'PYG', 'CRC', 'GTQ', 'JPY']
+
+// Miles con punto mientras se escribe, al estilo chileno. El campo era texto
+// crudo, así que un monto largo se leía "1500000" y había que contar ceros con
+// el dedo para saber si eran uno o diez millones.
+function formateaMonto(valor, moneda) {
+  const soloDigitos = String(valor ?? '').replace(/\D/g, '')
+  if (!soloDigitos) return ''
+  const n = parseInt(soloDigitos, 10)
+  if (!Number.isFinite(n)) return ''
+  return new Intl.NumberFormat('es-CL', {
+    maximumFractionDigits: MONEDAS_ENTERAS.includes(moneda) ? 0 : 2,
+    minimumFractionDigits: 0,
+  }).format(n)
+}
+
+const montoANumero = (valor) => parseInt(String(valor ?? '').replace(/\D/g, ''), 10) || 0
+
 function RateTester({ commData }) {
   const currencies = commData?.currencies || []
   const labels = commData?.labels || {}
   const [fromCur, setFromCur] = useState('CLP')
   const [toCur, setToCur]   = useState('COP')
-  const [amount, setAmount] = useState('100000')
+  const [amount, setAmount] = useState('100.000')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -149,7 +169,7 @@ function RateTester({ commData }) {
   }))
 
   const handleCalc = async () => {
-    const amt = parseFloat(String(amount).replace(/\./g,'').replace(',','.'))
+    const amt = montoANumero(amount)
     if (!amt || fromCur === toCur) return
     setLoading(true)
     try {
@@ -175,7 +195,12 @@ function RateTester({ commData }) {
         <div>
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>Monto a enviar</label>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="100000" style={{ ...INP, flex: 1 }} />
+            <input
+              value={amount}
+              onChange={e => setAmount(formateaMonto(e.target.value, fromCur))}
+              inputMode="numeric"
+              placeholder="100.000"
+              style={{ ...INP, flex: 1 }} />
             <button onClick={handleCalc} disabled={loading}
               style={{ padding: '9px 18px', background: 'linear-gradient(135deg,#4ade80,#22c55e)', border: 'none', borderRadius: 10, color: '#061027', fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {loading ? '...' : 'Calcular'}
