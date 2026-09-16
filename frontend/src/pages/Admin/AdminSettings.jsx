@@ -299,8 +299,14 @@ function CommissionMatrix({ data, onSaved }) {
   const k = (paisOrigen, paisDestino) => `${paisOrigen}_${paisDestino}`
 
   // Base % for current from currency
-  const currentBase = myFromDefaults[fromCur] ?? globalFromDefaults[fromCur] ?? globalDefault
-  const baseSource  = fromCur in myFromDefaults ? 'mine' : (fromCur in globalFromDefaults ? 'global' : 'default')
+  // La base es de la MONEDA, no del país: desde que las pestañas son países,
+  // buscarla por `fromCur` preguntaba por "Bolivia" en una tabla con la clave
+  // "BOB", así que se guardaba bien y al volver salía el valor por defecto.
+  const monedaOrigen = origen?.currency
+  const currentBase = myFromDefaults[monedaOrigen] ?? globalFromDefaults[monedaOrigen] ?? globalDefault
+  const baseSource  = monedaOrigen in myFromDefaults
+    ? 'mine'
+    : (monedaOrigen in globalFromDefaults ? 'global' : 'default')
 
   useEffect(() => { setBaseEdit('') }, [fromCur])
 
