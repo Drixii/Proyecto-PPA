@@ -473,7 +473,8 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
         x_nombre = izq + lado + int(alto_fila * 0.34 / holgura)
         borde_tasa = der - int(alto_fila * 0.34 / holgura)
 
-        texto_tasa = formatea_tasa(fila.get("tasa"))
+        # Algunas filas traen el texto ya hecho (un porcentaje, por ejemplo).
+        texto_tasa = fila.get("texto") or formatea_tasa(fila.get("tasa"))
         f_tasa = _encaja(peso_tasa, texto_tasa,
                          min(max(int(alto_fila * 0.42 * letra), 10 * ESCALA), tope),
                          borde_tasa - x_nombre)

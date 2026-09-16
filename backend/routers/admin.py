@@ -1946,6 +1946,9 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
     Salen TODOS los países del listado. Al que le falte la tasa viene con None
     y en la imagen sale con una raya: si está dado de alta, tiene que verse.
     """
+    from services.exchange_service import get_rate
+    from services.order_service import _get_commission
+
     recibe = sentido == "recibe"
     otros = db.query(Country).filter(
         Country.active == True,
@@ -1956,12 +1959,31 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
     for otro in otros:
         if otro.name == pais.name:
             continue
-        desde, hacia = (otro, pais) if recibe else (pais, otro)
+
+        texto = None
+        if recibe:
+            # El cartel de lo que llega no cotiza la ruta, sino a cómo está
+            # cada moneda: cuántas unidades por un dólar, que es el precio al
+            # que se compra. En los países que ya usan el dólar eso sería 1 y
+            # no dice nada, así que ahí sale la comisión de su ruta.
+            if (otro.currency or "").upper() == "USD":
+                pct = _get_commission(
+                    db, otro.currency, pais.currency, None,
+                    from_country=otro.name, to_country=pais.name,
+                )
+                valor, texto = None, f"{pct:g}%"
+            else:
+                valor = get_rate(db, "USD", otro.currency)
+        else:
+            valor = _tasa_de_ruta(db, pais, otro)
+
         filas.append({
             "name": otro.name,
             "iso2": otro.iso2 or "",
             "currency": otro.currency,
-            "tasa": _tasa_de_ruta(db, desde, hacia),
+            "tasa": valor,
+            # Cuando lo que va escrito no es un número, viene ya hecho.
+            "texto": texto,
         })
 
     if not filas:
@@ -2039,7 +2061,8 @@ def editor_de_imagen(
             "filas": [
                 {
                     "name": f["name"], "iso2": f["iso2"], "currency": f["currency"],
-                    "abrev": abrevia(f["name"]), "tasa": formatea_tasa(f["tasa"]),
+                    "abrev": abrevia(f["name"]),
+                    "tasa": f["texto"] or formatea_tasa(f["tasa"]),
                 }
                 for f in _filas_de_tasas(db, pais, sentido)
             ],
