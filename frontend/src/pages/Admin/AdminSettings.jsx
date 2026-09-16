@@ -1124,6 +1124,7 @@ function KoyweKeysForm() {
 // Comparte la consulta con ImagenDeTasas: misma clave, así que React Query la
 // pide una vez y la tabla y el cartel enseñan exactamente lo mismo.
 function TablaRecibe({ pais }) {
+  const qc = useQueryClient()
   const { data } = useQuery({
     queryKey: ['imagen-editor', pais?.name, 'recibe'],
     queryFn: () => api.get('/admin/commissions/imagen/editor', {
@@ -1131,7 +1132,43 @@ function TablaRecibe({ pais }) {
     }).then(r => r.data.data),
     enabled: !!pais?.name,
   })
-  const filas = data?.filas || []
+
+  // Mismo orden global que Comisiones por ruta: aquí se arrastra la parte de
+  // la lista que se ve, y al guardar se devuelve la lista COMPLETA — los
+  // países que solo reciben no salen en este listado y perderían su sitio si
+  // se mandara nada más lo visible.
+  const [ordenLocal, setOrdenLocal] = useState(null)
+  const arrastrando = useRef(null)
+
+  const guardarOrden = useMutation({
+    mutationFn: (orden) => api.put('/admin/countries/orden', { orden }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-commissions'] })
+      qc.invalidateQueries({ queryKey: ['imagen-editor'] })
+      setOrdenLocal(null)
+    },
+    onError: () => setOrdenLocal(null),
+  })
+
+  const base = data?.filas || []
+  const filas = ordenLocal
+    ? ordenLocal.map(n => base.find(f => f.name === n)).filter(Boolean)
+    : base
+
+  const mueve = (desde, hasta) => {
+    const nombres = filas.map(f => f.name)
+    if (desde === hasta || hasta < 0 || hasta >= nombres.length) return
+    const [movido] = nombres.splice(desde, 1)
+    nombres.splice(hasta, 0, movido)
+    setOrdenLocal(nombres)
+  }
+
+  const guardar = () => {
+    if (!ordenLocal) return
+    const visibles = new Set(ordenLocal)
+    const resto = (data?.orden || []).filter(n => !visibles.has(n))
+    guardarOrden.mutate([...ordenLocal, ...resto])
+  }
 
   return (
     <>
@@ -1145,16 +1182,30 @@ function TablaRecibe({ pais }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'rgba(4,10,30,.6)' }}>
-              {['Recibe desde', 'Precio'].map(h => (
+              {['⠿ Recibe desde (arrastra para ordenar)', 'Precio'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '9px 12px', fontSize: 11, fontWeight: 600, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filas.map(f => (
-              <tr key={f.name} style={{ borderTop: '1px solid rgba(255,255,255,.05)' }}>
+            {filas.map((f, indice) => (
+              <tr key={f.name}
+                draggable
+                onDragStart={e => { arrastrando.current = indice; e.dataTransfer.effectAllowed = 'move' }}
+                onDragOver={e => {
+                  // Sin preventDefault el navegador no toma esta fila por
+                  // destino válido y no se llega a soltar nunca.
+                  e.preventDefault()
+                  if (arrastrando.current === null || arrastrando.current === indice) return
+                  mueve(arrastrando.current, indice)
+                  arrastrando.current = indice
+                }}
+                onDragEnd={() => { arrastrando.current = null; guardar() }}
+                style={{ borderTop: '1px solid rgba(255,255,255,.05)', cursor: 'grab' }}>
                 <td style={{ padding: '10px 12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span title="Arrastra para cambiar el orden"
+                      style={{ color: '#475569', fontSize: 13, cursor: 'grab', userSelect: 'none' }}>⠿</span>
                     <Bandera iso2={f.iso2} ancho={18} alto={13} />
                     <span style={{ color: '#eaf2ff', fontWeight: 600 }}>{f.name}</span>
                     <span style={{ fontSize: 11, color: '#8aa0cc' }}>{f.currency}</span>

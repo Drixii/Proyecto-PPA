@@ -2125,6 +2125,10 @@ def editor_de_imagen(
             "lienzo": {"ancho": ANCHO_FINAL, "alto": ALTO_FINAL},
             "tiene_fondo": bool(ruta_fondo(pais.iso2 or "", sentido)),
             "posicion": _posicion_guardada(db, pais.iso2, sentido),
+            # El orden completo, no solo el de estas filas: quien reordene
+            # desde aqui tiene que devolver la lista entera o los paises que no
+            # salen en este listado perderian su sitio.
+            "orden": orden_paises(db),
             "filas": [
                 {
                     "name": f["name"], "iso2": f["iso2"], "currency": f["currency"],
