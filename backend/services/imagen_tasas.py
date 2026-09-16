@@ -24,7 +24,7 @@ CACHE_FONDOS = os.path.join(ASSETS, "fondos_cache")
 # Franja del alto donde va la tabla en el arte de la IA, en tanto por uno. Es
 # la zona que la instruccion le pide dejar limpia: debajo de la cabecera y por
 # encima de la barra del pie.
-ZONA_TABLA = (0.275, 0.895)
+ZONA_TABLA = (0.34, 0.895)
 
 # Montserrat va con el logo. Si faltara el fichero se cae a DejaVu, que es lo
 # unico que trae el sistema: fea pero legible, mejor que no generar la imagen.
@@ -604,6 +604,18 @@ def generar_con_ia(
     # El arte llega a 1024x1536; se lleva al lienzo de trabajo y se le pinta la
     # tabla encima, en la franja que la instruccion le pidio dejar libre.
     arte = Image.open(io.BytesIO(crudo)).convert("RGB").resize((ANCHO, ALTO), Image.LANCZOS)
-    _dibuja_filas(arte, ImageDraw.Draw(arte), filas,
-                  int(ALTO * ZONA_TABLA[0]), int(ALTO * ZONA_TABLA[1]))
+    d = ImageDraw.Draw(arte)
+
+    arriba = int(ALTO * ZONA_TABLA[0])
+    # El importe tambien lo pone el codigo: a la IA no se le pide ninguna cifra,
+    # y sin esta linea la columna de la derecha no se puede comprobar contra la
+    # calculadora.
+    monto = origen.get("monto")
+    if monto:
+        _escribe(d, (ANCHO // 2, arriba - int(6 * ESCALA)),
+                 f"POR CADA {formatea_monto(monto)} {origen.get('currency', '')}".strip(),
+                 _fuente("bold", int(12 * ESCALA)), TEXTO_TITULO, int(1 * ESCALA),
+                 anchor="md", sombra=True)
+
+    _dibuja_filas(arte, d, filas, arriba, int(ALTO * ZONA_TABLA[1]))
     return _a_tamano_final(arte)
