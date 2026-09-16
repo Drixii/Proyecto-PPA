@@ -1582,6 +1582,8 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
         for r in db.query(CommissionRule).filter(
             CommissionRule.super_admin_id == None,
             CommissionRule.to_currency != '*',
+            CommissionRule.from_country == None,
+            CommissionRule.to_country == None,
         ).all()
     }
     my_rules = {
@@ -1589,6 +1591,8 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
         for r in db.query(CommissionRule).filter(
             CommissionRule.super_admin_id == admin.id,
             CommissionRule.to_currency != '*',
+            CommissionRule.from_country == None,
+            CommissionRule.to_country == None,
         ).all()
     }
 
@@ -1598,6 +1602,7 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
         for r in db.query(CommissionRule).filter(
             CommissionRule.super_admin_id == admin.id,
             CommissionRule.to_currency == '*',
+            CommissionRule.from_country == None,
         ).all()
     }
     global_from_defaults = {
@@ -1605,6 +1610,7 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
         for r in db.query(CommissionRule).filter(
             CommissionRule.super_admin_id == None,
             CommissionRule.to_currency == '*',
+            CommissionRule.from_country == None,
         ).all()
     }
 
