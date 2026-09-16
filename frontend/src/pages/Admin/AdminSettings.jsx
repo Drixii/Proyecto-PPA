@@ -1097,7 +1097,7 @@ function ImagenDeTasas({ origen }) {
 
   const lienzo = editor?.lienzo || { ancho: 560, alto: 827 }
   const filas = editor?.filas || []
-  const posicion = pos || editor?.posicion || { x: 110, y: 215, ancho: 340, alto: 550 }
+  const posicion = pos || editor?.posicion || { x: 110, y: 215, ancho: 340, alto: 550, letra: 100 }
 
   // La posición vuelve a mandarla el servidor al cambiar de país; el estado
   // local solo existe mientras se arrastra.
@@ -1252,6 +1252,7 @@ function ImagenDeTasas({ origen }) {
 
   const { altoFila, desde } = reparteFilas(filas.length, posicion.alto)
   const escalaVista = anchoVista / lienzo.ancho
+  const factorLetra = (posicion.letra || 100) / 100
   const botonBase = {
     padding: '9px 16px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
     cursor: 'pointer', border: '1px solid rgba(255,255,255,.12)',
@@ -1345,12 +1346,12 @@ function ImagenDeTasas({ origen }) {
                       }} />
                   )}
                   <span style={{
-                    flex: 1, minWidth: 0, fontSize: Math.max(altoFila * 0.30 * escalaVista, 5),
+                    flex: 1, minWidth: 0, fontSize: Math.max(altoFila * 0.30 * factorLetra * escalaVista, 5),
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
                     {f.name.toUpperCase()}
                   </span>
-                  <span style={{ fontSize: Math.max(altoFila * 0.36 * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
+                  <span style={{ fontSize: Math.max(altoFila * 0.36 * factorLetra * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
                 </div>
               ))}
             </div>
@@ -1359,6 +1360,9 @@ function ImagenDeTasas({ origen }) {
             {[
               { campo: 'ancho', texto: 'Ancho', min: 160, max: lienzo.ancho },
               { campo: 'alto', texto: 'Alto', min: 100, max: lienzo.alto },
+              // La letra va aparte del alto de fila: agranda el texto sin
+              // tocar la pastilla ni el hueco que la rodea.
+              { campo: 'letra', texto: 'Letra', min: 60, max: 220 },
             ].map(({ campo, texto, min, max }) => (
               <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
                 <span style={{ width: 42, fontSize: 11, fontWeight: 700, color: '#8aa0cc' }}>{texto}</span>

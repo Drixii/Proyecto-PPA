@@ -2094,6 +2094,7 @@ class PosicionTablaIn(BaseModel):
     y: int
     ancho: Optional[int] = None
     alto: Optional[int] = None
+    letra: Optional[int] = None
 
 
 @router.put("/commissions/imagen/tabla", response_model=dict)
@@ -2110,6 +2111,7 @@ def mover_tabla(
     actual = _posicion_guardada(db, origen.iso2)
     ancho = int(data.ancho or actual["ancho"])
     alto = int(data.alto or actual["alto"])
+    letra = int(data.letra or actual.get("letra") or 100)
 
     # Se deja salir un poco por los bordes —a veces se quiere el bloque a
     # sangre— pero no tanto como para perderlo de vista y no poder recuperarlo.
@@ -2119,6 +2121,9 @@ def mover_tabla(
         "y": max(-margen, min(int(data.y), ALTO_FINAL - margen)),
         "ancho": max(120, min(ancho, ANCHO_FINAL)),
         "alto": max(80, min(alto, ALTO_FINAL)),
+        # Tamaño de letra en %. El dibujo no deja que desborde la pastilla,
+        # así que pasarse solo significa que deja de crecer.
+        "letra": max(50, min(letra, 220)),
     }
 
     clave = _clave_posicion(origen.iso2)
