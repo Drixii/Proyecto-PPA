@@ -819,7 +819,15 @@ export default function AdminUsers() {
                  que se le pasa al cliente es el código, y tener dos botones que
                  copian cosas distintas invitaba a mandar el que no era. */
               <div className="rounded-xl p-4" style={{background:'rgba(74,222,128,.06)', border:'1px solid rgba(74,222,128,.2)'}}>
-                <p className="text-xs font-semibold mb-2" style={{color:'#4ade80'}}>✓ Código generado</p>
+                <p className="text-xs font-semibold mb-1" style={{color:'#4ade80'}}>✓ Código generado</p>
+                {/* La caducidad, a la vista: el código muere en media hora y
+                    quien lo manda tiene que saberlo antes de guardarlo para
+                    luego. */}
+                <p className="text-[11px] mb-2" style={{color:'#fcd34d'}}>
+                  Caduca en {inviteResult.minutos_valido || 30} minutos
+                  {inviteResult.caduca_at && `, a las ${new Date(inviteResult.caduca_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`}
+                  . Pásaselo ahora.
+                </p>
                 <button
                   onClick={() => { navigator.clipboard.writeText(mensajeInvitacion(inviteResult.code)); setInviteCodeCopied(true); setTimeout(() => setInviteCodeCopied(false), 2500) }}
                   className="w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors"

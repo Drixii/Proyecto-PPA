@@ -1409,6 +1409,9 @@ def create_invite_code(
     db.refresh(invite)
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173").split(",")[0]
     reg_url = f"{frontend_url}/login?mode=register&code={code}"
+    from models.invite_code import MINUTOS_VALIDO
+    from datetime import timedelta as _td
+    caduca = (invite.created_at + _td(minutes=MINUTOS_VALIDO)) if invite.created_at else None
     return {
         "success": True,
         "data": {
@@ -1418,6 +1421,8 @@ def create_invite_code(
             "registration_url": reg_url,
             "is_used": invite.is_used,
             "created_at": invite.created_at.isoformat() if invite.created_at else None,
+            "minutos_valido": MINUTOS_VALIDO,
+            "caduca_at": caduca.isoformat() if caduca else None,
         },
         "message": "Código generado exitosamente",
     }

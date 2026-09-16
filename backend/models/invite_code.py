@@ -1,6 +1,32 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from database import Base
+
+# Cuanto vive un codigo sin usar. Corto a proposito: un codigo es una puerta
+# abierta a la plataforma y ya no va atado a un correo, asi que lo usa quien lo
+# tenga. Media hora es tiempo de sobra para pasarselo a alguien por chat y que
+# se registre, y poco para que uno reenviado siga sirviendo manana.
+MINUTOS_VALIDO = 30
+
+
+def vencido(invite) -> bool:
+    """Si el codigo ya no sirve por antiguedad.
+
+    Se calcula sobre created_at y no se guarda una fecha de caducidad: asi
+    cambiar MINUTOS_VALIDO vale para todos, tambien para los ya emitidos.
+
+    Sin fecha de creacion se da por valido: son filas anteriores a que la
+    columna existiera, y caducar de golpe algo que no se puede fechar dejaria
+    fuera a gente sin motivo.
+    """
+    if not invite or not invite.created_at:
+        return False
+    creado = invite.created_at
+    if creado.tzinfo is None:
+        creado = creado.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - creado > timedelta(minutes=MINUTOS_VALIDO)
 
 
 class InviteCode(Base):

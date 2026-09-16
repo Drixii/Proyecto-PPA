@@ -47,6 +47,12 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
         ).first()
         if not code_row:
             raise HTTPException(status_code=400, detail="Código de invitación inválido o ya utilizado")
+        from models.invite_code import vencido, MINUTOS_VALIDO
+        if vencido(code_row):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ese código caducó (dura {MINUTOS_VALIDO} minutos). Pídele uno nuevo a quien te invitó.",
+            )
         # El correo ya no tiene que coincidir con el de la invitacion: el codigo
         # se le pasa a quien sea y esa persona se registra con el correo que
         # use de verdad. Lo que decide de quien es cliente sigue siendo el
@@ -333,7 +339,8 @@ def check_invite_code(code: str, db: Session = Depends(get_db)):
         InviteCode.code == code.strip().upper(),
         InviteCode.is_used == False,
     ).first()
-    if not code_row:
+    from models.invite_code import vencido
+    if not code_row or vencido(code_row):
         return {"success": True, "data": {"valid": False}, "message": ""}
     return {"success": True, "data": {"valid": True}, "message": ""}
 
