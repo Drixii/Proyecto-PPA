@@ -238,7 +238,6 @@ export default function AdminUsers() {
   // retención del primer envío solo estorba.
   const [inviteTrusted, setInviteTrusted] = useState(false)
   const [inviteResult, setInviteResult] = useState(null)
-  const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
   const [inviteCodeCopied, setInviteCodeCopied] = useState(false)
   const [subAdminView, setSubAdminView] = useState('choice') // 'choice' | 'new' | 'existing'
   const [pwdModal, setPwdModal] = useState(null)
@@ -459,7 +458,6 @@ export default function AdminUsers() {
                   if (roleTab === 'client') {
                     setInviteEmail('')
                     setInviteResult(null)
-                    setInviteLinkCopied(false)
                     setInviteModal(true)
                   } else {
                     const pwd = generatePassword()
@@ -802,25 +800,22 @@ export default function AdminUsers() {
             </form>
 
             {inviteResult && (
+              /* Solo el código. El enlace de registro se quitó a propósito: lo
+                 que se le pasa al cliente es el código, y tener dos botones que
+                 copian cosas distintas invitaba a mandar el que no era. */
               <div className="rounded-xl p-4" style={{background:'rgba(74,222,128,.06)', border:'1px solid rgba(74,222,128,.2)'}}>
-                <p className="text-xs font-semibold mb-2" style={{color:'#4ade80'}}>✓ Enlace generado para {inviteResult.email}</p>
-                <div className="flex items-center gap-2 rounded-lg px-3 py-2 mb-2" style={{background:'rgba(0,0,0,.3)', border:'1px solid rgba(255,255,255,.08)'}}>
-                  <code className="flex-1 text-xs font-mono truncate" style={{color:'#fcd34d'}}>{inviteResult.registration_url}</code>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(inviteResult.registration_url); setInviteLinkCopied(true); setTimeout(() => setInviteLinkCopied(false), 2000) }}
-                    className="flex-1 text-xs font-semibold py-2 rounded-lg transition-colors"
-                    style={inviteLinkCopied ? {background:'rgba(74,222,128,.15)', color:'#4ade80', border:'1px solid rgba(74,222,128,.3)'} : {background:'rgba(255,255,255,.06)', color:'#8aa0cc', border:'1px solid rgba(255,255,255,.1)'}}>
-                    {inviteLinkCopied ? '✓ Copiado' : 'Copiar enlace'}
-                  </button>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(inviteResult.code); setInviteCodeCopied(true); setTimeout(() => setInviteCodeCopied(false), 2000) }}
-                    className="text-xs font-semibold px-3 py-2 rounded-lg font-mono"
-                    style={inviteCodeCopied ? {background:'rgba(74,222,128,.15)', color:'#4ade80', border:'1px solid rgba(74,222,128,.3)'} : {background:'rgba(252,211,77,.08)', color:'#fcd34d', border:'1px solid rgba(252,211,77,.2)'}}>
-                    {inviteCodeCopied ? '✓ Copiado' : `Código: ${inviteResult.code}`}
-                  </button>
-                </div>
+                <p className="text-xs font-semibold mb-2" style={{color:'#4ade80'}}>✓ Código generado para {inviteResult.email}</p>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(inviteResult.code); setInviteCodeCopied(true); setTimeout(() => setInviteCodeCopied(false), 2000) }}
+                  className="w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors"
+                  style={inviteCodeCopied
+                    ? {background:'rgba(74,222,128,.15)', border:'1px solid rgba(74,222,128,.3)'}
+                    : {background:'rgba(0,0,0,.3)', border:'1px solid rgba(252,211,77,.2)'}}>
+                  <code className="text-base font-mono font-bold tracking-wider" style={{color:'#fcd34d'}}>{inviteResult.code}</code>
+                  <span className="text-xs font-semibold shrink-0" style={{color: inviteCodeCopied ? '#4ade80' : '#8aa0cc'}}>
+                    {inviteCodeCopied ? '✓ Copiado' : 'Copiar código'}
+                  </span>
+                </button>
               </div>
             )}
 
