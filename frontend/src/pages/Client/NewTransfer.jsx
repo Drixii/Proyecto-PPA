@@ -217,7 +217,18 @@ export default function NewTransfer() {
   })
 
   const [payment, setPayment] = useState({ payment_method: 'transferencia', payment_bank: '' })
-  const [copiadoCuenta, setCopiadoCuenta] = useState(false)
+  // Qué campo se acaba de copiar. Era un booleano para todos los botones, así
+  // que al pulsar uno se encendía «Copiado» en todos a la vez y no había forma
+  // de saber cuál se había copiado de verdad.
+  const [copiado, setCopiado] = useState('')
+  const copiaRef = useRef(null)
+
+  const copiar = (clave, texto) => {
+    navigator.clipboard?.writeText(String(texto ?? '').trim())
+    setCopiado(clave)
+    clearTimeout(copiaRef.current)
+    copiaRef.current = setTimeout(() => setCopiado(''), 2000)
+  }
   // Aviso de verificación por monto. Se enseña ANTES de pagar: retener un
   // envío sin haberlo advertido es peor, porque el cliente ya puso el dinero.
   const [avisoMonto, setAvisoMonto] = useState(false)
@@ -384,6 +395,33 @@ export default function NewTransfer() {
   }
 
   const rawAmount = parseRaw(displayAmount)
+
+  // Los datos de la cuenta a la que hay que transferir, en un solo sitio: los
+  // pinta la lista y los copia el botón de «todos», así que no pueden decir
+  // cosas distintas.
+  //
+  // La cuenta de Koywe viene plana con claves fijas; la que carga el
+  // super-admin trae `campos` etiquetados, porque cada país pide datos
+  // distintos.
+  const datosCuenta = (cuentaTransfer
+    ? (cuentaTransfer.campos
+      ? cuentaTransfer.campos.map(c => ({ label: c.etiqueta, value: c.valor, principal: c.principal }))
+      : [
+        { label: 'Número de cuenta', value: cuentaTransfer.numero, principal: true },
+        { label: 'Titular', value: cuentaTransfer.titular },
+        { label: 'Banco', value: cuentaTransfer.banco },
+        { label: 'Documento', value: cuentaTransfer.documento },
+        { label: 'Tipo de cuenta', value: cuentaTransfer.tipo_cuenta },
+      ])
+    : []).filter(f => f.value)
+
+  // Con el monto incluido: es el dato con el que se reconoce la transferencia,
+  // y copiarlo aparte era un paso más donde equivocarse.
+  const textoCuenta = [
+    ...datosCuenta.map(f => `${f.label}: ${f.value}`),
+    `Monto: ${(rawAmount || parseFloat(calc.amount || '0')).toLocaleString('es-CL')} ${calc.fromCurrency}`,
+  ].join('\n')
+
 
   // ¿Este envío pasará por verificación? Solo aplica a clientes sin envíos
   // completados; el backend decide de verdad, esto solo avisa.
@@ -1184,33 +1222,31 @@ export default function NewTransfer() {
                             porque cada país pide datos distintos. El primero se
                             marca copiable: es el dato que hay que pegar en el
                             banco (número, IBAN o clave PIX según el país). */}
-                        {(cuentaTransfer.campos
-                          ? cuentaTransfer.campos.map(c => ({
-                              label: c.etiqueta, value: c.valor, copiable: c.principal,
-                            }))
-                          : [
-                            { label: 'Número de cuenta', value: cuentaTransfer.numero, copiable: true },
-                            { label: 'Titular', value: cuentaTransfer.titular },
-                            { label: 'Banco', value: cuentaTransfer.banco },
-                            { label: 'Documento', value: cuentaTransfer.documento },
-                            { label: 'Tipo de cuenta', value: cuentaTransfer.tipo_cuenta },
-                          ]
-                        ).filter(f => f.value).map(({ label, value, copiable }) => (
+                        {datosCuenta.map(({ label, value, principal }) => (
                           <div key={label} className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{color:'#475569'}}>{label}</p>
-                              <p className="text-sm font-semibold truncate" style={{color:'#eaf2ff', fontFamily: copiable ? 'monospace' : undefined}}>{value}</p>
+                              <p className="text-sm font-semibold truncate" style={{color:'#eaf2ff', fontFamily: principal ? 'monospace' : undefined}}>{value}</p>
                             </div>
-                            {copiable && (
-                              <button type="button"
-                                onClick={() => { navigator.clipboard?.writeText(value); setCopiadoCuenta(true); setTimeout(() => setCopiadoCuenta(false), 2000) }}
-                                className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0"
-                                style={{border:'1px solid rgba(255,255,255,.12)', background:'rgba(255,255,255,.04)', color: copiadoCuenta ? '#4ade80' : '#aebfe2'}}>
-                                {copiadoCuenta ? 'Copiado' : 'Copiar'}
-                              </button>
-                            )}
+                            {/* Copia en TODOS los campos, no solo en el número:
+                                el formulario del banco pide el RUT, el titular
+                                y el banco por separado, y escribir a mano un
+                                RUT es exactamente como se equivoca uno. */}
+                            <button type="button"
+                              onClick={() => copiar(label, value)}
+                              className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0"
+                              style={{border:'1px solid rgba(255,255,255,.12)', background:'rgba(255,255,255,.04)', color: copiado === label ? '#4ade80' : '#aebfe2'}}>
+                              {copiado === label ? 'Copiado' : 'Copiar'}
+                            </button>
                           </div>
                         ))}
+
+                        <button type="button"
+                          onClick={() => copiar('__todos__', textoCuenta)}
+                          className="w-full text-xs font-bold py-2.5 rounded-xl mt-1"
+                          style={{border:'1px solid rgba(56,189,248,.3)', background:'rgba(56,189,248,.08)', color: copiado === '__todos__' ? '#4ade80' : '#38bdf8'}}>
+                          {copiado === '__todos__' ? '✓ Datos copiados' : 'Copiar todos los datos'}
+                        </button>
                       </div>
 
                       <div className="rounded-xl p-3" style={{background:'rgba(251,191,36,.06)', border:'1px solid rgba(251,191,36,.15)'}}>
