@@ -27,9 +27,9 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-6 py-6 border-b border-slate-700/60">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-lg font-bold">CC</div>
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-lg font-bold">KG</div>
           <div>
-            <p className="font-bold text-sm leading-tight">CasaCambios</p>
+            <p className="font-bold text-sm leading-tight">KSAGlobal</p>
             <p className="text-xs text-slate-400 uppercase tracking-wider">
               {user?.role === 'admin' ? 'Administrador' : 'Cliente'}
             </p>

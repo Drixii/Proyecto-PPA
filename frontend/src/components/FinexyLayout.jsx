@@ -714,7 +714,7 @@ export default function FinexyLayout({ children, fullHeight = false }) {
         {/* Logo */}
         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-800 flex items-center justify-center text-white text-[10px] font-black tracking-tight mb-6 shadow-lg"
           style={{ boxShadow: '0 8px 20px rgba(56,189,248,.3)' }}>
-          CC
+          KG
         </div>
 
         {/* Nav icons */}
@@ -757,7 +757,7 @@ export default function FinexyLayout({ children, fullHeight = false }) {
           {/* Mobile logo */}
           <div className="flex md:hidden items-center gap-2 mr-1">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-400 to-blue-800 flex items-center justify-center text-white text-[9px] font-black shrink-0">
-              CC
+              KG
             </div>
           </div>
 
