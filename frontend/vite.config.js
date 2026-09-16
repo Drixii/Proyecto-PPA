@@ -8,7 +8,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt', no 'autoUpdate': con autoUpdate el service worker llama a
+      // location.reload() por su cuenta en cuanto hay un despliegue nuevo, y
+      // la web se recargaba sola en mitad de lo que estuvieras haciendo. Ahora
+      // la version nueva espera y AvisoActualizacion ofrece tomarla.
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],

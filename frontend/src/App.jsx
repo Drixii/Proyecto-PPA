@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import AvisoActualizacion from './components/AvisoActualizacion'
 import { useEffect, useState } from 'react'
 import { useStore } from './store/useStore'
 import api from './services/api'
@@ -139,6 +140,7 @@ function ForceChangePassword() {
 export default function App() {
   return (
     <BrowserRouter>
+      <AvisoActualizacion />
       <UserRefresh />
       <ForceChangePassword />
       <Routes>
