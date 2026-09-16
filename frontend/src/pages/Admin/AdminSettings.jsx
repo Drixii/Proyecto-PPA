@@ -93,7 +93,7 @@ function CurrencyPopup({ label, value, onChange, options, ratesFrom }) {
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', background: value === o.cur ? 'rgba(56,189,248,.1)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background .12s' }}
               onMouseEnter={e => { if (value !== o.cur) e.currentTarget.style.background = 'rgba(255,255,255,.05)' }}
               onMouseLeave={e => { if (value !== o.cur) e.currentTarget.style.background = 'transparent' }}>
-              <FlagImg cur={o.cur} size={24} />
+              <FlagImg cur={o.cur} iso2={o.iso2} size={24} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontWeight: 700, fontSize: 15, color: '#eaf2ff' }}>{o.cur}</span>
@@ -101,7 +101,7 @@ function CurrencyPopup({ label, value, onChange, options, ratesFrom }) {
                 </div>
                 {o.rate != null && ratesFrom && (
                   <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace' }}>
-                    1 {ratesFrom} = {fmt(o.rate, o.cur)} {o.cur}
+                    1 {ratesFrom} = {fmt(o.rate, o.moneda || o.cur)} {o.moneda || o.cur}
                   </span>
                 )}
               </div>
@@ -121,12 +121,12 @@ function CurrencyPopup({ label, value, onChange, options, ratesFrom }) {
       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</label>
       <button type="button" onClick={() => setOpen(true)}
         style={{ ...INP, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', overflow: 'hidden' }}>
-        {sel && <FlagImg cur={sel.cur} size={22} />}
+        {sel && <FlagImg cur={sel.cur} iso2={sel.iso2} size={22} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontWeight: 700, color: '#eaf2ff' }}>{sel?.cur}</span>
           {sel?.rate != null && ratesFrom ? (
             <span style={{ marginLeft: 8, fontSize: 11, color: '#38bdf8', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-              1 {ratesFrom} = {fmt(sel.rate, sel.cur)} {sel.cur}
+              1 {ratesFrom} = {fmt(sel.rate, sel.moneda || sel.cur)} {sel.moneda || sel.cur}
             </span>
           ) : (
             <span style={{ marginLeft: 8, fontSize: 12, color: '#8aa0cc', whiteSpace: 'nowrap' }}>{sel?.label}</span>
@@ -163,8 +163,8 @@ const montoANumero = (valor) => parseInt(String(valor ?? '').replace(/\D/g, ''),
 function RateTester({ commData }) {
   const currencies = commData?.from_currencies || commData?.currencies || []
   const labels = commData?.labels || {}
-  const [fromCur, setFromCur] = useState('CLP')
-  const [toCur, setToCur]   = useState('COP')
+  const [fromCur, setFromCur] = useState('Chile')
+  const [toCur, setToCur]   = useState('Colombia')
   const [amount, setAmount] = useState('100.000')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -172,32 +172,43 @@ function RateTester({ commData }) {
   // Live rates for the selected from currency
   const { data: ratesData } = useQuery({
     queryKey: ['admin-all-rates', fromCur],
-    queryFn: () => api.get('/admin/commissions/all-rates', { params: { from_currency: fromCur } }).then(r => r.data.data),
-    enabled: !!fromCur,
+    queryFn: () => api.get('/admin/commissions/all-rates', {
+      params: { from_currency: (commData?.paises || []).find(p => p.name === fromCur)?.currency },
+    }).then(r => r.data.data),
+    enabled: !!fromCur && !!(commData?.paises || []).length,
   })
 
   useEffect(() => {
     if (fromCur === toCur) {
-      const next = currencies.find(c => c !== fromCur)
+      const next = (commData?.paises || []).find(p => p.can_receive && p.name !== fromCur)?.name
       if (next) setToCur(next)
     }
     setResult(null)
   }, [fromCur])
 
-  // Origen solo entre las que pueden enviar, destino entre las que pueden
-  // recibir: simular una ruta que el sistema no deja crear no sirve de nada.
-  const fromOptions = (commData?.from_currencies || currencies)
-    .map(c => ({ cur: c, label: labels[c] || c, rate: null }))
-  const toOptions = (commData?.to_currencies || currencies)
-    .filter(c => c !== fromCur)
-    .map(c => ({ cur: c, label: labels[c] || c, rate: ratesData?.[c] ?? null }))
+  // Por PAÍS y no por moneda: Ecuador y Estados Unidos comparten el dólar pero
+  // pueden tener comisiones distintas, así que simular "USD" no decía cuál de
+  // los dos. Origen solo los que envían, destino solo los que reciben — simular
+  // una ruta que el sistema no deja crear no sirve de nada.
+  const paisesSim = commData?.paises || []
+  const paisOrigen = paisesSim.find(p => p.name === fromCur)
+  const paisDestino = paisesSim.find(p => p.name === toCur)
+  const fromOptions = paisesSim.filter(p => p.can_send)
+    .map(p => ({ cur: p.name, label: `${p.name} (${p.currency})`, iso2: p.iso2, moneda: p.currency, rate: null }))
+  const toOptions = paisesSim.filter(p => p.can_receive && p.name !== fromCur)
+    .map(p => ({ cur: p.name, label: `${p.name} (${p.currency})`, iso2: p.iso2, moneda: p.currency, rate: ratesData?.[p.currency] ?? null }))
 
   const handleCalc = async () => {
     const amt = montoANumero(amount)
     if (!amt || fromCur === toCur) return
     setLoading(true)
     try {
-      const r = await api.get('/admin/commissions/preview', { params: { from_currency: fromCur, to_currency: toCur, amount: amt } })
+      const r = await api.get('/admin/commissions/preview', {
+        params: {
+          from_currency: paisOrigen?.currency, to_currency: paisDestino?.currency,
+          from_country: fromCur, to_country: toCur, amount: amt,
+        },
+      })
       setResult(r.data.data)
     } catch { setResult(null) }
     finally { setLoading(false) }
@@ -215,7 +226,7 @@ function RateTester({ commData }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
         <CurrencyPopup label="Desde" value={fromCur} onChange={setFromCur} options={fromOptions} ratesFrom={null} />
-        <CurrencyPopup label="Hacia" value={toCur} onChange={setToCur} options={toOptions} ratesFrom={fromCur} />
+        <CurrencyPopup label="Hacia" value={toCur} onChange={setToCur} options={toOptions} ratesFrom={paisOrigen?.currency} />
         <div>
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8aa0cc', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>Monto a enviar</label>
           <div style={{ display: 'flex', gap: 8 }}>
