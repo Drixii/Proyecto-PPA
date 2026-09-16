@@ -1612,60 +1612,6 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
     }
 
 
-class AdminPublicoIn(BaseModel):
-    super_admin_id: Optional[int] = None
-
-
-@router.get("/commissions/publico", response_model=dict)
-def get_admin_publico(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
-    """Quien define los precios que ve la calculadora de la portada.
-
-    Quien entra sin sesion no es cliente de nadie todavia, y cada super-admin
-    tiene sus propias comisiones: hay que decir con cuales se cotiza de cara al
-    publico o la portada ensena un precio que luego nadie cobra.
-    """
-    fila = db.query(Setting).filter(Setting.key == "super_admin_publico").first()
-    actual = int(fila.value) if fila and str(fila.value or "").strip().isdigit() else None
-    admins = db.query(User).filter(
-        User.role == "admin", User.deleted_at == None, User.is_active == True
-    ).order_by(User.id).all()
-    return {
-        "success": True,
-        "data": {
-            "super_admin_id": actual,
-            "admins": [{"id": u.id, "full_name": u.full_name, "email": u.email} for u in admins],
-        },
-        "message": "",
-    }
-
-
-@router.put("/commissions/publico", response_model=dict)
-def set_admin_publico(
-    data: AdminPublicoIn,
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_super_admin),
-):
-    if data.super_admin_id is not None:
-        existe = db.query(User).filter(
-            User.id == data.super_admin_id, User.role == "admin", User.deleted_at == None
-        ).first()
-        if not existe:
-            raise HTTPException(status_code=400, detail="Ese super-admin no existe")
-
-    valor = "" if data.super_admin_id is None else str(data.super_admin_id)
-    fila = db.query(Setting).filter(Setting.key == "super_admin_publico").first()
-    if fila:
-        fila.value = valor
-    else:
-        db.add(Setting(key="super_admin_publico", value=valor))
-    db.commit()
-    return {
-        "success": True,
-        "data": {"super_admin_id": data.super_admin_id},
-        "message": "Precios de la portada actualizados" if valor else "La portada vuelve a las reglas globales",
-    }
-
-
 @router.get("/commissions/all-rates", response_model=dict)
 def get_all_rates_for_base(
     from_currency: str,

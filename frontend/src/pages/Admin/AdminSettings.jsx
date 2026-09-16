@@ -962,68 +962,6 @@ function KoyweKeysForm() {
 // cotizar al paralelo solo es correcto si la casa TAMBIÉN liquida a esa tasa.
 // Si el dinero se compra al oficial y se promete al paralelo, la diferencia la
 // paga la casa en cada orden.
-function PreciosPortada() {
-  const qc = useQueryClient()
-  const [msg, setMsg] = useState('')
-
-  const { data } = useQuery({
-    queryKey: ['admin-publico'],
-    queryFn: () => api.get('/admin/commissions/publico').then(r => r.data.data),
-  })
-
-  const cambiar = useMutation({
-    mutationFn: (id) => api.put('/admin/commissions/publico', { super_admin_id: id }),
-    onSuccess: (r) => {
-      setMsg(r.data.message)
-      qc.invalidateQueries({ queryKey: ['admin-publico'] })
-      setTimeout(() => setMsg(''), 4000)
-    },
-  })
-
-  const admins = data?.admins || []
-  if (admins.length === 0) return null
-
-  return (
-    <div style={{ ...GLASS, padding: '20px 24px', marginBottom: 16 }}>
-      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Precios de la portada</h3>
-      <p style={{ margin: '4px 0 14px', fontSize: 12.5, color: '#8aa0cc', lineHeight: 1.6 }}>
-        Quien entra a la web sin cuenta no es cliente de nadie todavía, y cada super-admin tiene
-        sus propias comisiones. Elige con cuáles cotiza la calculadora de la portada, o deja las
-        reglas globales.
-      </p>
-
-      <div style={{ display: 'grid', gap: 8, maxWidth: 460 }}>
-        {[{ id: null, full_name: 'Reglas globales', email: 'El precio común, sin dueño' }, ...admins].map(a => {
-          const activa = (data?.super_admin_id ?? null) === a.id
-          return (
-            <button key={a.id ?? 'global'} type="button"
-              onClick={() => { if (!activa) cambiar.mutate(a.id) }}
-              disabled={cambiar.isPending || activa}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11,
-                textAlign: 'left', cursor: activa ? 'default' : 'pointer',
-                background: activa ? 'rgba(74,222,128,.1)' : 'rgba(4,10,30,.5)',
-                border: `1px solid ${activa ? 'rgba(74,222,128,.3)' : 'rgba(255,255,255,.08)'}`,
-              }}>
-              <span style={{
-                width: 16, height: 16, borderRadius: 999, flexShrink: 0,
-                border: `2px solid ${activa ? '#4ade80' : 'rgba(255,255,255,.2)'}`,
-                background: activa ? '#4ade80' : 'transparent',
-              }} />
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>{a.full_name}</span>
-                <span style={{ display: 'block', fontSize: 11.5, color: '#8aa0cc', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.email}</span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      {msg && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#4ade80' }}>{msg}</p>}
-    </div>
-  )
-}
-
 function MercadoParalelo() {
   const qc = useQueryClient()
   const [msg, setMsg] = useState('')
@@ -2099,7 +2037,6 @@ export default function AdminSettings() {
           ) : (
             <>
               <MercadoParalelo />
-              <PreciosPortada />
               <RateTester commData={commData} />
               {/* Comisiones y países juntos: los países de la derecha son los
                   que aparecen como destino en la tabla de la izquierda, así
