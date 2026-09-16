@@ -335,8 +335,15 @@ export default function CardPayment({ orderId, amountLabel, onSuccess, onClose }
   const [account, setAccount] = useState(null)
   const [error, setError] = useState('')
 
+  // `intento` sube al reintentar y vuelve a lanzar el efecto. Sin él, un fallo
+  // al preparar el pago dejaba el error clavado y la única salida era cerrar:
+  // si el tropiezo era pasajero —la red, un 500 de un segundo— no había forma
+  // de volver a probar sin salirse de la pantalla.
+  const [intento, setIntento] = useState(0)
+
   useEffect(() => {
     let cancelado = false
+    setError('')
     api.post(`/payments/orders/${orderId}/intent`)
       .then(r => {
         if (cancelado) return
@@ -348,7 +355,7 @@ export default function CardPayment({ orderId, amountLabel, onSuccess, onClose }
         if (!cancelado) setError(err.response?.data?.detail || 'No se pudo iniciar el pago')
       })
     return () => { cancelado = true }
-  }, [orderId])
+  }, [orderId, intento])
 
   const stripePromise = useMemo(() => (pubKey ? stripeFor(pubKey, account) : null), [pubKey, account])
 
@@ -369,13 +376,22 @@ export default function CardPayment({ orderId, amountLabel, onSuccess, onClose }
           {error && (
             <>
               <p className="text-sm px-3 py-2 rounded-lg mb-4" style={{ color: '#f87171', background: 'rgba(239,68,68,.08)' }}>{error}</p>
-              <button
-                onClick={onClose}
-                className="w-full text-sm font-semibold py-3 rounded-xl"
-                style={{ border: '1px solid rgba(255,255,255,.1)', color: '#8aa0cc', background: 'rgba(255,255,255,.04)' }}
-              >
-                Cerrar
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIntento(n => n + 1)}
+                  className="flex-1 text-sm font-semibold py-3 rounded-xl"
+                  style={{ border: 'none', color: '#fff', background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)' }}
+                >
+                  Reintentar
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex-1 text-sm font-semibold py-3 rounded-xl"
+                  style={{ border: '1px solid rgba(255,255,255,.1)', color: '#8aa0cc', background: 'rgba(255,255,255,.04)' }}
+                >
+                  Cerrar
+                </button>
+              </div>
             </>
           )}
 

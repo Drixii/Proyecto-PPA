@@ -8,6 +8,30 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
+def generate_order_number(db: Session) -> str:
+    """Siguiente numero de orden del ano: CC-2026-0001, CC-2026-0002...
+
+    Se saca del numero mas alto que ya exista, no de cuantas ordenes hay. Con
+    el recuento, borrar una orden hacia que la siguiente repitiera un numero ya
+    usado —y con la base recien vaciada, que volviera a empezar por el 1 sobre
+    numeros que ya andaban por ahi en comprobantes y conversaciones.
+    """
+    year = datetime.now().year
+    prefijo = f"CC-{year}-"
+
+    ultimo = 0
+    numeros = db.query(Order.order_number).filter(
+        Order.order_number.like(f"{prefijo}%")
+    ).all()
+    for (numero,) in numeros:
+        try:
+            ultimo = max(ultimo, int(str(numero)[len(prefijo):]))
+        except (TypeError, ValueError):
+            continue   # un numero con otro formato no puede tumbar un envio
+
+    return f"{prefijo}{ultimo + 1:04d}"
+
+
 def _get_commission(db: Session, from_currency: str = None, to_currency: str = None,
                     super_admin_id: int = None, from_country: str = None,
                     to_country: str = None) -> float:
