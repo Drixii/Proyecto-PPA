@@ -26,11 +26,31 @@ const INP = {
   width: '100%',
   boxSizing: 'border-box',
 }
-const ISO2 = { CLP:'cl', COP:'co', USD:'us', EUR:'es', PEN:'pe', BRL:'br', MXN:'mx', ARS:'ar', CAD:'ca', VES:'ve' }
+// Respaldo por moneda, para los sitios que solo conocen la divisa. Faltaban
+// media docena —Bolivia salía sin bandera— y el euro apuntaba a España.
+const ISO2 = {
+  CLP:'cl', COP:'co', USD:'us', EUR:'eu', PEN:'pe', BRL:'br', MXN:'mx',
+  ARS:'ar', CAD:'ca', VES:'ve', BOB:'bo', PYG:'py', UYU:'uy', CRC:'cr',
+  DOP:'do', GTQ:'gt', CNY:'cn', JPY:'jp', GBP:'gb',
+}
 const flag = cur => ISO2[cur] ? `https://flagcdn.com/20x15/${ISO2[cur]}.png` : null
 
-function FlagImg({ cur, size = 20 }) {
-  return <Bandera iso2={ISO2[cur]} ancho={size} alto={Math.round(size * 0.75)} />
+function FlagImg({ cur, size = 20, iso2 }) {
+  // iso2 explícito si se conoce; si no, el mapa por moneda. Ese mapa estaba
+  // escrito a mano y no tenía todas: Bolivia salía sin bandera.
+  return <Bandera iso2={iso2 || ISO2[cur]} ancho={size} alto={Math.round(size * 0.75)} />
+}
+
+// Varios países comparten divisa (el dólar lo usan EE.UU., Ecuador y Panamá).
+// La comisión se guarda por moneda, así que la comparten; pero cada país se
+// pinta con su bandera y su nombre, o los que comparten divisa desaparecían de
+// la pantalla y no había forma de saber que su ruta estaba cubierta.
+function BanderasDe({ paises, size = 18 }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      {paises.map(p => <Bandera key={p.name} iso2={p.iso2} ancho={size} alto={Math.round(size * 0.75)} />)}
+    </span>
+  )
 }
 
 function fmt(n, cur) {
@@ -259,6 +279,10 @@ function CommissionMatrix({ data, onSaved }) {
   const origenes = data?.from_currencies || currencies
   const destinations = (data?.to_currencies || currencies).filter(c => c !== fromCur)
 
+  const paises = data?.paises || []
+  const paisesDe = (cur, campo) => paises.filter(p => p.currency === cur && p[campo])
+  const nombresDe = (cur, campo) => paisesDe(cur, campo).map(p => p.name).join(', ')
+
   const getRow = (fc, tc) => matrix.find(r => r.from_currency === fc && r.to_currency === tc)
   const k = (fc, tc) => `${fc}_${tc}`
 
@@ -339,8 +363,9 @@ function CommissionMatrix({ data, onSaved }) {
               background: fromCur === c ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.06)',
               color: fromCur === c ? '#eaf2ff' : '#8aa0cc',
               outline: fromCur === c ? '1px solid rgba(56,189,248,.4)' : 'none' }}>
-            <FlagImg cur={c} size={18} />
-            {c}
+            <BanderasDe paises={paisesDe(c, 'can_send')} size={16} />
+            <span>{c}</span>
+            <span style={{ fontSize: 11, opacity: .75 }}>{nombresDe(c, 'can_send')}</span>
           </button>
         ))}
       </div>
@@ -348,9 +373,9 @@ function CommissionMatrix({ data, onSaved }) {
       {/* Per-country base commission */}
       <div style={{ background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', borderRadius: 14, padding: '14px 18px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <FlagImg cur={fromCur} size={20} />
+          <BanderasDe paises={paisesDe(fromCur, 'can_send')} size={20} />
           <span style={{ fontSize: 13, color: '#aebfe2' }}>
-            Comisión base para <strong style={{ color: '#eaf2ff' }}>{countryName(fromCur)}</strong>:
+            Comisión base para <strong style={{ color: '#eaf2ff' }}>{nombresDe(fromCur, 'can_send') || fromCur}</strong>:
           </span>
           <span style={{ fontWeight: 700, color: SRC_STYLE[baseSource === 'mine' ? 'from_default_mine' : baseSource === 'global' ? 'from_default_global' : 'default'].color }}>
             {currentBase.toFixed(2)}%
@@ -405,9 +430,9 @@ function CommissionMatrix({ data, onSaved }) {
                   {/* Destino */}
                   <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <FlagImg cur={tc} size={18} />
+                      <BanderasDe paises={paisesDe(tc, 'can_receive')} size={18} />
                       <span style={{ color: '#eaf2ff', fontWeight: 600 }}>{tc}</span>
-                      <span style={{ fontSize: 12, color: '#8aa0cc' }}>{countryName(tc)}</span>
+                      <span style={{ fontSize: 12, color: '#8aa0cc' }}>{nombresDe(tc, 'can_receive')}</span>
                     </div>
                   </td>
                   {/* Actual */}

@@ -1532,11 +1532,26 @@ def _monedas_de_rutas(db: Session) -> dict:
     etiquetas = {
         cur: f"{', '.join(lista)} ({cur})" for cur, lista in nombres.items()
     }
+    # La lista pais a pais, con su bandera. La pantalla pinta un chip por pais
+    # —Ecuador y Estados Unidos aparte, cada uno con la suya— aunque la comision
+    # se guarde por moneda: sin esto, un pais que comparte divisa no se veia por
+    # ningun lado y no habia forma de saber que su ruta estaba cubierta.
+    lista_paises = [
+        {
+            "name": c.name,
+            "iso2": c.iso2 or "",
+            "currency": c.currency,
+            "can_send": bool(c.can_send),
+            "can_receive": bool(c.can_receive),
+        }
+        for c in paises
+    ]
     return {
         "origen": origen,
         "destino": destino,
         "etiquetas": etiquetas,
         "banderas": banderas,
+        "paises": lista_paises,
     }
 
 
@@ -1635,6 +1650,7 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
             "currencies": rutas["origen"] + [c for c in rutas["destino"] if c not in rutas["origen"]],
             "from_currencies": rutas["origen"],
             "to_currencies": rutas["destino"],
+            "paises": rutas["paises"],
             "labels": CURRENCY_LABELS,
             "flags": CURRENCY_FLAGS,
         },
