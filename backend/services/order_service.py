@@ -8,50 +8,57 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
-def _get_commission(db: Session, from_currency: str = None, to_currency: str = None, super_admin_id: int = None) -> float:
+def _get_commission(db: Session, from_currency: str = None, to_currency: str = None,
+                    super_admin_id: int = None, from_country: str = None,
+                    to_country: str = None) -> float:
+    """Porcentaje que se cobra por esta ruta.
+
+    Se busca de lo mas concreto a lo mas general y se para en la primera que
+    exista. El pais manda sobre la moneda porque varios paises comparten divisa
+    —Ecuador, Estados Unidos y Panama usan el dolar— y hace falta poder cobrar
+    distinto en cada uno sin que el resto se entere:
+
+      1. regla de pais a pais
+      2. regla de la moneda (lo que habia hasta ahora)
+      3. porcentaje base de esa moneda de origen (destino '*')
+      4. comision general del sistema
+
+    Dentro de cada nivel, una regla del super-admin gana sobre la global.
+    """
     from models.commission_rule import CommissionRule
 
-    # 1. Regla específica del super admin para esta ruta exacta
-    if super_admin_id and from_currency and to_currency:
-        rule = db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id == super_admin_id,
-            CommissionRule.from_currency == from_currency,
-            CommissionRule.to_currency == to_currency,
-        ).first()
-        if rule:
-            return rule.commission_pct
+    def busca(**filtros):
+        """Primero la del super-admin, si tiene; si no, la global."""
+        q = db.query(CommissionRule).filter_by(**filtros)
+        if super_admin_id:
+            propia = q.filter(CommissionRule.super_admin_id == super_admin_id).first()
+            if propia:
+                return propia.commission_pct
+        fila = q.filter(CommissionRule.super_admin_id == None).first()
+        return fila.commission_pct if fila else None
 
-    # 2. Regla global para esta ruta exacta
+    # 1. Pais a pais.
+    if from_country and to_country:
+        pct = busca(from_country=from_country, to_country=to_country)
+        if pct is not None:
+            return pct
+
+    # 2. Por moneda. Se exigen los paises nulos para no recoger por accidente
+    #    una regla de pais al preguntar por la moneda entera.
     if from_currency and to_currency:
-        rule = db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id == None,
-            CommissionRule.from_currency == from_currency,
-            CommissionRule.to_currency == to_currency,
-        ).first()
-        if rule:
-            return rule.commission_pct
+        pct = busca(from_currency=from_currency, to_currency=to_currency,
+                    from_country=None, to_country=None)
+        if pct is not None:
+            return pct
 
-    # 3. % base del super admin para este país origen (to_currency='*')
-    if super_admin_id and from_currency:
-        rule = db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id == super_admin_id,
-            CommissionRule.from_currency == from_currency,
-            CommissionRule.to_currency == '*',
-        ).first()
-        if rule:
-            return rule.commission_pct
-
-    # 4. % base global para este país origen
+    # 3. Base de la moneda de origen.
     if from_currency:
-        rule = db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id == None,
-            CommissionRule.from_currency == from_currency,
-            CommissionRule.to_currency == '*',
-        ).first()
-        if rule:
-            return rule.commission_pct
+        pct = busca(from_currency=from_currency, to_currency="*",
+                    from_country=None, to_country=None)
+        if pct is not None:
+            return pct
 
-    # 5. Comisión global genérica
+    # 4. La general del sistema.
     row = db.query(Setting).filter(Setting.key == "commission_pct").first()
     if row:
         try:
@@ -59,12 +66,6 @@ def _get_commission(db: Session, from_currency: str = None, to_currency: str = N
         except ValueError:
             pass
     return settings.FEE_PERCENTAGE
-
-
-def generate_order_number(db: Session) -> str:
-    year = datetime.now().year
-    count = db.query(Order).count() + 1
-    return f"CC-{year}-{count:04d}"
 
 
 def find_sub_admin_for_country(db: Session, country: str, super_admin_id: Optional[int] = None) -> Optional[int]:
@@ -185,7 +186,11 @@ def create_order(db: Session, data, client: User) -> Order:
         rate = vista
 
     client_super_admin_id = getattr(client, "super_admin_id", None)
-    commission_pct = _get_commission(db, data.currency_from, data.currency_to, client_super_admin_id)
+    commission_pct = _get_commission(
+        db, data.currency_from, data.currency_to, client_super_admin_id,
+        from_country=getattr(data, "sender_country", None),
+        to_country=getattr(data, "receiver_country", None),
+    )
     fee = round(data.amount_sent * commission_pct / 100, 2)
     amount_received = round((data.amount_sent - fee) * rate, 2)
 

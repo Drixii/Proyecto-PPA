@@ -276,15 +276,16 @@ function CommissionMatrix({ data, onSaved }) {
   // Origen y destino son listas distintas: un país puede recibir sin enviar
   // —Ecuador, Venezuela, Panamá— y salía como origen de rutas que nadie puede
   // usar. Las manda el backend desde los países dados de alta.
-  const origenes = data?.from_currencies || currencies
-  const destinations = (data?.to_currencies || currencies).filter(c => c !== fromCur)
-
+  // Una entrada por PAÍS, no por moneda: Ecuador, Estados Unidos y Panamá son
+  // rutas distintas aunque compartan el dólar, y cada una lleva su comisión.
   const paises = data?.paises || []
-  const paisesDe = (cur, campo) => paises.filter(p => p.currency === cur && p[campo])
-  const nombresDe = (cur, campo) => paisesDe(cur, campo).map(p => p.name).join(', ')
+  const origenes = paises.filter(p => p.can_send)
+  const origen = origenes.find(p => p.name === fromCur) || origenes[0]
+  const destinations = paises.filter(p => p.can_receive && p.name !== origen?.name)
 
-  const getRow = (fc, tc) => matrix.find(r => r.from_currency === fc && r.to_currency === tc)
-  const k = (fc, tc) => `${fc}_${tc}`
+  const getRow = (paisOrigen, paisDestino) =>
+    matrix.find(r => r.from_country === paisOrigen && r.to_country === paisDestino)
+  const k = (paisOrigen, paisDestino) => `${paisOrigen}_${paisDestino}`
 
   // Base % for current from currency
   const currentBase = myFromDefaults[fromCur] ?? globalFromDefaults[fromCur] ?? globalDefault
@@ -299,13 +300,17 @@ function CommissionMatrix({ data, onSaved }) {
     setTimeout(() => setMsgs(m => { const n = {...m}; delete n[key]; return n }), 2500)
   }
 
-  const handleSaveRow = async (tc) => {
-    const key = k(fromCur, tc)
+  const handleSaveRow = async (destino) => {
+    const key = k(origen?.name, destino.name)
     const pct = parseFloat(editMap[key])
     if (isNaN(pct) || pct < 0 || pct > 100) return
     setSaving(s => ({ ...s, [key]: true }))
     try {
-      await api.put('/admin/commissions', { from_currency: fromCur, to_currency: tc, commission_pct: pct, apply_to_all: applyAll[key] || false })
+      await api.put('/admin/commissions', {
+        from_currency: origen.currency, to_currency: destino.currency,
+        from_country: origen.name, to_country: destino.name,
+        commission_pct: pct, apply_to_all: applyAll[key] || false,
+      })
       setEditMap(m => { const n = {...m}; delete n[key]; return n })
       showMsg(key, '✓ Guardado')
       qc.invalidateQueries(['admin-commissions'])
@@ -329,7 +334,7 @@ function CommissionMatrix({ data, onSaved }) {
     if (isNaN(pct) || pct < 0 || pct > 100) return
     setBaseSaving(true)
     try {
-      await api.put('/admin/commissions', { from_currency: fromCur, to_currency: '*', commission_pct: pct, apply_to_all: false })
+      await api.put('/admin/commissions', { from_currency: origen.currency, to_currency: '*', commission_pct: pct, apply_to_all: false })
       setBaseEdit('')
       setBaseMsg('✓ Base guardada')
       setTimeout(() => setBaseMsg(''), 2500)
@@ -357,15 +362,15 @@ function CommissionMatrix({ data, onSaved }) {
 
       {/* FROM tabs — solo las que pueden enviar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
-        {origenes.map(c => (
-          <button key={c} onClick={() => setFromCur(c)}
+        {origenes.map(p => (
+          <button key={p.name} onClick={() => setFromCur(p.name)}
             style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: 6,
-              background: fromCur === c ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.06)',
-              color: fromCur === c ? '#eaf2ff' : '#8aa0cc',
-              outline: fromCur === c ? '1px solid rgba(56,189,248,.4)' : 'none' }}>
-            <BanderasDe paises={paisesDe(c, 'can_send')} size={16} />
-            <span>{c}</span>
-            <span style={{ fontSize: 11, opacity: .75 }}>{nombresDe(c, 'can_send')}</span>
+              background: origen?.name === p.name ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.06)',
+              color: origen?.name === p.name ? '#eaf2ff' : '#8aa0cc',
+              outline: origen?.name === p.name ? '1px solid rgba(56,189,248,.4)' : 'none' }}>
+            <Bandera iso2={p.iso2} ancho={16} alto={12} />
+            <span>{p.name}</span>
+            <span style={{ fontSize: 11, opacity: .7 }}>{p.currency}</span>
           </button>
         ))}
       </div>
@@ -373,9 +378,10 @@ function CommissionMatrix({ data, onSaved }) {
       {/* Per-country base commission */}
       <div style={{ background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', borderRadius: 14, padding: '14px 18px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <BanderasDe paises={paisesDe(fromCur, 'can_send')} size={20} />
+          <Bandera iso2={origen?.iso2} ancho={20} alto={15} />
           <span style={{ fontSize: 13, color: '#aebfe2' }}>
-            Comisión base para <strong style={{ color: '#eaf2ff' }}>{nombresDe(fromCur, 'can_send') || fromCur}</strong>:
+            Comisión base para <strong style={{ color: '#eaf2ff' }}>{origen?.currency}</strong>
+            <span style={{ color: '#8aa0cc' }}> (toda la moneda)</span>:
           </span>
           <span style={{ fontWeight: 700, color: SRC_STYLE[baseSource === 'mine' ? 'from_default_mine' : baseSource === 'global' ? 'from_default_global' : 'default'].color }}>
             {currentBase.toFixed(2)}%
@@ -417,9 +423,10 @@ function CommissionMatrix({ data, onSaved }) {
             </tr>
           </thead>
           <tbody>
-            {destinations.map(tc => {
-              const row = getRow(fromCur, tc)
-              const key = k(fromCur, tc)
+            {destinations.map(destino => {
+              const tc = destino.name
+              const row = getRow(origen?.name, destino.name)
+              const key = k(origen?.name, destino.name)
               const edited = editMap[key] !== undefined
               const src = row?.source || 'default'
               const srcStyle = SRC_STYLE[src] || SRC_STYLE.default
@@ -430,9 +437,9 @@ function CommissionMatrix({ data, onSaved }) {
                   {/* Destino */}
                   <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <BanderasDe paises={paisesDe(tc, 'can_receive')} size={18} />
-                      <span style={{ color: '#eaf2ff', fontWeight: 600 }}>{tc}</span>
-                      <span style={{ fontSize: 12, color: '#8aa0cc' }}>{nombresDe(tc, 'can_receive')}</span>
+                      <Bandera iso2={destino.iso2} ancho={18} alto={13} />
+                      <span style={{ color: '#eaf2ff', fontWeight: 600 }}>{destino.name}</span>
+                      <span style={{ fontSize: 12, color: '#8aa0cc' }}>{destino.currency}</span>
                     </div>
                   </td>
                   {/* Actual */}
@@ -468,7 +475,7 @@ function CommissionMatrix({ data, onSaved }) {
                   {/* Actions */}
                   <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button onClick={() => handleSaveRow(tc)} disabled={!edited || saving[key]}
+                      <button onClick={() => handleSaveRow(destino)} disabled={!edited || saving[key]}
                         style={{ padding: '5px 14px', borderRadius: 8, border: 'none', cursor: edited ? 'pointer' : 'not-allowed',
                           background: edited ? 'linear-gradient(135deg,#3b82f6,#1d4ed8)' : 'rgba(255,255,255,.06)',
                           color: edited ? '#fff' : '#8aa0cc', fontWeight: 600, fontSize: 12 }}>

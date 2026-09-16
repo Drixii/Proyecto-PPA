@@ -88,6 +88,10 @@ def convert(
     from_currency: str = Query(..., alias="from"),
     to_currency: str = Query(..., alias="to"),
     amount: float = Query(..., gt=0),
+    # Paises opcionales: varios comparten divisa y pueden tener comisiones
+    # distintas. Sin ellos se cobra la de la moneda, que es el nivel anterior.
+    from_country: str | None = Query(None),
+    to_country: str | None = Query(None),
     db: Session = Depends(get_db),
     quien=Depends(get_current_user_optional),
 ):
@@ -114,7 +118,8 @@ def convert(
     # Sin sesion, dueno queda en None y se aplican las reglas globales. Desde
     # que las comisiones son globales eso es lo mismo que ve cualquiera, asi
     # que no hay nada que elegir: la portada cotiza lo que cobran todos.
-    pct = _get_commission(db, from_currency.upper(), to_currency.upper(), dueno)
+    pct = _get_commission(db, from_currency.upper(), to_currency.upper(), dueno,
+                          from_country=from_country, to_country=to_country)
     fee = round(amount * pct / 100, 2)
     amount_received = round((amount - fee) * rate, 2)
     return {

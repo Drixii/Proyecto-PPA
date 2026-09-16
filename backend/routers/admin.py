@@ -1560,11 +1560,16 @@ class CommissionRuleIn(BaseModel):
     to_currency: str
     commission_pct: float
     apply_to_all: bool = False
+    # Ruta concreta. Sin paises, la regla vale para toda la moneda.
+    from_country: Optional[str] = None
+    to_country: Optional[str] = None
 
 
 class CommissionRuleDelete(BaseModel):
     from_currency: str
     to_currency: str
+    from_country: Optional[str] = None
+    to_country: Optional[str] = None
 
 
 @router.get("/commissions", response_model=dict)
@@ -1603,10 +1608,22 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
         ).all()
     }
 
-    def _effective(fc, tc):
+    # Reglas de pais a pais. Mandan sobre las de moneda, que siguen existiendo
+    # como precio general de la divisa.
+    por_pais = {
+        f"{r.from_country}|{r.to_country}": r.commission_pct
+        for r in db.query(CommissionRule).filter(
+            CommissionRule.from_country != None, CommissionRule.to_country != None,
+        ).all()
+    }
+
+    def _effective(fc, tc, pais_origen, pais_destino):
+        propia = por_pais.get(f"{pais_origen}|{pais_destino}")
+        if propia is not None:
+            return propia, "mine"
         k = f"{fc}_{tc}"
         if k in my_rules:
-            return my_rules[k], "mine"
+            return my_rules[k], "global_rule"
         if k in global_rules:
             return global_rules[k], "global_rule"
         if fc in my_from_defaults:
@@ -1618,22 +1635,29 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
     rutas = _monedas_de_rutas(db)
     CURRENCY_LABELS = rutas["etiquetas"]
     CURRENCY_FLAGS = rutas["banderas"]
+    paises = rutas["paises"]
 
+    # Una fila por PAIS, no por moneda: Ecuador, Estados Unidos y Panama son
+    # tres rutas distintas aunque compartan el dolar.
     matrix = []
-    for fc in rutas["origen"]:
-        for tc in rutas["destino"]:
-            if fc == tc:
+    for origen in [p for p in paises if p["can_send"]]:
+        for destino in [p for p in paises if p["can_receive"]]:
+            if origen["name"] == destino["name"]:
                 continue
-            eff, src = _effective(fc, tc)
+            eff, src = _effective(
+                origen["currency"], destino["currency"], origen["name"], destino["name"],
+            )
             matrix.append({
-                "from_currency": fc,
-                "to_currency": tc,
-                "from_label": CURRENCY_LABELS.get(fc, fc),
-                "to_label": CURRENCY_LABELS.get(tc, tc),
-                "from_flag": CURRENCY_FLAGS.get(fc, ""),
-                "to_flag": CURRENCY_FLAGS.get(tc, ""),
-                "my_pct": my_rules.get(f"{fc}_{tc}"),
-                "global_pct": global_rules.get(f"{fc}_{tc}"),
+                "from_currency": origen["currency"],
+                "to_currency": destino["currency"],
+                "from_country": origen["name"],
+                "to_country": destino["name"],
+                "from_label": origen["name"],
+                "to_label": destino["name"],
+                "from_flag": origen["iso2"],
+                "to_flag": destino["iso2"],
+                "my_pct": por_pais.get(f"{origen['name']}|{destino['name']}"),
+                "global_pct": global_rules.get(f"{origen['currency']}_{destino['currency']}"),
                 "effective_pct": eff,
                 "source": src,
             })
@@ -1686,35 +1710,35 @@ def set_commission_rule(
     if data.commission_pct < 0 or data.commission_pct > 100:
         raise HTTPException(400, "Comisión debe estar entre 0 y 100")
 
-    def _upsert(to_currency: str):
+    def _upsert(to_currency: str, to_country: str = None):
         # Las comisiones son del negocio, no de cada super-admin: se guardan
-        # como globales y valen para todos y para las calculadoras publicas,
-        # incluida la de la portada.
+        # como globales y valen para todos y para las calculadoras publicas.
         #
-        # Antes se guardaban a nombre de quien las tocaba, asi que cambiar un
-        # precio solo lo veian los clientes de ese admin y la portada seguia
-        # cotizando otro. Cualquier regla vieja con dueno se borra al guardar:
-        # si sobreviviera, ganaria sobre la global y el cambio no se aplicaria.
-        db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id != None,
-            CommissionRule.from_currency == data.from_currency,
-            CommissionRule.to_currency == to_currency,
+        # Con paises, la regla es de esa ruta concreta: asi Ecuador puede cobrar
+        # distinto que Estados Unidos aunque los dos usen el dolar.
+        pais_origen = data.from_country
+        filtros = dict(
+            from_currency=data.from_currency,
+            to_currency=to_currency,
+            from_country=pais_origen,
+            to_country=to_country,
+        )
+
+        # Restos con dueno de la misma ruta: si sobrevivieran ganarian sobre la
+        # global y el cambio pareceria no aplicarse.
+        db.query(CommissionRule).filter_by(**filtros).filter(
+            CommissionRule.super_admin_id != None
         ).delete(synchronize_session=False)
 
-        rule = db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id == None,
-            CommissionRule.from_currency == data.from_currency,
-            CommissionRule.to_currency == to_currency,
+        rule = db.query(CommissionRule).filter_by(**filtros).filter(
+            CommissionRule.super_admin_id == None
         ).first()
         if rule:
             rule.commission_pct = data.commission_pct
             rule.updated_at = datetime.utcnow()
         else:
             db.add(CommissionRule(
-                super_admin_id=None,
-                from_currency=data.from_currency,
-                to_currency=to_currency,
-                commission_pct=data.commission_pct,
+                super_admin_id=None, commission_pct=data.commission_pct, **filtros
             ))
 
     if data.apply_to_all:
@@ -1725,15 +1749,14 @@ def set_commission_rule(
         # cada super-admin del sistema, así que un admin cambiaba en silencio
         # los precios de los demás. Con un solo admin no se notaba; con dos es
         # justo lo contrario del aislamiento que tiene el resto del panel.
-        destinos = [
-            c.currency for c in db.query(Country).filter(
-                Country.active == True, Country.can_receive == True
-            ).all()
-        ]
-        for to_cur in {d for d in destinos if d != data.from_currency}:
-            _upsert(to_cur)
+        for c in db.query(Country).filter(
+            Country.active == True, Country.can_receive == True
+        ).all():
+            if c.currency == data.from_currency and c.name == data.from_country:
+                continue
+            _upsert(c.currency, c.name)
     else:
-        _upsert(data.to_currency)
+        _upsert(data.to_currency, data.to_country)
 
     db.commit()
     return {"success": True, "data": {}, "message": "Comisión guardada"}
@@ -1861,11 +1884,12 @@ def delete_commission_rule(
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
-    # La regla es global, asi que se borra la global. Se barren tambien los
-    # restos con dueno de antes, que si no seguirian aplicandose.
-    db.query(CommissionRule).filter(
-        CommissionRule.from_currency == data.from_currency,
-        CommissionRule.to_currency == data.to_currency,
+    # La ruta exacta, incluidos los restos con dueno de antes.
+    db.query(CommissionRule).filter_by(
+        from_currency=data.from_currency,
+        to_currency=data.to_currency,
+        from_country=data.from_country,
+        to_country=data.to_country,
     ).delete(synchronize_session=False)
     db.commit()
     return {"success": True, "data": {}, "message": "Regla eliminada"}
@@ -1876,12 +1900,15 @@ def preview_commission(
     from_currency: str,
     to_currency: str,
     amount: float,
+    from_country: Optional[str] = None,
+    to_country: Optional[str] = None,
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
     from services.order_service import _get_commission
     from services.exchange_service import get_rate
-    pct = _get_commission(db, from_currency, to_currency, admin.id)
+    pct = _get_commission(db, from_currency, to_currency, admin.id,
+                          from_country=from_country, to_country=to_country)
     rate = get_rate(db, from_currency, to_currency)
     fee = round(amount * pct / 100, 2)
     net = amount - fee

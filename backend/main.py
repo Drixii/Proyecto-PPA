@@ -102,6 +102,9 @@ def _run_migrations():
         "ALTER TABLE orders ADD COLUMN released_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE orders ADD COLUMN released_by_id INTEGER",
         "ALTER TABLE invite_codes ADD COLUMN trusted BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE commission_rules ADD COLUMN from_country VARCHAR",
+        "ALTER TABLE commission_rules ADD COLUMN to_country VARCHAR",
+        "CREATE INDEX IF NOT EXISTS ix_commission_rules_paises ON commission_rules (from_country, to_country)",
         "ALTER TABLE invite_codes ALTER COLUMN email DROP NOT NULL",
     ]
     # Estas migraciones se reejecutan en cada arranque, así que "la columna ya
