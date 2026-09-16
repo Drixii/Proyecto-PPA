@@ -218,11 +218,6 @@ export default function NewTransfer() {
 
   const [payment, setPayment] = useState({ payment_method: 'transferencia', payment_bank: '' })
   const [copiadoCuenta, setCopiadoCuenta] = useState(false)
-  // Aviso de titularidad. Sale una vez por sesión al elegir cómo pagar: si
-  // saliera en cada envío se aprende a cerrarlo sin leerlo, y si no saliera
-  // nunca el cliente no tiene forma de saber la regla hasta que le rechazan
-  // un pago.
-  const [avisoTitular, setAvisoTitular] = useState(false)
   // Aviso de verificación por monto. Se enseña ANTES de pagar: retener un
   // envío sin haberlo advertido es peor, porque el cliente ya puso el dinero.
   const [avisoMonto, setAvisoMonto] = useState(false)
@@ -308,15 +303,6 @@ export default function NewTransfer() {
   })()
 
   // Qué falta de verdad. Solo decide si el botón de pagar está activo.
-  // Al entrar al paso de pago (3), una vez por sesión.
-  useEffect(() => {
-    if (step !== 3) return
-    try {
-      if (sessionStorage.getItem('aviso-titular') === 'visto') return
-    } catch { /* sin sessionStorage: se muestra igual */ }
-    setAvisoTitular(true)
-  }, [step])
-
   const faltaDelPagador = (() => {
     const falta = []
     const nombre = (pagador.sender_name || '').trim()
@@ -375,16 +361,27 @@ export default function NewTransfer() {
     && !telReceptorMal
 
   // Aviso de que el pago debe salir de la cuenta del propio titular. Se abre al
-  // entrar al paso de pago, una sola vez: repetirlo en cada vuelta atras
-  // convierte la advertencia en un estorbo que se cierra sin leer.
+  // entrar al paso de pago y una sola vez por sesión: repetirlo en cada envío
+  // se aprende a cerrarlo sin leerlo, y no enseñarlo nunca deja al cliente sin
+  // forma de conocer la regla hasta que le rechazan un pago.
+  //
+  // Hubo un tiempo en que había DOS avisos distintos diciendo esto mismo, y al
+  // llegar al paso de pago salían los dos, uno encima del otro.
   const [avisoPagador, setAvisoPagador] = useState(false)
   const avisoMostrado = useRef(false)
   useEffect(() => {
-    if (step === 3 && !avisoMostrado.current) {
-      avisoMostrado.current = true
-      setAvisoPagador(true)
-    }
+    if (step !== 3 || avisoMostrado.current) return
+    avisoMostrado.current = true
+    try {
+      if (sessionStorage.getItem('aviso-titular') === 'visto') return
+    } catch { /* sin sessionStorage se enseña igual */ }
+    setAvisoPagador(true)
   }, [step])
+
+  const cerrarAvisoPagador = () => {
+    try { sessionStorage.setItem('aviso-titular', 'visto') } catch { /* da igual */ }
+    setAvisoPagador(false)
+  }
 
   const rawAmount = parseRaw(displayAmount)
 
@@ -639,36 +636,6 @@ export default function NewTransfer() {
 
   return (
     <FinexyLayout>
-      {avisoTitular && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.82)'}}>
-          <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(251,191,36,.3)'}}>
-            <div className="flex items-start gap-3 mb-3">
-              <span className="text-2xl shrink-0">⚠️</span>
-              <h3 className="font-semibold" style={{color:'#eaf2ff'}}>
-                Paga desde una cuenta a tu nombre
-              </h3>
-            </div>
-            <p className="text-sm leading-relaxed mb-3" style={{color:'#aebfe2'}}>
-              Solo aceptamos pagos emitidos por el mismo titular que registra el envío.
-              El nombre de la cuenta desde la que pagues tiene que coincidir con el tuyo.
-            </p>
-            <p className="text-xs leading-relaxed mb-5" style={{color:'#8aa0cc'}}>
-              Si pagas desde la cuenta de otra persona, el envío queda retenido y puede
-              anularse. Es para proteger tanto tu dinero como el de quien recibe.
-            </p>
-            <button
-              onClick={() => {
-                try { sessionStorage.setItem('aviso-titular', 'visto') } catch { /* da igual */ }
-                setAvisoTitular(false)
-              }}
-              className="w-full text-sm font-semibold py-3 rounded-xl"
-              style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', color:'#fff'}}>
-              Entendido, pagaré desde mi cuenta
-            </button>
-          </div>
-        </div>
-      )}
-
       {avisoMonto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.82)'}}>
           <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(168,85,247,.3)'}}>
@@ -1668,7 +1635,7 @@ export default function NewTransfer() {
         <Portal>
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(2,6,23,.8)', backdropFilter: 'blur(4px)' }}
-            onClick={() => setAvisoPagador(false)}>
+            onClick={cerrarAvisoPagador}>
             <div className="w-full max-w-sm rounded-3xl p-6 text-center" style={GLASS}
               onClick={e => e.stopPropagation()}>
               <div className="mx-auto mb-4 flex items-center justify-center rounded-2xl"
@@ -1686,7 +1653,7 @@ export default function NewTransfer() {
                 Si el dinero llega desde la cuenta de otra persona, el envío queda retenido y
                 hay que devolverlo.
               </p>
-              <button onClick={() => setAvisoPagador(false)}
+              <button onClick={cerrarAvisoPagador}
                 className="w-full bg-gradient-to-r from-blue-400 to-blue-700 text-white font-semibold py-3 rounded-xl">
                 Entendido
               </button>
