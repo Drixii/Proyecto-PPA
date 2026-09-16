@@ -1903,62 +1903,82 @@ def delete_commission_rule(
     return {"success": True, "data": {}, "message": "Regla eliminada"}
 
 
-def _pais_de_origen(db: Session, nombre: str) -> Country:
+def _pais_del_cartel(db: Session, nombre: str, sentido: str = "envia") -> Country:
+    """El país del que va el cartel, mirando en la dirección que toca."""
     pais = db.query(Country).filter(Country.name == nombre, Country.active == True).first()
     if not pais:
         raise HTTPException(status_code=404, detail="País no encontrado")
-    if not pais.can_send:
+    if sentido == "recibe":
+        if not pais.can_receive:
+            raise HTTPException(status_code=400, detail=f"{pais.name} no recibe envíos")
+    elif not pais.can_send:
         raise HTTPException(status_code=400, detail=f"Desde {pais.name} no se puede enviar")
     return pais
 
 
-def _filas_de_tasas(db: Session, origen: Country) -> list[dict]:
-    """Una fila por destino dado de alta, con la tasa ya con su comisión.
+def _tasa_de_ruta(db: Session, desde: Country, hacia: Country) -> Optional[float]:
+    """A cuánto sale esa ruta: la tasa con la comisión de ESA ruta descontada.
 
-    Salen TODOS los destinos de la lista de países. Si a alguno le falta la
-    tasa, viene con tasa None y en la imagen sale con una raya: si está dado de
-    alta, tiene que verse.
+    Es la misma cuenta que hace /rates/convert, que es lo que ven todas las
+    calculadoras, así que la imagen y el cliente dicen lo mismo.
     """
     from services.exchange_service import get_rate
     from services.order_service import _get_commission
 
+    tasa = get_rate(db, desde.currency, hacia.currency)
+    if not tasa:
+        return None
+    pct = _get_commission(
+        db, desde.currency, hacia.currency, None,
+        from_country=desde.name, to_country=hacia.name,
+    )
+    return tasa * (1 - pct / 100)
+
+
+def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[dict]:
+    """Una fila por país del listado, con la tasa de su ruta.
+
+    En `envia`, `pais` es el origen y las filas son los destinos. En `recibe`
+    es al revés: el cartel es de lo que llega a `pais` y cada fila es un país
+    que le manda, con lo que vale allí un... perdón, con lo que se recibe aquí
+    por una unidad de la moneda de allí.
+
+    Salen TODOS los países del listado. Al que le falte la tasa viene con None
+    y en la imagen sale con una raya: si está dado de alta, tiene que verse.
+    """
+    recibe = sentido == "recibe"
+    otros = db.query(Country).filter(
+        Country.active == True,
+        Country.can_send == True if recibe else Country.can_receive == True,
+    ).order_by(Country.name).all()
+
     filas = []
-    for destino in db.query(Country).filter(
-        Country.active == True, Country.can_receive == True
-    ).order_by(Country.name).all():
-        if destino.name == origen.name:
+    for otro in otros:
+        if otro.name == pais.name:
             continue
-        tasa = get_rate(db, origen.currency, destino.currency)
-        efectiva = None
-        if tasa:
-            pct = _get_commission(
-                db, origen.currency, destino.currency, None,
-                from_country=origen.name, to_country=destino.name,
-            )
-            # La comisión se descuenta del monto enviado, así que la tasa a la
-            # que sale la operación baja en ese porcentaje. Es la misma cuenta
-            # que hace /rates/convert, que es lo que ven las calculadoras.
-            efectiva = tasa * (1 - pct / 100)
+        desde, hacia = (otro, pais) if recibe else (pais, otro)
         filas.append({
-            "name": destino.name,
-            "iso2": destino.iso2 or "",
-            "currency": destino.currency,
-            "tasa": efectiva,
+            "name": otro.name,
+            "iso2": otro.iso2 or "",
+            "currency": otro.currency,
+            "tasa": _tasa_de_ruta(db, desde, hacia),
         })
 
     if not filas:
-        raise HTTPException(status_code=400, detail="No hay destinos dados de alta")
+        raise HTTPException(status_code=400, detail="No hay países dados de alta para ese listado")
     return filas
 
 
-def _clave_posicion(iso2: str) -> str:
-    return f"imagen_tabla_{(iso2 or '').lower()}"
+def _clave_posicion(iso2: str, sentido: str = "envia") -> str:
+    from services.imagen_tasas import clave_imagen
+
+    return f"imagen_tabla_{clave_imagen(iso2, sentido)}"
 
 
-def _posicion_guardada(db: Session, iso2: str) -> dict:
+def _posicion_guardada(db: Session, iso2: str, sentido: str = "envia") -> dict:
     from services.imagen_tasas import POSICION_POR_DEFECTO
 
-    fila = db.query(Setting).filter(Setting.key == _clave_posicion(iso2)).first()
+    fila = db.query(Setting).filter(Setting.key == _clave_posicion(iso2, sentido)).first()
     if not fila or not fila.value:
         return dict(POSICION_POR_DEFECTO)
     try:
@@ -1970,6 +1990,7 @@ def _posicion_guardada(db: Session, iso2: str) -> dict:
 @router.get("/commissions/imagen")
 def imagen_de_tasas(
     from_country: str,
+    sentido: str = "envia",
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
@@ -1984,16 +2005,18 @@ def imagen_de_tasas(
     from fastapi.responses import Response
     from services import imagen_tasas
 
-    origen = _pais_de_origen(db, from_country)
-    filas = _filas_de_tasas(db, origen)
-    datos = {"name": origen.name, "iso2": origen.iso2 or "", "currency": origen.currency}
-    png = imagen_tasas.generar(datos, filas, _posicion_guardada(db, origen.iso2))
+    pais = _pais_del_cartel(db, from_country, sentido)
+    filas = _filas_de_tasas(db, pais, sentido)
+    datos = {"name": pais.name, "iso2": pais.iso2 or "", "currency": pais.currency}
+    png = imagen_tasas.generar(datos, filas,
+                               _posicion_guardada(db, pais.iso2, sentido), sentido)
     return Response(content=png, media_type="image/png")
 
 
 @router.get("/commissions/imagen/editor", response_model=dict)
 def editor_de_imagen(
     from_country: str,
+    sentido: str = "envia",
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
@@ -2003,19 +2026,22 @@ def editor_de_imagen(
     arrastra en pantalla sea lo mismo que va a salir.
     """
     from services.imagen_tasas import (
-        ANCHO_FINAL, ALTO_FINAL, formatea_tasa, ruta_fondo,
+        ANCHO_FINAL, ALTO_FINAL, abrevia, formatea_tasa, ruta_fondo,
     )
 
-    origen = _pais_de_origen(db, from_country)
+    pais = _pais_del_cartel(db, from_country, sentido)
     return {
         "success": True,
         "data": {
             "lienzo": {"ancho": ANCHO_FINAL, "alto": ALTO_FINAL},
-            "tiene_fondo": bool(ruta_fondo(origen.iso2 or "")),
-            "posicion": _posicion_guardada(db, origen.iso2),
+            "tiene_fondo": bool(ruta_fondo(pais.iso2 or "", sentido)),
+            "posicion": _posicion_guardada(db, pais.iso2, sentido),
             "filas": [
-                {"name": f["name"], "iso2": f["iso2"], "tasa": formatea_tasa(f["tasa"])}
-                for f in _filas_de_tasas(db, origen)
+                {
+                    "name": f["name"], "iso2": f["iso2"], "currency": f["currency"],
+                    "abrev": abrevia(f["name"]), "tasa": formatea_tasa(f["tasa"]),
+                }
+                for f in _filas_de_tasas(db, pais, sentido)
             ],
         },
         "message": "",
@@ -2025,6 +2051,7 @@ def editor_de_imagen(
 @router.get("/commissions/imagen/fondo")
 def ver_fondo(
     from_country: str,
+    sentido: str = "envia",
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
@@ -2032,10 +2059,10 @@ def ver_fondo(
     from fastapi.responses import FileResponse
     from services.imagen_tasas import ruta_fondo
 
-    origen = _pais_de_origen(db, from_country)
-    ruta = ruta_fondo(origen.iso2 or "")
+    pais = _pais_del_cartel(db, from_country, sentido)
+    ruta = ruta_fondo(pais.iso2 or "", sentido)
     if not ruta:
-        raise HTTPException(status_code=404, detail="Ese país no tiene imagen de fondo")
+        raise HTTPException(status_code=404, detail="Ese listado no tiene imagen de fondo")
     return FileResponse(ruta, media_type="image/jpeg")
 
 
@@ -2044,6 +2071,7 @@ def ver_fondo(
 @router.post("/commissions/imagen/fondo", response_model=dict)
 def subir_fondo(
     from_country: str,
+    sentido: str = "envia",
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
@@ -2051,9 +2079,9 @@ def subir_fondo(
     """Sube la imagen de fondo de un país. Se guarda recortada a 560x827."""
     from services.imagen_tasas import guardar_fondo
 
-    origen = _pais_de_origen(db, from_country)
-    if not origen.iso2:
-        raise HTTPException(status_code=400, detail=f"{origen.name} no tiene código de país")
+    pais = _pais_del_cartel(db, from_country, sentido)
+    if not pais.iso2:
+        raise HTTPException(status_code=400, detail=f"{pais.name} no tiene código de país")
 
     permitidas = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -2067,26 +2095,27 @@ def subir_fondo(
     if len(datos) > 12 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="La imagen pesa más de 12 MB")
     try:
-        guardar_fondo(origen.iso2, datos)
+        guardar_fondo(pais.iso2, datos, sentido)
     except Exception:
         raise HTTPException(status_code=400, detail="No se pudo leer esa imagen")
 
-    return {"success": True, "data": None, "message": f"Fondo de {origen.name} guardado"}
+    return {"success": True, "data": None, "message": f"Fondo de {pais.name} guardado"}
 
 
 @router.delete("/commissions/imagen/fondo", response_model=dict)
 def quitar_fondo(
     from_country: str,
+    sentido: str = "envia",
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
     """Quita la imagen subida. El país vuelve a la versión automática."""
     from services.imagen_tasas import borrar_fondo
 
-    origen = _pais_de_origen(db, from_country)
-    if not borrar_fondo(origen.iso2 or ""):
-        raise HTTPException(status_code=404, detail="Ese país no tiene imagen de fondo")
-    return {"success": True, "data": None, "message": f"Fondo de {origen.name} eliminado"}
+    pais = _pais_del_cartel(db, from_country, sentido)
+    if not borrar_fondo(pais.iso2 or "", sentido):
+        raise HTTPException(status_code=404, detail="Ese listado no tiene imagen de fondo")
+    return {"success": True, "data": None, "message": f"Fondo de {pais.name} eliminado"}
 
 
 class PosicionTablaIn(BaseModel):
@@ -2096,20 +2125,22 @@ class PosicionTablaIn(BaseModel):
     alto: Optional[int] = None
     letra: Optional[int] = None
     negrita: Optional[bool] = None
+    etiqueta: Optional[str] = None
 
 
 @router.put("/commissions/imagen/tabla", response_model=dict)
 def mover_tabla(
     from_country: str,
     data: PosicionTablaIn,
+    sentido: str = "envia",
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
     """Guarda dónde va el bloque de países y tasas sobre la imagen del país."""
-    from services.imagen_tasas import ANCHO_FINAL, ALTO_FINAL, POSICION_POR_DEFECTO
+    from services.imagen_tasas import ANCHO_FINAL, ALTO_FINAL, ETIQUETAS
 
-    origen = _pais_de_origen(db, from_country)
-    actual = _posicion_guardada(db, origen.iso2)
+    pais = _pais_del_cartel(db, from_country, sentido)
+    actual = _posicion_guardada(db, pais.iso2, sentido)
     ancho = int(data.ancho or actual["ancho"])
     alto = int(data.alto or actual["alto"])
     letra = int(data.letra or actual.get("letra") or 100)
@@ -2128,9 +2159,12 @@ def mover_tabla(
         # `or` no vale aquí: apagar la negrita manda False y se perdería.
         "negrita": (data.negrita if data.negrita is not None
                     else actual.get("negrita", True)),
+        # Qué se escribe en cada fila: el país, su abreviatura o la divisa.
+        "etiqueta": (data.etiqueta if data.etiqueta in ETIQUETAS
+                     else actual.get("etiqueta", "pais")),
     }
 
-    clave = _clave_posicion(origen.iso2)
+    clave = _clave_posicion(pais.iso2, sentido)
     fila = db.query(Setting).filter(Setting.key == clave).first()
     if fila:
         fila.value = json.dumps(posicion)
@@ -2143,14 +2177,15 @@ def mover_tabla(
 @router.delete("/commissions/imagen/tabla", response_model=dict)
 def centrar_tabla(
     from_country: str,
+    sentido: str = "envia",
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
     """Devuelve el bloque a su sitio de fábrica."""
     from services.imagen_tasas import POSICION_POR_DEFECTO
 
-    origen = _pais_de_origen(db, from_country)
-    db.query(Setting).filter(Setting.key == _clave_posicion(origen.iso2)).delete()
+    pais = _pais_del_cartel(db, from_country, sentido)
+    db.query(Setting).filter(Setting.key == _clave_posicion(pais.iso2, sentido)).delete()
     db.commit()
     return {"success": True, "data": dict(POSICION_POR_DEFECTO), "message": "Posición restablecida"}
 

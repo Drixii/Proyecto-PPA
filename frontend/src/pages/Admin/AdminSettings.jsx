@@ -291,7 +291,13 @@ function CommissionMatrix({ data, onSaved }) {
   // rutas distintas aunque compartan el dólar, y cada una lleva su comisión.
   const paises = data?.paises || []
   const origenes = paises.filter(p => p.can_send)
-  const origen = origenes.find(p => p.name === fromCur) || origenes[0]
+  // Venezuela no envía, así que nunca sale como origen, pero es a donde va casi
+  // todo: tiene su propia pestaña para ver de un vistazo quién le manda y a
+  // cuánto. Ahí no hay comisiones que tocar —esas viven en la ruta de cada
+  // país que envía—, solo el cartel.
+  const receptor = paises.find(p => p.name === 'Venezuela' && p.can_receive && !p.can_send)
+  const soloRecibe = fromCur === RECIBE
+  const origen = soloRecibe ? receptor : (origenes.find(p => p.name === fromCur) || origenes[0])
   const destinations = paises.filter(p => p.can_receive && p.name !== origen?.name)
 
   const getRow = (paisOrigen, paisDestino) =>
@@ -377,8 +383,19 @@ function CommissionMatrix({ data, onSaved }) {
         </div>
       </div>
 
-      {/* FROM tabs — solo las que pueden enviar */}
+      {/* FROM tabs — solo las que pueden enviar, más la de Venezuela recibe */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
+        {receptor && (
+          <button onClick={() => setFromCur(RECIBE)}
+            style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: 6,
+              background: soloRecibe ? 'rgba(250,204,21,.18)' : 'rgba(255,255,255,.06)',
+              color: soloRecibe ? '#fde68a' : '#8aa0cc',
+              outline: soloRecibe ? '1px solid rgba(250,204,21,.45)' : 'none' }}>
+            <Bandera iso2={receptor.iso2} ancho={16} alto={12} />
+            <span>{receptor.name}</span>
+            <span style={{ fontSize: 11, opacity: .8 }}>(recibe)</span>
+          </button>
+        )}
         {origenes.map(p => (
           <button key={p.name} onClick={() => setFromCur(p.name)}
             style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: 6,
@@ -392,6 +409,13 @@ function CommissionMatrix({ data, onSaved }) {
         ))}
       </div>
 
+      {soloRecibe ? (
+        <p style={{ margin: '0 0 18px', fontSize: 12, color: '#8aa0cc', lineHeight: 1.7 }}>
+          Aquí solo se ve el cartel de lo que <strong>llega</strong> a {receptor?.name}: una fila
+          por país que le envía, con la tasa de esa ruta. Las comisiones se ponen en la
+          pestaña del país que envía.
+        </p>
+      ) : (<>
       {/* Per-country base commission */}
       <div style={{ background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', borderRadius: 14, padding: '14px 18px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -513,13 +537,14 @@ function CommissionMatrix({ data, onSaved }) {
           </tbody>
         </table>
       </div>
+      </>)}
 
-      {/* Imagen para compartir: la tabla de este origen hacia todos sus
-          destinos, con la comisión de cada ruta ya descontada. */}
-      <ImagenDeTasas origen={origen} />
+      {/* Imagen para compartir: una fila por país del listado, con la
+          comisión de cada ruta ya descontada. */}
+      <ImagenDeTasas origen={origen} sentido={soloRecibe ? 'recibe' : 'envia'} />
 
       {/* Legend */}
-      <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 11, color: '#8aa0cc' }}>
+      <div hidden={soloRecibe} style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 11, color: '#8aa0cc' }}>
         {Object.entries(SRC_STYLE).map(([k, v]) => (
           <span key={k}><span style={{ color: v.color }}>●</span> {v.label}</span>
         ))}
@@ -1061,6 +1086,10 @@ function KoyweKeysForm() {
 // Mismas constantes que services/imagen_tasas.py, en píxeles de la imagen
 // final. Si cambian allí, cambian aquí: lo que se arrastra dejaría de
 // coincidir con lo que se genera.
+// Valor de `fromCur` cuando lo elegido no es un origen sino el listado de
+// lo que LLEGA a Venezuela.
+const RECIBE = '__recibe__'
+
 const ESPACIO_FILA = 5
 const ALTO_FILA_MIN = 16
 const ALTO_FILA_MAX = 42
@@ -1075,7 +1104,7 @@ function reparteFilas(n, alto) {
   return { altoFila, desde: Math.max(sobra, 0) / 2 }
 }
 
-function ImagenDeTasas({ origen }) {
+function ImagenDeTasas({ origen, sentido = 'envia' }) {
   const [url, setUrl] = useState(null)
   const [fondoUrl, setFondoUrl] = useState(null)
   const [cargando, setCargando] = useState(false)
@@ -1090,9 +1119,9 @@ function ImagenDeTasas({ origen }) {
   const ficheroRef = useRef(null)
 
   const { data: editor, refetch } = useQuery({
-    queryKey: ['imagen-editor', origen?.name],
+    queryKey: ['imagen-editor', origen?.name, sentido],
     queryFn: () => api.get('/admin/commissions/imagen/editor', {
-      params: { from_country: origen.name },
+      params: { from_country: origen.name, sentido },
     }).then(r => r.data.data),
     enabled: !!origen?.name,
   })
@@ -1101,9 +1130,9 @@ function ImagenDeTasas({ origen }) {
   const filas = editor?.filas || []
   const posicion = pos || editor?.posicion || { x: 110, y: 215, ancho: 340, alto: 550, letra: 100, negrita: true }
 
-  // La posición vuelve a mandarla el servidor al cambiar de país; el estado
+  // La posición vuelve a mandarla el servidor al cambiar de cartel; el estado
   // local solo existe mientras se arrastra.
-  useEffect(() => { setPos(null) }, [origen?.name])
+  useEffect(() => { setPos(null) }, [origen?.name, sentido])
 
   // La imagen de fondo va detrás de sesión, así que no se puede poner en un
   // <img src>: se pide con el token y se convierte en URL de objeto.
@@ -1113,7 +1142,7 @@ function ImagenDeTasas({ origen }) {
     setFondoUrl(u => { if (u) URL.revokeObjectURL(u); return null })
     if (origen?.name && editor?.tiene_fondo) {
       api.get('/admin/commissions/imagen/fondo', {
-        params: { from_country: origen.name }, responseType: 'blob',
+        params: { from_country: origen.name, sentido }, responseType: 'blob',
       }).then(r => {
         if (!vivo) return
         creada = URL.createObjectURL(r.data)
@@ -1145,7 +1174,7 @@ function ImagenDeTasas({ origen }) {
     setCargando(true); setError('')
     try {
       const r = await api.get('/admin/commissions/imagen', {
-        params: { from_country: origen.name }, responseType: 'blob',
+        params: { from_country: origen.name, sentido }, responseType: 'blob',
       })
       setUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(r.data) })
     } catch (e) {
@@ -1160,7 +1189,7 @@ function ImagenDeTasas({ origen }) {
     cuerpo.append('file', archivo)
     try {
       await api.post('/admin/commissions/imagen/fondo', cuerpo, {
-        params: { from_country: origen.name },
+        params: { from_country: origen.name, sentido },
       })
       await refetch()
       aviso('Imagen de fondo guardada')
@@ -1176,7 +1205,7 @@ function ImagenDeTasas({ origen }) {
     setError('')
     try {
       await api.delete('/admin/commissions/imagen/fondo', {
-        params: { from_country: origen.name },
+        params: { from_country: origen.name, sentido },
       })
       await refetch()
       aviso('Imagen quitada. Este país vuelve a la versión automática.')
@@ -1188,7 +1217,7 @@ function ImagenDeTasas({ origen }) {
   const guardarPosicion = async (siguiente) => {
     try {
       await api.put('/admin/commissions/imagen/tabla', siguiente, {
-        params: { from_country: origen.name },
+        params: { from_country: origen.name, sentido },
       })
     } catch (e) {
       setError(await detalleDeError(e, 'No se pudo guardar la posición'))
@@ -1198,7 +1227,7 @@ function ImagenDeTasas({ origen }) {
   const restablecer = async () => {
     try {
       const r = await api.delete('/admin/commissions/imagen/tabla', {
-        params: { from_country: origen.name },
+        params: { from_country: origen.name, sentido },
       })
       setPos(r.data.data)
       aviso('Bloque devuelto a su sitio')
@@ -1257,6 +1286,14 @@ function ImagenDeTasas({ origen }) {
   const factorLetra = (posicion.letra || 100) / 100
   const negrita = posicion.negrita !== false
 
+  const etiqueta = posicion.etiqueta || 'pais'
+
+  const cambiaEtiqueta = (cual) => {
+    const siguiente = { ...posicion, etiqueta: cual }
+    setPos(siguiente)
+    guardarPosicion(siguiente)
+  }
+
   const cambiaNegrita = () => {
     const siguiente = { ...posicion, negrita: !negrita }
     setPos(siguiente)
@@ -1286,11 +1323,30 @@ function ImagenDeTasas({ origen }) {
       <h4 style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 700, color: '#eaf2ff' }}>
         Imagen de tasas de {origen?.name || ''}
       </h4>
-      <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+      <p style={{ margin: '0 0 12px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
         Sube la imagen del país con su fondo y sus letras ya puestas, y coloca
         encima el bloque de países y tasas arrastrándolo. Sin imagen subida se
         genera la versión automática.
       </p>
+
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+        {[
+          { clave: 'pais', texto: 'Nombre del país', ayuda: 'ESTADOS UNIDOS' },
+          { clave: 'abrev', texto: 'Abreviado', ayuda: 'EEUU' },
+          { clave: 'divisa', texto: 'Divisa', ayuda: 'USD, con el país debajo en pequeño' },
+        ].map(({ clave, texto, ayuda }) => (
+          <button key={clave} onClick={() => cambiaEtiqueta(clave)} title={ayuda}
+            style={{
+              padding: '7px 14px', borderRadius: 999, fontSize: 12.5, fontWeight: 700,
+              cursor: 'pointer', border: 'none',
+              background: etiqueta === clave ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.06)',
+              color: etiqueta === clave ? '#eaf2ff' : '#8aa0cc',
+              outline: etiqueta === clave ? '1px solid rgba(56,189,248,.4)' : 'none',
+            }}>
+            {texto}
+          </button>
+        ))}
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <input
@@ -1384,10 +1440,21 @@ function ImagenDeTasas({ origen }) {
                       }} />
                   )}
                   <span style={{
-                    flex: 1, minWidth: 0, fontSize: Math.max(Math.min(altoFila * 0.34 * factorLetra, altoFila * 0.62) * escalaVista, 5),
+                    flex: 1, minWidth: 0, lineHeight: 1.1,
+                    fontSize: Math.max(Math.min(altoFila * 0.34 * factorLetra, altoFila * 0.62) * escalaVista, 5),
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
-                    {f.name.toUpperCase()}
+                    {etiqueta === 'divisa' ? (f.currency || '').toUpperCase()
+                      : etiqueta === 'abrev' ? (f.abrev || f.name).toUpperCase()
+                      : f.name.toUpperCase()}
+                    {etiqueta === 'divisa' && (
+                      <span style={{
+                        display: 'block', color: '#3b82f6', fontWeight: 700,
+                        fontSize: Math.max(Math.min(altoFila * 0.34 * factorLetra, altoFila * 0.62) * 0.52 * escalaVista, 4),
+                      }}>
+                        {f.name.toUpperCase()}
+                      </span>
+                    )}
                   </span>
                   <span style={{ fontSize: Math.max(Math.min(altoFila * 0.42 * factorLetra, altoFila * 0.62) * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
                 </div>

@@ -109,7 +109,31 @@ def reparte_filas(cuantas: int, arriba: int, abajo: int):
     return alto_fila, arriba + max(sobra, 0) // 2
 
 
+# Como se abrevian los nombres que no caben. Solo los largos: 'Chile' o 'Perú'
+# se quedan como estan, que ya son cortos.
+ABREVIATURAS = {
+    "Estados Unidos": "EEUU",
+    "Venezuela": "VNZLA",
+    "República Dominicana": "R. DOM.",
+    "Costa Rica": "C. RICA",
+    "Reino Unido": "R. UNIDO",
+    "Guatemala": "GUATE",
+    "Argentina": "ARG",
+    "Colombia": "COL",
+    "Paraguay": "PARAG.",
+    "Uruguay": "URUG.",
+}
+
+# Que se escribe en cada fila. Lo elige el editor.
+ETIQUETAS = ("pais", "abrev", "divisa")
+
+
+def abrevia(nombre: str) -> str:
+    return ABREVIATURAS.get(nombre, nombre)
+
+
 SOMBRA = (6, 16, 46)
+TEXTO_DIVISA = (59, 130, 246)   # el azul claro del pais pequeno bajo la divisa
 
 
 def _escribe(d: ImageDraw.ImageDraw, xy, texto, fuente, fill, espaciado=0,
@@ -411,7 +435,8 @@ def _pie(d: ImageDraw.ImageDraw) -> int:
 
 def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
                   izq: int, arriba: int, der: int, abajo: int,
-                  letra: float = 1.0, negrita: bool = True) -> None:
+                  letra: float = 1.0, negrita: bool = True,
+                  etiqueta: str = "pais") -> None:
     """Pinta la tabla dentro del rectangulo dado.
 
     Va aparte porque las filas son lo unico que no cambia: se dibujan igual en
@@ -456,10 +481,25 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
                font=f_tasa, fill=TEXTO_PAIS, anchor="rm")
 
         hueco = borde_tasa - _ancho(texto_tasa, f_tasa) - int(8 * ESCALA) - x_nombre
-        f_nombre = _encaja(peso_pais, fila["name"].upper(),
-                           min(max(int(alto_fila * 0.34 * letra), 9 * ESCALA), tope), hueco)
-        d.text((x_nombre, y + alto_fila // 2), fila["name"].upper(),
-               font=f_nombre, fill=TEXTO_PAIS, anchor="lm")
+        cuerpo = min(max(int(alto_fila * 0.34 * letra), 9 * ESCALA), tope)
+
+        if etiqueta == "divisa":
+            # Dos lineas: la divisa grande y debajo el pais en pequeno, que es
+            # lo unico que distingue a Ecuador de Panama cuando las dos son USD.
+            divisa = (fila.get("currency") or "").upper()
+            f_divisa = _encaja(peso_pais, divisa, cuerpo, hueco)
+            d.text((x_nombre, y + int(alto_fila * 0.40)), divisa,
+                   font=f_divisa, fill=TEXTO_PAIS, anchor="lm")
+
+            pais = fila["name"].upper()
+            f_pequeno = _encaja("semi", pais, max(int(cuerpo * 0.52), 6 * ESCALA), hueco)
+            d.text((x_nombre, y + int(alto_fila * 0.72)), pais,
+                   font=f_pequeno, fill=TEXTO_DIVISA, anchor="lm")
+        else:
+            texto = fila["name"] if etiqueta == "pais" else abrevia(fila["name"])
+            f_nombre = _encaja(peso_pais, texto.upper(), cuerpo, hueco)
+            d.text((x_nombre, y + alto_fila // 2), texto.upper(),
+                   font=f_nombre, fill=TEXTO_PAIS, anchor="lm")
 
         y += alto_fila + ESPACIO
 
@@ -473,18 +513,29 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
 # nombre y el numero quedan cerca, como en el arte de referencia.
 POSICION_POR_DEFECTO = {
     "x": 110, "y": 215, "ancho": 340, "alto": 550, "letra": 100, "negrita": True,
+    "etiqueta": "pais",
 }
 
 
-def ruta_fondo(iso2: str) -> str | None:
-    """Fichero de la imagen subida para ese pais, si la hay."""
+def clave_imagen(iso2: str, sentido: str = "envia") -> str:
+    """Identifica una imagen: el pais y en que direccion se mira.
+
+    Un mismo pais puede tener dos carteles distintos —uno de lo que envia y
+    otro de lo que recibe— con su propio fondo y su propia colocacion.
+    """
+    base = (iso2 or "").lower()
+    return base if sentido != "recibe" else f"{base}-recibe"
+
+
+def ruta_fondo(iso2: str, sentido: str = "envia") -> str | None:
+    """Fichero de la imagen subida para ese cartel, si la hay."""
     if not iso2:
         return None
-    ruta = os.path.join(FONDOS_SUBIDOS, f"{iso2.lower()}.jpg")
+    ruta = os.path.join(FONDOS_SUBIDOS, f"{clave_imagen(iso2, sentido)}.jpg")
     return ruta if os.path.exists(ruta) else None
 
 
-def guardar_fondo(iso2: str, datos: bytes) -> None:
+def guardar_fondo(iso2: str, datos: bytes, sentido: str = "envia") -> None:
     """Deja la imagen subida lista para usarse: recortada a 560x827.
 
     Se guarda ya recortada para que lo que se ve en el editor y lo que sale al
@@ -495,19 +546,20 @@ def guardar_fondo(iso2: str, datos: bytes) -> None:
     # pixeles girados; sin esto se guardan tumbadas.
     img = ImageOps.exif_transpose(img).convert("RGB")
     os.makedirs(FONDOS_SUBIDOS, exist_ok=True)
-    _cubre(img, ANCHO, ALTO).save(os.path.join(FONDOS_SUBIDOS, f"{iso2.lower()}.jpg"),
-                                  "JPEG", quality=92)
+    nombre = f"{clave_imagen(iso2, sentido)}.jpg"
+    _cubre(img, ANCHO, ALTO).save(os.path.join(FONDOS_SUBIDOS, nombre), "JPEG", quality=92)
 
 
-def borrar_fondo(iso2: str) -> bool:
-    ruta = ruta_fondo(iso2)
+def borrar_fondo(iso2: str, sentido: str = "envia") -> bool:
+    ruta = ruta_fondo(iso2, sentido)
     if not ruta:
         return False
     os.remove(ruta)
     return True
 
 
-def generar(origen: dict, filas: list[dict], posicion: dict | None = None) -> bytes:
+def generar(origen: dict, filas: list[dict], posicion: dict | None = None,
+            sentido: str = "envia") -> bytes:
     """PNG con una fila por destino: bandera, pais y a cuanto se le envia.
 
     `origen` es {name, iso2, currency}; cada fila, {name, iso2, currency,
@@ -516,7 +568,7 @@ def generar(origen: dict, filas: list[dict], posicion: dict | None = None) -> by
     Si hay imagen subida para el pais, se usa tal cual y solo se le dibuja la
     tabla encima, en `posicion`. Si no, se arma entera aqui.
     """
-    subida = ruta_fondo(origen.get("iso2", ""))
+    subida = ruta_fondo(origen.get("iso2", ""), sentido)
     if subida:
         img = Image.open(subida).convert("RGB")
         if img.size != (ANCHO, ALTO):
@@ -531,7 +583,8 @@ def generar(origen: dict, filas: list[dict], posicion: dict | None = None) -> by
                       izq + int(p["ancho"]) * ESCALA,
                       arriba + int(p["alto"]) * ESCALA,
                       letra=int(p.get("letra") or 100) / 100,
-                      negrita=p.get("negrita", True) is not False)
+                      negrita=p.get("negrita", True) is not False,
+                      etiqueta=p.get("etiqueta") or "pais")
         return _a_tamano_final(img)
 
     img = _lienzo_de_fondo(origen).convert("RGB")
