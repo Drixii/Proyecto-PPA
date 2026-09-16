@@ -123,8 +123,12 @@ export default function OrderAdmin() {
       <div className="px-6 py-4 flex items-center gap-3" style={GLASS}>
         <button
           onClick={() => navigate('/admin/pipeline')}
-          style={{color:'#8aa0cc', background:'none', border:'none', cursor:'pointer', fontSize:'1.2rem'}}
-        >←</button>
+          style={{
+            color: '#f87171', background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.35)', cursor: 'pointer',
+            fontSize: 12.5, fontWeight: 700, height: 32, padding: '0 13px',
+            borderRadius: 10, whiteSpace: 'nowrap', flexShrink: 0,
+          }}
+        >← Volver</button>
         <div>
           <p className="font-mono text-xs" style={{color:'#8aa0cc'}}>{order.order_number}</p>
           <h1 className="font-bold" style={{color:'#eaf2ff'}}>Detalle — Vista Admin</h1>

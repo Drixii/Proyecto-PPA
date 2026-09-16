@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import SelectorBusqueda from './SelectorBusqueda'
 import { createPortal } from 'react-dom'
 import api from '../services/api'
 import { Bandera } from '../utils/flags'
@@ -146,6 +147,9 @@ function ToDropdown({ countries, value, onChange, onClose, mobile }) {
 // ── CalculatorDark ────────────────────────────────────────────────────────────
 export default function CalculatorDark({ onSend }) {
   const [fromCurrency, setFromCurrency] = useState('CLP')
+  // El país, no solo la moneda: Ecuador, Estados Unidos y Panamá comparten
+  // el dólar y cada uno puede tener su comisión.
+  const [fromCountry, setFromCountry]   = useState('Chile')
   const [toCountry, setToCountry]       = useState('Colombia')
   const [toCurrency, setToCurrency]     = useState('COP')
   const [displayAmount, setDisplayAmount] = useState('')
@@ -158,22 +162,24 @@ export default function CalculatorDark({ onSend }) {
   const receivedRef = useRef(null)
   const countRaf    = useRef(null)
 
-  const { sendCurrencies, receiveCountries } = useCountries()
+  const { sendCountries, receiveCountries } = useCountries()
   const countries   = receiveCountries.filter(c => c.currency !== fromCurrency)
   // El iso2 del pais elegido sale de la propia lista: el mapa de nombres no
   // cubre a todos (Canada, China, Japon, Reino Unido se quedaban sin bandera).
   const isoDestino  = receiveCountries.find(c => c.country === toCountry)?.iso2
-  const selectedFrom = sendCurrencies.find(c => c.code === fromCurrency)
+  const selectedFrom = sendCountries.find(c => c.country === fromCountry)
+    || sendCountries.find(c => c.code === fromCurrency)
   const rawAmount   = parseRaw(displayAmount)
 
   // Si el admin quita el país o la moneda que estaba elegida, hay que caer en
   // una válida; si no, el calculador se queda pidiendo una tasa que ya no
   // existe y muestra un error permanente.
   useEffect(() => {
-    if (sendCurrencies.length && !sendCurrencies.some(c => c.code === fromCurrency)) {
-      setFromCurrency(sendCurrencies[0].code)
+    if (sendCountries.length && !sendCountries.some(c => c.country === fromCountry)) {
+      const uno = sendCountries.find(c => c.code === fromCurrency) || sendCountries[0]
+      setFromCurrency(uno.code); setFromCountry(uno.country)
     }
-  }, [sendCurrencies, fromCurrency])
+  }, [sendCountries, fromCurrency, fromCountry])
 
   useEffect(() => {
     if (countries.length && !countries.some(c => c.country === toCountry)) {
@@ -204,7 +210,12 @@ export default function CalculatorDark({ onSend }) {
     if (!rawAmount || rawAmount <= 0) return
     setLoading(true); setRateError(null)
     try {
-      const res = await api.get('/rates/convert', { params: { from: fromCurrency, to: toCurrency, amount: rawAmount } })
+      const res = await api.get('/rates/convert', {
+        params: {
+          from: fromCurrency, to: toCurrency, amount: rawAmount,
+          from_country: fromCountry, to_country: toCountry,
+        },
+      })
       const prev = result?.amount_received || 0
       setResult(res.data.data)
       animateCount(prev, res.data.data.amount_received, res.data.data)
@@ -238,8 +249,10 @@ export default function CalculatorDark({ onSend }) {
     if (!e.target.value.replace(/\D/g, '')) { setDisplayAmount(''); return }
     setDisplayAmount(fmt(num, fromCurrency))
   }
-  const handleFromChange = code => {
-    setFromCurrency(code); setResult(null); setRateError(false); setFromOpen(false)
+  const handleFromChange = (origen) => {
+    const code = origen.code
+    setFromCurrency(code); setFromCountry(origen.country)
+    setResult(null); setRateError(false); setFromOpen(false)
     if (displayAmount) { const n = parseRaw(displayAmount); if (n) setDisplayAmount(fmt(n, code)) }
     if (toCurrency === code) {
       const next = receiveCountries.filter(c => c.currency !== code)
@@ -298,7 +311,15 @@ export default function CalculatorDark({ onSend }) {
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{fromCurrency}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9fb3dd" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>
-              {fromOpen && <FromDropdown value={fromCurrency} onChange={handleFromChange} onClose={() => setFromOpen(false)} mobile={isMobile} options={sendCurrencies} />}
+              {fromOpen && (
+                <SelectorBusqueda
+                  titulo="¿Desde dónde envías?"
+                  placeholder="Buscar país o moneda..."
+                  valor={fromCountry}
+                  opciones={sendCountries.map(c => ({ clave: c.country, titulo: c.country, subtitulo: c.code, iso2: c.iso2, code: c.code }))}
+                  onElegir={o => handleFromChange({ country: o.clave, code: o.code })}
+                  onCerrar={() => setFromOpen(false)} />
+              )}
             </div>
             <input type="text" inputMode="numeric" value={displayAmount} onChange={handleAmountChange} placeholder="0"
               className="calc-amount"
@@ -330,7 +351,15 @@ export default function CalculatorDark({ onSend }) {
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{toCurrency}</span>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9fb3dd" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </button>
-              {toOpen && <ToDropdown countries={countries} value={toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} mobile={isMobile} />}
+              {toOpen && (
+                <SelectorBusqueda
+                  titulo="¿A qué país envías?"
+                  placeholder="Buscar país..."
+                  valor={toCountry}
+                  opciones={countries.map(c => ({ clave: c.country, titulo: c.country, subtitulo: c.currency, iso2: c.iso2, currency: c.currency }))}
+                  onElegir={o => handleCountryChange({ country: o.clave, currency: o.currency })}
+                  onCerrar={() => setToOpen(false)} />
+              )}
             </div>
             <p ref={receivedRef} className="calc-received" style={{ flex: 1, margin: 0, textAlign: 'right', fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: result ? '#7dd3fc' : 'rgba(125,211,252,.3)', textShadow: result ? '0 0 22px rgba(56,189,248,.45)' : 'none' }}>
               {result ? fmt(result.amount_received, toCurrency) : '—'}

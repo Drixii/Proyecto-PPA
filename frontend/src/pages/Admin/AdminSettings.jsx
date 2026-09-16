@@ -2820,11 +2820,12 @@ export default function AdminSettings() {
             <button
               onClick={() => setSection(null)}
               style={{
-                width: 34, height: 34, borderRadius: 11, cursor: 'pointer', fontSize: 16,
-                background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', color: '#8aa0cc',
+                height: 34, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+                background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.35)', color: '#f87171',
               }}
             >
-              ←
+              ← Volver
             </button>
           )}
           <div>

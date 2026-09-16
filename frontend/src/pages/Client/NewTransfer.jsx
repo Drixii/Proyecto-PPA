@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import FinexyLayout from '../../components/FinexyLayout'
@@ -201,6 +202,7 @@ export default function NewTransfer() {
   const [calc, setCalc] = useState({
     amount: prefill.amount || '',
     fromCurrency: prefill.fromCurrency || 'CLP',
+    fromCountry: prefill.fromCountry || 'Chile',
     toCountry: prefill.toCountry || prefillReceiver?.receiver_country || 'Colombia',
     toCurrency: prefill.toCurrency || 'COP',
     result: prefill.result || null,
@@ -345,7 +347,7 @@ export default function NewTransfer() {
   // Arriba del todo a propósito: `sendCurrencies` y `receiveCountries` se usan
   // más abajo en este mismo componente, y declararlos después dejaba la página
   // en blanco (ReferenceError por leer un const antes de inicializarlo).
-  const { sendCurrencies, receiveCountries, countries } = useCountries()
+  const { sendCountries, receiveCountries, countries } = useCountries()
 
   // Bandera de un país por su nombre. Primero lo que dice la base (así un país
   // añadido desde Ajustes tiene bandera), y si no está —una orden vieja de un
@@ -436,7 +438,8 @@ export default function NewTransfer() {
     return false
   })()
 
-  const selectedFrom = sendCurrencies.find(c => c.code === calc.fromCurrency)
+  const selectedFrom = sendCountries.find(c => c.country === calc.fromCountry)
+    || sendCountries.find(c => c.code === calc.fromCurrency)
 
   useEffect(() => {
     if (!rawAmount) { setLiveResult(null); return }
@@ -445,7 +448,10 @@ export default function NewTransfer() {
     const t = setTimeout(async () => {
       try {
         const res = await api.get('/rates/convert', {
-          params: { from: calc.fromCurrency, to: calc.toCurrency, amount: rawAmount }
+          params: {
+            from: calc.fromCurrency, to: calc.toCurrency, amount: rawAmount,
+            from_country: calc.fromCountry, to_country: calc.toCountry,
+          }
         })
         setLiveResult(res.data.data)
       } catch {
@@ -463,7 +469,8 @@ export default function NewTransfer() {
     setDisplayAmount(formatDisplay(num, calc.fromCurrency))
   }
 
-  const handleFromCurrencyChange = (code) => {
+  const handleFromCurrencyChange = (origen) => {
+    const code = origen.code
     // Con un destinatario ya guardado, su país está fijado ("bloqueado") y no
     // se puede tocar: moverlo cambiaría el receptor por debajo y la orden
     // saldría para otra persona, o crearía un contacto nuevo con el nombre del
@@ -479,6 +486,7 @@ export default function NewTransfer() {
     setCalc(prev => ({
       ...prev,
       fromCurrency: code,
+      fromCountry: origen.country,
       ...(newCountry ? { toCountry: newCountry, toCurrency: newCurrency } : {}),
     }))
     if (newCountry) setReceiver(r => ({ ...r, receiver_country: newCountry }))
@@ -505,16 +513,17 @@ export default function NewTransfer() {
   // bloqueado, COP seguía apareciendo como origen. Elegirlo pedía un envío de
   // Colombia a Colombia y, al intentar resolverlo, movía el país del receptor.
   const origenesData = destinoBloqueado
-    ? sendCurrencies.filter(c => c.code !== calc.toCurrency)
-    : sendCurrencies
+    ? sendCountries.filter(c => c.code !== calc.toCurrency)
+    : sendCountries
 
   // Si Ajustes quita el país o la moneda elegida, caer en una válida: si no,
   // el paso de calcular se queda pidiendo una tasa inexistente.
   useEffect(() => {
-    if (origenesData.length && !origenesData.some(c => c.code === calc.fromCurrency)) {
-      setCalc(prev => ({ ...prev, fromCurrency: origenesData[0].code }))
+    if (origenesData.length && !origenesData.some(c => c.country === calc.fromCountry)) {
+      const uno = origenesData.find(c => c.code === calc.fromCurrency) || origenesData[0]
+      setCalc(prev => ({ ...prev, fromCurrency: uno.code, fromCountry: uno.country }))
     }
-  }, [origenesData, calc.fromCurrency])
+  }, [origenesData, calc.fromCurrency, calc.fromCountry])
 
   const { data: banksData } = useQuery({
     queryKey: ['banks', receiver.receiver_country],
@@ -865,9 +874,9 @@ export default function NewTransfer() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setStep(0)}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
-                  ←
+                  className="h-8 px-3 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-colors shrink-0"
+                  style={{border:'1px solid rgba(248,113,113,.35)', color:'#f87171', background:'rgba(248,113,113,.08)'}}>
+                  ← Volver
                 </button>
                 <h2 className="font-semibold" style={{color:'#eaf2ff'}}>¿Cuánto quieres enviar?</h2>
               </div>
@@ -887,7 +896,13 @@ export default function NewTransfer() {
                         <ChevronDown />
                       </button>
                       {fromOpen && (
-                        <FromDropdown value={calc.fromCurrency} onChange={handleFromCurrencyChange} onClose={() => setFromOpen(false)} options={origenesData} />
+                        <SelectorBusqueda
+                          titulo="¿Desde dónde envías?"
+                          placeholder="Buscar país o moneda..."
+                          valor={calc.fromCountry}
+                          opciones={origenesData.map(c => ({ clave: c.country, titulo: c.country, subtitulo: c.code, iso2: c.iso2, code: c.code }))}
+                          onElegir={o => handleFromCurrencyChange({ country: o.clave, code: o.code })}
+                          onCerrar={() => setFromOpen(false)} />
                       )}
                     </div>
                     <input
@@ -947,7 +962,13 @@ export default function NewTransfer() {
                         </button>
                       )}
                       {toOpen && destinatarioType !== 'anterior' && (
-                        <ToDropdown countries={countriesData} value={calc.toCountry} onChange={handleCountryChange} onClose={() => setToOpen(false)} />
+                        <SelectorBusqueda
+                          titulo="¿A qué país envías?"
+                          placeholder="Buscar país..."
+                          valor={calc.toCountry}
+                          opciones={countriesData.map(c => ({ clave: c.country, titulo: c.country, subtitulo: c.currency, iso2: c.iso2, currency: c.currency }))}
+                          onElegir={o => handleCountryChange({ country: o.clave, currency: o.currency })}
+                          onCerrar={() => setToOpen(false)} />
                       )}
                     </div>
                     <p className="flex-1 text-3xl font-bold text-right" style={{color: receivedDisplay ? '#38bdf8' : '#64748b'}}>
@@ -990,9 +1011,9 @@ export default function NewTransfer() {
           {step === 2 && (
             <div className="space-y-5">
               <div className="flex items-center gap-3">
-                <button onClick={() => setStep(1)} className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
-                  ←
+                <button onClick={() => setStep(1)} className="h-8 px-3 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-colors shrink-0"
+                  style={{border:'1px solid rgba(248,113,113,.35)', color:'#f87171', background:'rgba(248,113,113,.08)'}}>
+                  ← Volver
                 </button>
                 <div className="flex-1">
                   <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Datos del receptor</h2>
@@ -1101,9 +1122,9 @@ export default function NewTransfer() {
           {step === 3 && (
             <div className="space-y-5">
               <div className="flex items-center gap-3">
-                <button onClick={() => setStep(destinatarioType === 'anterior' ? 1 : 2)} className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
-                  ←
+                <button onClick={() => setStep(destinatarioType === 'anterior' ? 1 : 2)} className="h-8 px-3 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-colors shrink-0"
+                  style={{border:'1px solid rgba(248,113,113,.35)', color:'#f87171', background:'rgba(248,113,113,.08)'}}>
+                  ← Volver
                 </button>
                 <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Método de pago</h2>
               </div>
@@ -1485,9 +1506,9 @@ export default function NewTransfer() {
           {step === 4 && (
             <div className="space-y-5">
               <div className="flex items-center gap-3">
-                <button onClick={() => setStep(3)} className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                  style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}>
-                  ←
+                <button onClick={() => setStep(3)} className="h-8 px-3 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-colors shrink-0"
+                  style={{border:'1px solid rgba(248,113,113,.35)', color:'#f87171', background:'rgba(248,113,113,.08)'}}>
+                  ← Volver
                 </button>
                 <h2 className="font-semibold" style={{color:'#eaf2ff'}}>Confirmar transferencia</h2>
               </div>

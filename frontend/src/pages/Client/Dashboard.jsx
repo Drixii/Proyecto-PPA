@@ -160,8 +160,12 @@ export default function Dashboard() {
   })
 
   const { data: rateData, dataUpdatedAt: rateUpdatedAt } = useQuery({
-    queryKey: ['live-rate', 'CLP', rateCurrency],
-    queryFn: () => api.get('/rates/convert', { params: { from: 'CLP', to: rateCurrency, amount: 1000 } }).then(r => r.data.data),
+    queryKey: ['live-rate', 'CLP', rateCountry, rateCurrency],
+    // Con el país: varios comparten divisa y cada uno puede tener su
+    // comisión, así que sin esto la cifra no era la de esa ruta.
+    queryFn: () => api.get('/rates/convert', {
+      params: { from: 'CLP', to: rateCurrency, amount: 1000, from_country: 'Chile', to_country: rateCountry },
+    }).then(r => r.data.data),
     refetchInterval: TASA_REFRESCO_MS,
     enabled: !!rateCurrency,
   })

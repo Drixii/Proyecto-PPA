@@ -71,9 +71,9 @@ export default function OrderDetail() {
       <div className="px-6 py-4 flex items-center gap-3" style={{ ...GLASS, borderRadius:0, borderLeft:'none', borderRight:'none', borderTop:'none' }}>
         <button
           onClick={() => navigate('/dashboard')}
-          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
-          style={{border:'1px solid rgba(255,255,255,.1)', color:'#8aa0cc', background:'rgba(255,255,255,.04)'}}
-        >←</button>
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-bold transition-colors shrink-0"
+          style={{border:'1px solid rgba(248,113,113,.35)', color:'#f87171', background:'rgba(248,113,113,.08)'}}
+        >← Volver</button>
         <div>
           <p className="font-mono text-sm" style={{color:'#8aa0cc'}}>{data.order_number}</p>
           <h1 className="font-bold" style={{color:'#eaf2ff'}}>Detalle de transferencia</h1>
