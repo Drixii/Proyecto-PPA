@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ImagenAmpliable from './ImagenAmpliable'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
@@ -251,7 +252,7 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
               <>
                 <div className="rounded-2xl overflow-hidden" style={GLASS}>
                   {proofIsImage ? (
-                    <img src={proofUrl} alt="Comprobante" className="w-full max-h-80 object-contain" />
+                    <ImagenAmpliable src={proofUrl} alt="Comprobante" className="w-full max-h-80 object-contain" />
                   ) : (
                     <div className="flex flex-col items-center justify-center py-10 gap-3">
                       <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="1.5">
@@ -302,7 +303,7 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
               <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#8aa0cc'}}>Comprobante de envío (sub-admin)</p>
               <div className="rounded-2xl overflow-hidden" style={{background:'rgba(74,222,128,.05)', border:'1px solid rgba(74,222,128,.15)'}}>
                 {cpIsImage ? (
-                  <img src={cpUrl} alt="Prueba de envío" className="w-full max-h-80 object-contain" />
+                  <ImagenAmpliable src={cpUrl} alt="Prueba de envío" className="w-full max-h-80 object-contain" />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 gap-3">
                     <p className="text-sm" style={{color:'#aebfe2'}}>Comprobante de envío PDF</p>
@@ -1089,7 +1090,7 @@ export function ClientOrderPanel({ order }) {
             {proofUrl ? (
               <div className="rounded-2xl overflow-hidden" style={GLASS}>
                 {proofIsImage ? (
-                  <img src={proofUrl} alt="Comprobante" className="w-full max-h-96 object-contain" />
+                  <ImagenAmpliable src={proofUrl} alt="Comprobante" className="w-full max-h-96 object-contain" />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 gap-3">
                     <p className="text-sm" style={{color:'#aebfe2'}}>Comprobante PDF</p>
@@ -1112,7 +1113,7 @@ export function ClientOrderPanel({ order }) {
             {completionProofUrl ? (
               <div className="rounded-2xl overflow-hidden" style={{background:'rgba(74,222,128,.05)', border:'1px solid rgba(74,222,128,.15)'}}>
                 {completionProofIsImage ? (
-                  <img src={completionProofUrl} alt="Prueba de envío" className="w-full max-h-96 object-contain" />
+                  <ImagenAmpliable src={completionProofUrl} alt="Prueba de envío" className="w-full max-h-96 object-contain" />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 gap-3">
                     <p className="text-sm" style={{color:'#aebfe2'}}>Comprobante PDF</p>
