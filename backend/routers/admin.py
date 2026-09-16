@@ -1975,42 +1975,18 @@ def set_ia(
     return {"success": True, "data": None, "message": ", ".join(cambios) or "Sin cambios"}
 
 
-def _monto_redondo(db: Session, moneda: str) -> float:
-    """Un monto de ejemplo bonito para la moneda: 100 USD, 100.000 CLP...
-
-    Se busca lo que valen unos cien dólares y se redondea al 1, 2 o 5 por
-    potencia de diez más cercano, que es como se escriben los importes en un
-    anuncio. Sirve para que la imagen enseñe cuánto llega de verdad en vez de
-    un 0,00096, que no le dice nada a nadie.
-    """
-    from services.exchange_service import get_rate
-
-    tasa = get_rate(db, moneda, "USD")
-    if not tasa or tasa <= 0:
-        return 100.0
-
-    objetivo = 100 / tasa
-    potencia = 10 ** int(math.floor(math.log10(objetivo)))
-    for paso in (1, 2, 5, 10):
-        if objetivo <= paso * potencia * 1.5:
-            return float(paso * potencia)
-    return float(10 * potencia)
-
-
 @router.get("/commissions/imagen")
 def imagen_de_tasas(
     from_country: str,
     con_ia: bool = False,
-    monto: Optional[float] = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
-    """Imagen con lo que recibe el destinatario en cada país.
+    """Imagen con la tasa a la que se envía a cada país desde `from_country`.
 
-    Sale un importe, no una tasa: cuánto llega por `monto` de la moneda de
-    origen, con la comisión de ESA ruta ya descontada. La cuenta es la misma
-    que hace /rates/convert —la que usan todas las calculadoras—, así que el
-    número de la imagen y el que ve el cliente coinciden al céntimo.
+    Es a cuánto se cambia una unidad de la moneda de origen, con la comisión
+    de ESA ruta ya descontada: el precio real, no la tasa de mercado. Sale la
+    tasa y nada más.
 
     Aparecen TODOS los destinos de la lista de países. Si a alguno le falta la
     tasa sale con una raya: si está dado de alta, tiene que verse.
@@ -2026,9 +2002,6 @@ def imagen_de_tasas(
     if not origen.can_send:
         raise HTTPException(status_code=400, detail=f"Desde {origen.name} no se puede enviar")
 
-    if monto is None or monto <= 0:
-        monto = _monto_redondo(db, origen.currency)
-
     filas = []
     for destino in db.query(Country).filter(
         Country.active == True, Country.can_receive == True
@@ -2036,31 +2009,27 @@ def imagen_de_tasas(
         if destino.name == origen.name:
             continue
         tasa = get_rate(db, origen.currency, destino.currency)
-        recibe = None
+        efectiva = None
         if tasa:
             pct = _get_commission(
                 db, origen.currency, destino.currency, None,
                 from_country=origen.name, to_country=destino.name,
             )
-            # Mismo redondeo que /rates/convert, paso a paso: si aqui se
-            # calculara de otra forma, la imagen y la calculadora dirian
-            # numeros distintos para la misma ruta.
-            comision = round(monto * pct / 100, 2)
-            recibe = round((monto - comision) * tasa, 2)
+            # La comision se descuenta del monto enviado, asi que la tasa a la
+            # que sale la operacion baja en ese porcentaje. Es la misma cuenta
+            # que hace /rates/convert, que es lo que ven las calculadoras.
+            efectiva = tasa * (1 - pct / 100)
         filas.append({
             "name": destino.name,
             "iso2": destino.iso2 or "",
             "currency": destino.currency,
-            "recibe": recibe,
+            "tasa": efectiva,
         })
 
     if not filas:
         raise HTTPException(status_code=400, detail="No hay destinos dados de alta")
 
-    datos_origen = {
-        "name": origen.name, "iso2": origen.iso2 or "",
-        "currency": origen.currency, "monto": monto,
-    }
+    datos_origen = {"name": origen.name, "iso2": origen.iso2 or "", "currency": origen.currency}
 
     if con_ia:
         clave = ss.get_secret(db, "openai_api_key")

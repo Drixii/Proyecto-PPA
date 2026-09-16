@@ -251,17 +251,6 @@ def formatea_tasa(valor: float) -> str:
     return texto
 
 
-def formatea_monto(valor) -> str:
-    """Importe como se escribe aqui: 923.220 / 4.973,70 / 0,85.
-
-    Sin decimales a partir de mil —a nadie le importan los centimos de un
-    importe de seis cifras y ocupan sitio— y con dos por debajo.
-    """
-    if valor is None:
-        return "—"
-    if valor >= 1000:
-        return f"{valor:,.0f}".replace(",", ".")
-    return f"{valor:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
 
 
 def _a_tamano_final(img: Image.Image) -> bytes:
@@ -373,16 +362,7 @@ def _cabecera(img: Image.Image, d: ImageDraw.ImageDraw, origen: dict) -> int:
         img.paste(bandera, (x0 + (alto_p - lado_b) // 2, y + (alto_p - lado_b) // 2), bandera)
     _escribe(d, (x0 + lado_b + int(12 * ESCALA), y + alto_p // 2), "TASAS DE CAMBIO",
              f_tc, TEXTO_TITULO, esp_tc, anchor="lm")
-    y += alto_p + int(9 * ESCALA)
-
-    # Con que importe estan hechas las cuentas. Sin esta linea la columna de la
-    # derecha son numeros sueltos que no se pueden comprobar contra nada.
-    monto = origen.get("monto")
-    if monto:
-        _escribe(d, (centro, y), f"POR CADA {formatea_monto(monto)} {origen.get('currency', '')}".strip(),
-                 _fuente("bold", int(12 * ESCALA)), TEXTO_TITULO, int(1 * ESCALA),
-                 anchor="ma", sombra=True)
-        y += int(18 * ESCALA)
+    y += alto_p + int(10 * ESCALA)
 
     _escribe(d, (centro, y), "ACTUALIZADAS HOY", _fuente("semi", int(9 * ESCALA)),
              TEXTO_SUAVE, int(3 * ESCALA), anchor="ma", sombra=True)
@@ -429,7 +409,7 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
 
         # La tasa manda: se dibuja primero y el nombre usa lo que sobre.
         f_tasa = _fuente("extra", max(int(alto_fila * 0.42), 10 * ESCALA))
-        texto_tasa = formatea_monto(fila.get("recibe"))
+        texto_tasa = formatea_tasa(fila.get("tasa"))
         borde_tasa = ANCHO - MARGEN - int(alto_fila * 0.45)
         d.text((borde_tasa, y + alto_fila // 2), texto_tasa,
                font=f_tasa, fill=TEXTO_PAIS, anchor="rm")
@@ -444,10 +424,10 @@ def _dibuja_filas(img: Image.Image, d: ImageDraw.ImageDraw, filas: list[dict],
 
 
 def generar(origen: dict, filas: list[dict]) -> bytes:
-    """PNG con una fila por destino: bandera, pais y cuanto recibe.
+    """PNG con una fila por destino: bandera, pais y a cuanto se le envia.
 
-    `origen` es {name, iso2, currency, monto}; cada fila, {name, iso2,
-    currency, recibe}.
+    `origen` es {name, iso2, currency}; cada fila, {name, iso2, currency,
+    tasa}, donde la tasa ya lleva descontada la comision de esa ruta.
     """
     img = _lienzo_de_fondo(origen).convert("RGB")
     d = ImageDraw.Draw(img)
@@ -553,7 +533,6 @@ def generar_con_ia(
         escena=ESCENAS.get((origen.get("iso2") or "").upper(),
                            f"un paisaje o una ciudad reconocible de {origen['name']}"),
         moneda=origen.get("currency", ""),
-        monto=formatea_monto(origen.get("monto")),
         fecha=_hoy(),
     )
 
