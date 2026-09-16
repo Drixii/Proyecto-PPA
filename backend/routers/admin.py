@@ -1689,8 +1689,22 @@ def set_commission_rule(
         raise HTTPException(400, "Comisión debe estar entre 0 y 100")
 
     def _upsert(to_currency: str):
+        # Las comisiones son del negocio, no de cada super-admin: se guardan
+        # como globales y valen para todos y para las calculadoras publicas,
+        # incluida la de la portada.
+        #
+        # Antes se guardaban a nombre de quien las tocaba, asi que cambiar un
+        # precio solo lo veian los clientes de ese admin y la portada seguia
+        # cotizando otro. Cualquier regla vieja con dueno se borra al guardar:
+        # si sobreviviera, ganaria sobre la global y el cambio no se aplicaria.
+        db.query(CommissionRule).filter(
+            CommissionRule.super_admin_id != None,
+            CommissionRule.from_currency == data.from_currency,
+            CommissionRule.to_currency == to_currency,
+        ).delete(synchronize_session=False)
+
         rule = db.query(CommissionRule).filter(
-            CommissionRule.super_admin_id == admin.id,
+            CommissionRule.super_admin_id == None,
             CommissionRule.from_currency == data.from_currency,
             CommissionRule.to_currency == to_currency,
         ).first()
@@ -1699,7 +1713,7 @@ def set_commission_rule(
             rule.updated_at = datetime.utcnow()
         else:
             db.add(CommissionRule(
-                super_admin_id=admin.id,
+                super_admin_id=None,
                 from_currency=data.from_currency,
                 to_currency=to_currency,
                 commission_pct=data.commission_pct,
@@ -1849,11 +1863,12 @@ def delete_commission_rule(
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
+    # La regla es global, asi que se borra la global. Se barren tambien los
+    # restos con dueno de antes, que si no seguirian aplicandose.
     db.query(CommissionRule).filter(
-        CommissionRule.super_admin_id == admin.id,
         CommissionRule.from_currency == data.from_currency,
         CommissionRule.to_currency == data.to_currency,
-    ).delete()
+    ).delete(synchronize_session=False)
     db.commit()
     return {"success": True, "data": {}, "message": "Regla eliminada"}
 
