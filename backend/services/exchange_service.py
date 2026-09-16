@@ -208,6 +208,47 @@ def clave_paralelo(moneda: str) -> str:
     return f"tasa_paralela_{moneda.upper()}"
 
 
+# Con que lado de Binance se cotiza cada moneda.
+#
+# Por defecto VENTA, que es el lado que hace la casa: para entregarle
+# moneda local al destinatario hay que vender el USDT. Cotizar al de compra
+# promete algo mas de moneda local por dolar de la que se recibe al
+# cambiarlo, y esa diferencia la paga la casa en cada orden. Se deja elegir
+# porque no todas las casas liquidan igual, pero el que no sabe cual usar
+# quiere el de venta.
+LADOS = ("SELL", "BUY")
+
+
+def clave_lado(moneda: str) -> str:
+    return f"binance_lado_{moneda.upper()}"
+
+
+def lado_binance(db: Session, moneda: str) -> str:
+    from models.setting import Setting
+    try:
+        row = db.query(Setting).filter(Setting.key == clave_lado(moneda)).first()
+    except Exception:
+        return "SELL"
+    valor = str(row.value).strip().upper() if row and row.value else ""
+    return valor if valor in LADOS else "SELL"
+
+
+def set_lado_binance(db: Session, moneda: str, lado: str) -> str:
+    from models.setting import Setting
+
+    lado = (lado or "").strip().upper()
+    if lado not in LADOS:
+        raise ValueError("El lado tiene que ser SELL o BUY")
+    clave = clave_lado(moneda)
+    row = db.query(Setting).filter(Setting.key == clave).first()
+    if row:
+        row.value = lado
+    else:
+        db.add(Setting(key=clave, value=lado))
+    db.commit()
+    return lado
+
+
 def usa_paralelo(db: Session, moneda: str) -> bool:
     """Si esa moneda debe cotizarse al mercado paralelo."""
     from models.setting import Setting
@@ -226,13 +267,19 @@ def _creible(moneda: str, rate: float | None) -> bool:
     return bool(rate) and cfg["minimo"] <= rate <= cfg["maximo"]
 
 
-async def fetch_parallel_rate(moneda: str) -> tuple[float | None, str]:
-    """Tasa de mercado paralelo. Devuelve (unidades por USD, fuente)."""
+async def fetch_parallel_rate(moneda: str, lado: str = "SELL") -> tuple[float | None, str]:
+    """Tasa de mercado paralelo. Devuelve (unidades por USD, fuente).
+
+    `lado` solo afecta a Binance, que es la unica fuente que tiene dos
+    precios. Las demas —Yadio, DolarAPI— publican un valor y ya.
+    """
     moneda = moneda.upper()
     cfg = config_paralelo(moneda)
 
     for nombre, fetcher in cfg["fuentes"]:
-        rate = await fetcher()
+        # La fuente de Binance esta declarada con el lado por defecto, asi
+        # que se vuelve a pedir con el elegido en vez de usar su lambda.
+        rate = await (_binance_p2p(moneda, lado) if nombre == "binance_p2p" else fetcher())
         if rate is None:
             continue
         if not _creible(moneda, rate):
@@ -400,8 +447,9 @@ async def fetch_and_store_rates(db: Session):
     monedas = sorted(al_paralelo)
     # A la vez y no una tras otra: cada consulta tarda un segundo o dos, y en
     # serie el arranque del servicio se iba a mas de un minuto.
+    lados = {m: lado_binance(db, m) for m in monedas}
     resultados = await asyncio.gather(
-        *(fetch_parallel_rate(m) for m in monedas), return_exceptions=True
+        *(fetch_parallel_rate(m, lados[m]) for m in monedas), return_exceptions=True
     )
     paralelas = {}
     for moneda, res in zip(monedas, resultados):

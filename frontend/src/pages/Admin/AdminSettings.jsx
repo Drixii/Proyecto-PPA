@@ -1640,6 +1640,18 @@ function MercadoParalelo() {
     ? Math.max(0, Math.ceil((dataUpdatedAt + REFRESCO_PARALELO - ahora) / 1000))
     : null
 
+  // Con qué lado de Binance se cotiza esta moneda.
+  const cambiarLado = useMutation({
+    mutationFn: (lado) => api.post('/rates/parallel/lado', { moneda, lado }),
+    onSuccess: (r) => {
+      setMsg(r.data.message); setError('')
+      qc.invalidateQueries({ queryKey: ['tasa-paralelo'] })
+      qc.invalidateQueries({ queryKey: ['rates'] })
+      setTimeout(() => setMsg(''), 5000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar'); setMsg('') },
+  })
+
   const cambiar = useMutation({
     mutationFn: (body) => api.post('/rates/parallel', body),
     onSuccess: (r) => {
@@ -1759,19 +1771,34 @@ function MercadoParalelo() {
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 10 }}>
             {/* Los dos lados de Binance, como se ven en la app. La casa cobra
                 al de venta: es el que hace de verdad en cada envío. */}
-            <div>
-              <p style={etiqueta}>Compra (Binance)</p>
-              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.compra == null ? '#64748b' : '#8aa0cc' }}>
-                {m.compra == null ? 'Sin datos' : num(comoSeLee(m.compra), 4)}
-              </p>
-            </div>
-            <div>
-              <p style={etiqueta}>Venta (Binance)</p>
-              <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: m.venta == null ? '#64748b' : '#eaf2ff' }}>
-                {m.venta == null ? 'Sin datos' : num(comoSeLee(m.venta), 4)}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: 10.5, color: '#64748b' }}>la que se cobra</p>
-            </div>
+            {/* Los dos lados de Binance, como se ven en la app. Se pulsa el
+                que se quiera usar: ese es el que cobra el sistema. */}
+            {[
+              { lado: 'BUY', texto: 'Compra', valor: m.compra },
+              { lado: 'SELL', texto: 'Venta', valor: m.venta },
+            ].map(({ lado, texto, valor }) => {
+              const elegido = (m.lado || 'SELL') === lado
+              return (
+                <button key={lado}
+                  onClick={() => !elegido && cambiarLado.mutate(lado)}
+                  disabled={cambiarLado.isPending}
+                  title={elegido ? 'Es la que se está cobrando' : `Cobrar al precio de ${texto.toLowerCase()}`}
+                  style={{
+                    textAlign: 'left', padding: '8px 14px', borderRadius: 12,
+                    cursor: elegido ? 'default' : 'pointer',
+                    background: elegido ? 'rgba(56,189,248,.12)' : 'rgba(255,255,255,.04)',
+                    border: `1px solid ${elegido ? 'rgba(56,189,248,.45)' : 'rgba(255,255,255,.08)'}`,
+                  }}>
+                  <p style={etiqueta}>{texto} (Binance)</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700, color: valor == null ? '#64748b' : (elegido ? '#eaf2ff' : '#8aa0cc') }}>
+                    {valor == null ? 'Sin datos' : num(comoSeLee(valor), 4)}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 10.5, color: elegido ? '#38bdf8' : '#64748b' }}>
+                    {elegido ? '● la que se cobra' : 'usar esta'}
+                  </p>
+                </button>
+              )
+            })}
 
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
               <p style={etiqueta}>Se actualiza en</p>

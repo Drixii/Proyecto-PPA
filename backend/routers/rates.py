@@ -7,6 +7,7 @@ from schemas.rate import RateOut, ConvertResult, ManualRateUpdate, CountryInfo
 from services.exchange_service import (
     get_rate, set_manual_rate, fetch_and_store_rates,
     MONEDAS_PARALELO, SUPPORTED_CURRENCIES, usa_paralelo, clave_paralelo, comparar_fuentes,
+    lado_binance,
 )
 from auth.dependencies import require_admin, get_current_user_optional
 from config import settings
@@ -208,6 +209,11 @@ class ParaleloIn(BaseModel):
     activo: bool
 
 
+class LadoIn(BaseModel):
+    moneda: str
+    lado: str          # SELL (venta) o BUY (compra)
+
+
 @router.get("/parallel", response_model=dict)
 async def estado_paralelo(_admin=Depends(require_admin), db: Session = Depends(get_db)):
     """Qué dice cada fuente ahora mismo, junto a la tasa oficial.
@@ -237,7 +243,38 @@ async def paralelo_de_moneda(moneda: str, _admin=Depends(require_admin), db: Ses
         raise HTTPException(status_code=400, detail="El dólar es la base: no tiene paralelo contra sí mismo")
     datos = await comparar_moneda(moneda)
     datos["activo"] = usa_paralelo(db, moneda)
+    datos["lado"] = lado_binance(db, moneda)
     return {"success": True, "data": datos, "message": ""}
+
+
+@router.post("/parallel/lado", response_model=dict)
+def cambiar_lado(
+    data: LadoIn,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    """Con qué lado de Binance se cotiza esa moneda: venta o compra.
+
+    Venta es el lado que hace la casa —para entregar moneda local hay que
+    vender el USDT— y es lo que viene puesto. Cambiarlo a compra promete algo
+    más de moneda local por dólar de la que se recibe al cambiarlo, así que la
+    diferencia la pone la casa en cada orden.
+    """
+    from services.exchange_service import set_lado_binance
+
+    moneda = data.moneda.upper()
+    if moneda == "USD" or moneda not in SUPPORTED_CURRENCIES:
+        raise HTTPException(status_code=400, detail=f"{moneda} no se cotiza contra Binance")
+    try:
+        lado = set_lado_binance(db, moneda, data.lado)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "success": True,
+        "data": {"moneda": moneda, "lado": lado},
+        "message": f"{moneda} se cotiza al precio de {'venta' if lado == 'SELL' else 'compra'}",
+    }
 
 
 @router.post("/parallel", response_model=dict)
