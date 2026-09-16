@@ -250,6 +250,19 @@ def formatea_tasa(valor: float) -> str:
     return texto
 
 
+def formatea_monto(valor) -> str:
+    """Importe como se escribe aqui: 923.220 / 4.973,70 / 0,85.
+
+    Sin decimales a partir de mil —a nadie le importan los centimos de un
+    importe de seis cifras y ocupan sitio— y con dos por debajo.
+    """
+    if valor is None:
+        return "—"
+    if valor >= 1000:
+        return f"{valor:,.0f}".replace(",", ".")
+    return f"{valor:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+
+
 def _a_tamano_final(img: Image.Image) -> bytes:
     """Deja la imagen exactamente en 560x827 y la devuelve como PNG."""
     if img.size != (ANCHO_FINAL, ALTO_FINAL):
@@ -355,11 +368,20 @@ def _cabecera(img: Image.Image, d: ImageDraw.ImageDraw, origen: dict) -> int:
         img.paste(bandera, (x0 + (alto_p - lado_b) // 2, y + (alto_p - lado_b) // 2), bandera)
     _escribe(d, (x0 + lado_b + int(12 * ESCALA), y + alto_p // 2), "TASAS DE CAMBIO",
              f_tc, TEXTO_TITULO, esp_tc, anchor="lm")
-    y += alto_p + int(10 * ESCALA)
+    y += alto_p + int(9 * ESCALA)
+
+    # Con que importe estan hechas las cuentas. Sin esta linea la columna de la
+    # derecha son numeros sueltos que no se pueden comprobar contra nada.
+    monto = origen.get("monto")
+    if monto:
+        _escribe(d, (centro, y), f"POR CADA {formatea_monto(monto)} {origen.get('currency', '')}".strip(),
+                 _fuente("bold", int(12 * ESCALA)), TEXTO_TITULO, int(1 * ESCALA),
+                 anchor="ma", sombra=True)
+        y += int(18 * ESCALA)
 
     _escribe(d, (centro, y), "ACTUALIZADAS HOY", _fuente("semi", int(9 * ESCALA)),
              TEXTO_SUAVE, int(3 * ESCALA), anchor="ma", sombra=True)
-    return y + int(20 * ESCALA)
+    return y + int(19 * ESCALA)
 
 
 def _pie(d: ImageDraw.ImageDraw) -> int:
@@ -406,7 +428,7 @@ def generar(origen: dict, filas: list[dict]) -> bytes:
 
         # La tasa manda: se dibuja primero y el nombre usa lo que sobre.
         f_tasa = _fuente("extra", max(int(alto_fila * 0.42), 10 * ESCALA))
-        texto_tasa = formatea_tasa(fila.get("tasa"))
+        texto_tasa = formatea_monto(fila.get("recibe"))
         borde_tasa = ANCHO - MARGEN - int(alto_fila * 0.45)
         d.text((borde_tasa, y + alto_fila // 2), texto_tasa,
                font=f_tasa, fill=TEXTO_PAIS, anchor="rm")
@@ -455,11 +477,12 @@ INSTRUCCION_POR_DEFECTO = (
     "  · «{PAIS}» enorme, en negrita muy gruesa\n"
     "  · una pastilla azul oscuro con la bandera circular de {pais} y el texto "
     "«TASAS DE CAMBIO»\n"
+    "  · «POR CADA {monto} {moneda}» en negrita\n"
     "  · «ACTUALIZADAS HOY» en letra pequeña y espaciada\n\n"
     "LISTA, debajo: una fila por país, cada una en una píldora blanca de "
     "esquinas totalmente redondeadas. En cada fila, a la IZQUIERDA la bandera "
     "circular del país y su nombre en mayúsculas en azul oscuro; a la DERECHA, "
-    "pegada al borde, la tasa en negrita gruesa y azul oscuro.\n\n"
+    "pegado al borde, el importe que recibe, en negrita gruesa y azul oscuro.\n\n"
     "PIE: una barra azul oscuro redondeada con «SEGURIDAD • CONFIANZA • "
     "MEJORES TASAS».\n\n"
     "Diseño limpio, moderno, mucho contraste. Sin marcas de agua y sin ningún "
@@ -483,7 +506,8 @@ def generar_con_ia(
     mandarle la tasa a un cliente sin mirarla.
     """
     lineas = "\n".join(
-        f"{f['name']}: {formatea_tasa(f.get('tasa'))}" for f in filas
+        f"{f['name']}: {formatea_monto(f.get('recibe'))} {f.get('currency', '')}".strip()
+        for f in filas
     )
     texto = (instruccion or "").strip() or INSTRUCCION_POR_DEFECTO
     texto = _rellena(
@@ -491,6 +515,7 @@ def generar_con_ia(
         pais=origen["name"],
         PAIS=origen["name"].upper(),
         moneda=origen.get("currency", ""),
+        monto=formatea_monto(origen.get("monto")),
         fecha=_hoy(),
     )
     prompt = (

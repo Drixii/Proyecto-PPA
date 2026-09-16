@@ -1064,6 +1064,7 @@ function ImagenDeTasas({ origen }) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [hechaConIa, setHechaConIa] = useState(false)
+  const [monto, setMonto] = useState('')
 
   const { data: ia } = useQuery({
     queryKey: ['ia-config'],
@@ -1080,8 +1081,14 @@ function ImagenDeTasas({ origen }) {
     if (!origen) return
     setCargando(true); setError('')
     try {
+      const limpio = Number(String(monto).replace(/[^\d.]/g, ''))
       const r = await api.get('/admin/commissions/imagen', {
-        params: { from_country: origen.name, con_ia: conIa },
+        params: {
+          from_country: origen.name,
+          con_ia: conIa,
+          // Sin monto lo elige el servidor: uno redondo para esa moneda.
+          ...(limpio > 0 ? { monto: limpio } : {}),
+        },
         responseType: 'blob',
       })
       setUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(r.data) })
@@ -1118,8 +1125,25 @@ function ImagenDeTasas({ origen }) {
           </button>
         )}
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <input
+            value={monto}
+            onChange={e => setMonto(e.target.value.replace(/[^\d.]/g, ''))}
+            inputMode="numeric"
+            placeholder="Monto"
+            style={{
+              width: 110, padding: '9px 11px', borderRadius: 10, fontSize: 13,
+              background: 'rgba(6,13,40,.8)', color: '#eaf2ff',
+              border: '1px solid rgba(255,255,255,.12)',
+            }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#8aa0cc' }}>
+            {origen?.currency || ''}
+          </span>
+        </div>
+
         <span style={{ fontSize: 11.5, color: '#64748b' }}>
-          Una fila por destino, con la comisión de cada ruta ya descontada.
+          Cuánto recibe cada destino por ese monto, con la comisión de su ruta
+          ya descontada. Sin monto se usa uno redondo.
         </span>
       </div>
 
