@@ -3,18 +3,74 @@
   var stopped=false, raf=0, anim=0;
   var cv,ctx,hero,gridTitle,pin,hint,W=0,H=0,rot=0,progress=0;
 
+  // Las posiciones son a ojo, no las capitales reales. Con las de verdad casi
+  // todas caen en la misma franja del Atlántico sur y las banderas se montan
+  // unas sobre otras; separadas así se leen todas. Cada una sigue estando en
+  // su país, solo que descentrada.
   var countries=[
-    { iso:'ca', name:'Canadá',    lat:43.7,  lon:-79.4 },
-    { iso:'us', name:'EE.UU.',    lat:40.7,  lon:-74.0 },
-    { iso:'mx', name:'México',    lat:19.4,  lon:-99.1 },
-    { iso:'co', name:'Colombia',  lat:4.7,   lon:-74.1 },
-    { iso:'ve', name:'Venezuela', lat:10.5,  lon:-66.9 },
-    { iso:'pe', name:'Perú',      lat:-12.0, lon:-77.0 },
-    { iso:'br', name:'Brasil',    lat:-23.5, lon:-46.6 },
-    { iso:'ar', name:'Argentina', lat:-34.6, lon:-58.4 },
-    { iso:'cl', name:'Chile',     lat:-33.4, lon:-70.6 },
-    { iso:'es', name:'España',    lat:40.4,  lon:-3.7  }
+    { iso:'ca', name:'Canadá',    lat:58.0,  lon:-108.0 },
+    { iso:'us', name:'EE.UU.',    lat:39.0,  lon:-98.0  },
+    { iso:'mx', name:'México',    lat:22.0,  lon:-103.0 },
+    { iso:'co', name:'Colombia',  lat:5.0,   lon:-75.0  },
+    { iso:'ve', name:'Venezuela', lat:13.0,  lon:-62.0  },
+    { iso:'pe', name:'Perú',      lat:-10.0, lon:-79.0  },
+    { iso:'br', name:'Brasil',    lat:-11.0, lon:-50.0  },
+    { iso:'ar', name:'Argentina', lat:-38.0, lon:-60.0  },
+    { iso:'cl', name:'Chile',     lat:-31.0, lon:-73.0  },
+    { iso:'es', name:'España',    lat:40.4,  lon:-3.7   }
   ];
+
+  // Precio de cada moneda contra el dólar y cuánto se movió hoy. Si la
+  // petición falla el globo sigue igual, solo sin los badges.
+  function cargarPrecios(){
+    fetch('/api/rates/cinta').then(function(r){return r.json();}).then(function(j){
+      var porIso={};
+      (j.data||[]).forEach(function(f){ if(f.iso2) porIso[f.iso2.toLowerCase()]=f; });
+      countries.forEach(function(c){
+        var f=porIso[c.iso];
+        if(f){ c.precio=f.rate; c.variacion=f.variacion; }
+      });
+    }).catch(function(){});
+  }
+
+  function precioCorto(v){
+    if(v==null)return null;
+    if(v>=1000)return Math.round(v).toLocaleString('es-CL');
+    if(v>=1)return v.toLocaleString('es-CL',{maximumFractionDigits:2});
+    return v.toLocaleString('es-CL',{maximumFractionDigits:4});
+  }
+
+  // Badge bajo la bandera: el precio y la flecha del día.
+  function badgePrecio(c,px,py,alpha){
+    var txt=precioCorto(c.precio);
+    if(txt==null)return;
+    var sube=(c.variacion||0)>=0;
+    var flecha=c.variacion==null?'':(sube?' ▲':' ▼');
+    var pct=c.variacion==null?'':Math.abs(c.variacion).toFixed(2)+'%';
+
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.font='700 12px \'Space Grotesk\',system-ui,sans-serif';
+    var wTxt=ctx.measureText(txt).width;
+    var wPct=pct?ctx.measureText(flecha+' '+pct).width:0;
+    var w=wTxt+wPct+(pct?8:0)+20, h=22, x=px-w/2, y=py;
+
+    ctx.beginPath();
+    if(ctx.roundRect)ctx.roundRect(x,y,w,h,11);
+    else ctx.rect(x,y,w,h);
+    ctx.fillStyle='rgba(8,16,44,.82)';ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.14)';ctx.lineWidth=1;ctx.stroke();
+
+    ctx.textAlign='left';
+    ctx.textBaseline='middle';
+    ctx.fillStyle='#eaf2ff';
+    ctx.fillText(txt,x+10,y+h/2+0.5);
+    if(pct){
+      ctx.fillStyle=sube?'#4ade80':'#f87171';
+      ctx.fillText(flecha+' '+pct,x+10+wTxt+8,y+h/2+0.5);
+    }
+    ctx.restore();
+  }
   var dots=[], arcs=[];
 
   function toVec(la,lo){var a=la*Math.PI/180,b=lo*Math.PI/180;return [Math.cos(a)*Math.sin(b),Math.sin(a),Math.cos(a)*Math.cos(b)];}
@@ -239,6 +295,7 @@
         var flagHalf=fr*2.3*0.32;
         ctx.fillText(c.name,ppx,ppy-flagHalf-14);
         ctx.restore();
+        badgePrecio(c,ppx,ppy+flagHalf+8,clamp((morph-0.45)/0.52,0,1));
       }
     }
 
@@ -272,6 +329,7 @@
       img.src='https://flagcdn.com/w640/'+c.iso+'.png';
       c.img=img;
     }
+    cargarPrecios();
     dots=[];
     for(var lat=-82;lat<=82;lat+=5){
       var rr=Math.cos(lat*Math.PI/180);
