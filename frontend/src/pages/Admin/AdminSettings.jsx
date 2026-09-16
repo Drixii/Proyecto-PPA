@@ -1051,8 +1051,10 @@ function MercadoParalelo() {
   const { data: paises = [] } = useQuery({
     queryKey: ['countries'],
     queryFn: () => api.get('/rates/countries').then(r => r.data.data),
-    // La lista de países cambia cuando alguien la edita, no sola.
-    staleTime: 60000,
+    // Cambia cuando alguien la edita, no sola: no hace falta preguntar cada
+    // pocos segundos, pero sí darla por vieja enseguida para que al volver a
+    // esta pantalla ya esté al día. Editar países además la invalida a mano.
+    staleTime: 5000,
     refetchInterval: false,
   })
   const opciones = paises

@@ -70,6 +70,12 @@ export default function CountriesManager() {
     qc.invalidateQueries({ queryKey: ['admin-countries'] })
     // El calculador del home y el del cliente leen la misma lista.
     qc.invalidateQueries({ queryKey: ['countries'] })
+    // Y las pantallas que arman sus listas con los países: las pestañas de
+    // origen de comisiones, el simulador y el mercado paralelo. Sin esto,
+    // marcar "envía" tardaba hasta un ciclo de refresco entero en verse
+    // arriba, y parecía que no se había guardado.
+    qc.invalidateQueries({ queryKey: ['admin-commissions'] })
+    qc.invalidateQueries({ queryKey: ['tasa-paralelo'] })
   }
 
   const patchMut = useMutation({
