@@ -1253,7 +1253,16 @@ def listar_cuentas_propias(
             "catalogo": paises,
             # Por país, que es como se cobra: tres comparten el dólar y en
             # Estados Unidos se cobra por Zelle, no con número de cuenta.
-            "catalogo_paises": cuentas_propias.catalogo_por_pais(db),
+            # Lleva el estado real de la cuenta que emite Koywe y si ese país
+            # tiene tarjeta, que son los dos interruptores de la tarjeta.
+            "catalogo_paises": [
+                {
+                    **p,
+                    "estado_koywe": estado_koywe.get(p["moneda"]) if p["koywe"] else None,
+                    "tiene_tarjeta": p["moneda"] in con_tarjeta,
+                }
+                for p in cuentas_propias.catalogo_por_pais(db)
+            ],
             "cuentas": cuentas_propias.listar(db, _admin.id),
             "cubiertas_por_koywe": list(cuentas_propias.CUBIERTAS_POR_KOYWE),
             "monedas_tarjeta": sorted(con_tarjeta),
@@ -1309,6 +1318,7 @@ class TarjetaIn(BaseModel):
 def cambiar_tarjeta_pais(
     moneda: str,
     data: TarjetaIn,
+    pais: Optional[str] = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
@@ -1320,7 +1330,7 @@ def cambiar_tarjeta_pais(
     from services import cuentas_propias
 
     try:
-        cuenta = cuentas_propias.set_tarjeta(db, _admin.id, moneda, data.activa)
+        cuenta = cuentas_propias.set_tarjeta(db, _admin.id, moneda, data.activa, pais)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -1338,6 +1348,7 @@ class IntegracionIn(BaseModel):
 def cambiar_integracion_pais(
     moneda: str,
     data: IntegracionIn,
+    pais: Optional[str] = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
@@ -1345,7 +1356,7 @@ def cambiar_integracion_pais(
     from services import cuentas_propias
 
     try:
-        cuenta = cuentas_propias.set_integracion(db, _admin.id, moneda, data.activa)
+        cuenta = cuentas_propias.set_integracion(db, _admin.id, moneda, data.activa, pais)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {

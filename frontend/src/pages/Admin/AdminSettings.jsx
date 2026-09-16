@@ -2936,6 +2936,22 @@ export default function AdminSettings() {
 // dólar. Cada país tiene ahora su tarjeta, con sus cuentas y su «Añadir
 // cuenta», y los campos que pide los dice el servidor: en Estados Unidos es
 // Zelle —titular y correo— y no un formulario bancario.
+// Interruptor de encender/apagar. Se repetía en cada sitio con los mismos
+// veinte estilos; aquí va una vez.
+function Palanca({ encendida, onClick, titulo }) {
+  return (
+    <button onClick={onClick} title={titulo}
+      style={{
+        width: 40, height: 23, borderRadius: 999, border: 'none', padding: 3,
+        cursor: 'pointer', flexShrink: 0, display: 'flex',
+        justifyContent: encendida ? 'flex-end' : 'flex-start',
+        background: encendida ? 'rgba(74,222,128,.28)' : 'rgba(255,255,255,.12)',
+      }}>
+      <span style={{ width: 17, height: 17, borderRadius: 999, background: encendida ? '#4ade80' : '#64748b' }} />
+    </button>
+  )
+}
+
 function CuentasPropiasForm() {
   const qc = useQueryClient()
   const [abierto, setAbierto] = useState(false)
@@ -2958,6 +2974,25 @@ function CuentasPropiasForm() {
   const cuentas = data?.cuentas || []
 
   const delPais = (pais) => cuentas.filter(c => (c.pais || '') === pais)
+
+  // Sin ninguna fila todavía, los dos vienen encendidos: es como se comporta
+  // el backend, y enseñarlos apagados haría creer que hay algo desactivado.
+  const integracionOn = (p) => {
+    const c = delPais(p.pais)[0]
+    return c ? c.integracion !== false : true
+  }
+  const tarjetaOn = (p) => {
+    const c = delPais(p.pais)[0]
+    return c ? c.tarjeta !== false : true
+  }
+
+  const estadoKoywe = (p) => {
+    const ek = p.estado_koywe
+    if (!ek) return { texto: 'No se pudo consultar a Koywe ahora mismo', color: '#fcd34d' }
+    if (ek.publicada) return { texto: 'Activa — tus clientes la ven', color: '#4ade80' }
+    if (!ek.habilitada) return { texto: 'Emitida pero deshabilitada en Koywe', color: '#fb923c' }
+    return { texto: `Falta rellenar en Koywe: ${(ek.faltan || []).join(', ')}`, color: '#fcd34d' }
+  }
   const listas = cuentas.filter(c => c.activa && Object.keys(c.datos || {}).length).length
 
   const aviso = (texto, malo = false) => {
@@ -2979,6 +3014,30 @@ function CuentasPropiasForm() {
       refrescar(); aviso(r.data.message)
     },
     onError: (e) => aviso(e.response?.data?.detail || 'No se pudo guardar', true),
+  })
+
+  // Interruptores del PAÍS: valen para todas sus cuentas.
+  const cambiarIntegracion = useMutation({
+    mutationFn: ({ pais, moneda, activa }) =>
+      api.patch(`/admin/cuentas-propias/${moneda}/integracion`, { activa }, { params: { pais } }),
+    onSuccess: (r) => { refrescar(); aviso(r.data.message) },
+    onError: (e) => aviso(e.response?.data?.detail || 'No se pudo cambiar', true),
+  })
+
+  const cambiarTarjeta = useMutation({
+    mutationFn: ({ pais, moneda, activa }) =>
+      api.patch(`/admin/cuentas-propias/${moneda}/tarjeta`, { activa }, { params: { pais } }),
+    onSuccess: (r) => { refrescar(); aviso(r.data.message) },
+    onError: (e) => aviso(e.response?.data?.detail || 'No se pudo cambiar', true),
+  })
+
+  // Y el de cada cuenta: apagarla la esconde sin borrar los datos.
+  const cambiarActiva = useMutation({
+    mutationFn: ({ c, activa }) =>
+      api.put(`/admin/cuentas-propias/${c.moneda}`, { datos: c.datos, activa, alias: c.alias },
+        { params: { pais: c.pais, cuenta_id: c.id } }),
+    onSuccess: () => refrescar(),
+    onError: (e) => aviso(e.response?.data?.detail || 'No se pudo cambiar', true),
   })
 
   const borrar = useMutation({
@@ -3060,6 +3119,53 @@ function CuentasPropiasForm() {
                     )}
                   </div>
 
+                  {/* La cuenta que emite Koywe, con su estado real: puede
+                      estar emitida pero deshabilitada, o sin titular, y
+                      entonces al cliente no se le enseña nada aunque el panel
+                      diga que ese país está cubierto. */}
+                  {p.koywe && (
+                    <div style={{
+                      borderRadius: 10, padding: '9px 11px', marginBottom: 9,
+                      background: 'rgba(56,189,248,.05)',
+                      border: '1px solid rgba(56,189,248,.18)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#c3d2ee' }}>
+                            Cuenta de Koywe
+                          </p>
+                          <p style={{ margin: '2px 0 0', fontSize: 10.5, lineHeight: 1.5, color: estadoKoywe(p).color }}>
+                            {integracionOn(p) ? estadoKoywe(p).texto : 'Apagada — transfieren a tus cuentas'}
+                          </p>
+                          {p.estado_koywe?.publicada && p.estado_koywe.banco && (
+                            <p style={{ margin: '2px 0 0', fontSize: 10, color: '#475569' }}>
+                              {p.estado_koywe.banco}{p.estado_koywe.numero ? ` · ${p.estado_koywe.numero}` : ''}
+                            </p>
+                          )}
+                        </div>
+                        <Palanca
+                          encendida={integracionOn(p)}
+                          titulo={integracionOn(p) ? 'Apagar: transfieren a tus cuentas' : 'Encender: cobra Koywe'}
+                          onClick={() => cambiarIntegracion.mutate({ pais: p.pais, moneda: p.moneda, activa: !integracionOn(p) })} />
+                      </div>
+                    </div>
+                  )}
+
+                  {p.tiene_tarjeta && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#c3d2ee' }}>Pago con tarjeta</p>
+                        <p style={{ margin: 0, fontSize: 10.5, color: '#64748b' }}>
+                          {tarjetaOn(p) ? 'Se le ofrece al cliente' : 'Oculto en este país'}
+                        </p>
+                      </div>
+                      <Palanca
+                        encendida={tarjetaOn(p)}
+                        titulo={tarjetaOn(p) ? 'Quitar el botón de tarjeta' : 'Ofrecer tarjeta'}
+                        onClick={() => cambiarTarjeta.mutate({ pais: p.pais, moneda: p.moneda, activa: !tarjetaOn(p) })} />
+                    </div>
+                  )}
+
                   {mias.length === 0 && !editandoAqui && (
                     <p style={{ margin: '0 0 10px', fontSize: 11.5, color: '#475569' }}>
                       Todavía no hay ninguna.
@@ -3081,6 +3187,10 @@ function CuentasPropiasForm() {
                             {c.datos?.[c.principal] || '—'}
                           </p>
                         </div>
+                        <Palanca
+                          encendida={c.activa}
+                          titulo={c.activa ? 'Apagar: deja de verse' : 'Encender'}
+                          onClick={() => cambiarActiva.mutate({ c, activa: !c.activa })} />
                         <button onClick={() => editar(p, c)} title="Editar"
                           style={{ padding: '4px 9px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.12)', color: '#8aa0cc' }}>
                           Editar

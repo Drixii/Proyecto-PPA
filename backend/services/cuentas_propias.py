@@ -395,7 +395,34 @@ def info_de(moneda: str) -> dict:
     return INFO_KOYWE.get(moneda, {"pais": moneda, "bandera": ""})
 
 
-def set_tarjeta(db: Session, super_admin_id: int, moneda: str, activa: bool) -> dict:
+def _filas_del_pais(db: Session, super_admin_id: int, moneda: str, pais: str = None) -> list:
+    """Las cuentas de ese pais. Si no hay ninguna, crea una vacia.
+
+    Los dos interruptores —tarjeta e integracion— son del PAIS, no de una
+    cuenta: se pueden tener tres bancos en Chile y la tarjeta esta encendida o
+    apagada para Chile entero. Por eso se aplican a todas sus filas, y hace
+    falta una aunque no haya datos bancarios todavia: apagar la tarjeta en un
+    pais donde aun no has cargado cuenta es un caso legitimo.
+    """
+    q = db.query(SuperAdminAccount).filter(
+        SuperAdminAccount.super_admin_id == super_admin_id,
+        SuperAdminAccount.currency == moneda,
+    )
+    if pais:
+        q = q.filter(or_(SuperAdminAccount.country == pais,
+                         SuperAdminAccount.country == None))
+    filas = q.all()
+    if not filas:
+        fila = SuperAdminAccount(super_admin_id=super_admin_id, currency=moneda,
+                                 country=pais, datos="{}")
+        db.add(fila)
+        db.flush()
+        filas = [fila]
+    return filas
+
+
+def set_tarjeta(db: Session, super_admin_id: int, moneda: str, activa: bool,
+                pais: str = None) -> dict:
     """Enciende o apaga el pago con tarjeta en un pais.
 
     No valida los datos bancarios ni los exige: apagar la tarjeta en un pais
@@ -406,25 +433,15 @@ def set_tarjeta(db: Session, super_admin_id: int, moneda: str, activa: bool) -> 
     if moneda not in MONEDAS_ORIGEN:
         raise ValueError(f"No se puede configurar {moneda or 'esa moneda'}")
 
-    fila = (
-        db.query(SuperAdminAccount)
-        .filter(
-            SuperAdminAccount.super_admin_id == super_admin_id,
-            SuperAdminAccount.currency == moneda,
-        )
-        .first()
-    )
-    if not fila:
-        fila = SuperAdminAccount(super_admin_id=super_admin_id, currency=moneda, datos="{}")
-        db.add(fila)
-
-    fila.card_enabled = bool(activa)
+    filas = _filas_del_pais(db, super_admin_id, moneda, pais)
+    for fila in filas:
+        fila.card_enabled = bool(activa)
     db.commit()
-    db.refresh(fila)
-    return _a_dict(fila)
+    return _a_dict(filas[0])
 
 
-def set_integracion(db: Session, super_admin_id: int, moneda: str, activa: bool) -> dict:
+def set_integracion(db: Session, super_admin_id: int, moneda: str, activa: bool,
+                    pais: str = None) -> dict:
     """Cobrar la transferencia por la integracion o a la cuenta propia.
 
     Apagarla no quita la transferencia: cambia a donde se transfiere. Con la
@@ -436,22 +453,11 @@ def set_integracion(db: Session, super_admin_id: int, moneda: str, activa: bool)
     if moneda not in MONEDAS_ORIGEN:
         raise ValueError(f"No se puede configurar {moneda or 'esa moneda'}")
 
-    fila = (
-        db.query(SuperAdminAccount)
-        .filter(
-            SuperAdminAccount.super_admin_id == super_admin_id,
-            SuperAdminAccount.currency == moneda,
-        )
-        .first()
-    )
-    if not fila:
-        fila = SuperAdminAccount(super_admin_id=super_admin_id, currency=moneda, datos="{}")
-        db.add(fila)
-
-    fila.transfer_integracion = bool(activa)
+    filas = _filas_del_pais(db, super_admin_id, moneda, pais)
+    for fila in filas:
+        fila.transfer_integracion = bool(activa)
     db.commit()
-    db.refresh(fila)
-    return _a_dict(fila)
+    return _a_dict(filas[0])
 
 
 def usa_integracion(db: Session, super_admin_id: Optional[int], moneda: str) -> bool:
