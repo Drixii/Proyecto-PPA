@@ -338,17 +338,6 @@ export default function CalculatorDark({ onSend }) {
           </div>
         </div>
 
-        {/* COMISIÓN */}
-        {result && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 6px 2px' }}>
-            <span style={{ fontSize: 12.5, color: '#8aa0cc' }}>Comisión</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              $0
-            </span>
-          </div>
-        )}
-
         {/* CTA */}
         <button className="calc-cta" onClick={() => onSend?.({ amount: rawAmount, fromCurrency, toCountry, toCurrency, result })}
           style={{ marginTop: 16, width: '100%', padding: 15, fontSize: 16, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 14px 38px rgba(56,189,248,.4)' }}>

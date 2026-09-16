@@ -496,10 +496,13 @@ function TasaYAcciones({ countries, rateCountry, rateCurrency, rateData, actuali
             {/* Valor */}
             <div className="w-full sm:flex-1 rounded-xl px-4 py-2.5 min-w-0" style={{ background: 'rgba(6,13,40,.5)', border: '1px solid rgba(255,255,255,.06)' }}>
               <p className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: rateData ? '#eaf2ff' : '#475569' }}>
-                {rateData ? (rateData.rate * 1000).toLocaleString('es-CL', { maximumFractionDigits: 4 }) : '—'}
+                {/* Lo que RECIBE, no la tasa de mercado. `rate` es el precio
+                    antes de nuestra comisión, así que la cifra de aquí salía
+                    más alta que la del calculador y que la del envío real. */}
+                {rateData ? rateData.amount_received.toLocaleString('es-CL', { maximumFractionDigits: 4 }) : '—'}
                 <span className="text-xs font-normal ml-1.5" style={{ color: '#8aa0cc' }}>{rateCurrency}</span>
               </p>
-              <p className="text-[11px]" style={{ color: '#8aa0cc' }}>por cada 1.000 CLP que envíes</p>
+              <p className="text-[11px]" style={{ color: '#8aa0cc' }}>es lo que recibe por cada 1.000 CLP que envíes</p>
             </div>
           </div>
         </div>

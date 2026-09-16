@@ -167,19 +167,29 @@ def convert(
                           from_country=from_country, to_country=to_country)
     fee = round(amount * pct / 100, 2)
     amount_received = round((amount - fee) * rate, 2)
-    return {
-        "success": True,
-        "data": ConvertResult(
-            from_currency=from_currency.upper(),
-            to_currency=to_currency.upper(),
-            amount_sent=amount,
-            rate=rate,
-            amount_received=amount_received,
-            fee=fee,
-            total_to_pay=amount,
-        ).model_dump(),
-        "message": ""
-    }
+
+    # Al cliente no se le enseña la comisión: ni el importe ni la tasa de
+    # mercado, porque con las dos cifras y una división sale igual. Ve la tasa
+    # a la que se le cambia de verdad —ya con la comisión dentro— y cuánto
+    # recibe el destinatario, que es lo que decide si envía o no.
+    #
+    # Se quita aquí y no en la pantalla: esconderlo con CSS lo deja igual de
+    # visible para quien mire la respuesta de la API. Es lo mismo que hace
+    # `_sin_comision` con las órdenes.
+    es_del_equipo = quien is not None and quien.role in ("admin", "sub_admin")
+    datos = ConvertResult(
+        from_currency=from_currency.upper(),
+        to_currency=to_currency.upper(),
+        amount_sent=amount,
+        rate=rate if es_del_equipo else (amount_received / amount if amount else rate),
+        amount_received=amount_received,
+        fee=fee,
+        total_to_pay=amount,
+    ).model_dump()
+    if not es_del_equipo:
+        datos.pop("fee", None)
+
+    return {"success": True, "data": datos, "message": ""}
 
 
 @router.post("/manual", response_model=dict)

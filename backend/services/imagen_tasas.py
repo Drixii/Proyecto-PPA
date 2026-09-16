@@ -284,8 +284,9 @@ def formatea_tasa(valor: float) -> str:
     """Numero legible sin perder precision en monedas muy pequenas.
 
     Un peso chileno vale 0,00483 reales: con dos decimales saldria 0,00 y la
-    imagen no diria nada. Se conservan cuatro cifras significativas y se usa
-    coma decimal, que es como se lee en la region.
+    imagen no diria nada. Se conservan TRES cifras significativas —0,0123 /
+    0,00123 / 0,000123— y se usa coma decimal, que es como se lee en la region.
+    Con cuatro, los numeros largos empujaban al nombre del pais y lo encogian.
     """
     if valor is None:
         return "—"
@@ -294,8 +295,8 @@ def formatea_tasa(valor: float) -> str:
     elif valor >= 1:
         texto = f"{valor:,.3f}".replace(",", "@").replace(".", ",").replace("@", ".")
     else:
-        # Cuatro cifras significativas: 0,00483 en vez de 0,00.
-        decimales = 4
+        # Tres cifras significativas: 0,00483 en vez de 0,00.
+        decimales = 3
         v = valor
         while v < 1 and decimales < 8:
             v *= 10

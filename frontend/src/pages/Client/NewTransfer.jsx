@@ -924,7 +924,15 @@ export default function NewTransfer() {
                             : <span className="text-sm shrink-0">🌍</span>
                           }
                           <span className="text-sm font-bold" style={{color:'#eaf2ff'}}>{calc.toCurrency}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full ml-1" style={{background:'rgba(100,116,139,.2)', color:'#64748b'}}>bloqueado</span>
+                          {/* Decía solo «bloqueado», y leído junto al nombre
+                              del país parecía que ese país no estuviera
+                              disponible. Lo que está fijado es el destinatario
+                              elegido, no el país. */}
+                          <span title="Lo fija el destinatario que elegiste. Para enviar a otro país, elige «Nuevo destinatario»."
+                            className="text-[10px] px-1.5 py-0.5 rounded-full ml-1"
+                            style={{background:'rgba(100,116,139,.2)', color:'#64748b'}}>
+                            del destinatario
+                          </span>
                         </div>
                       ) : (
                         <button type="button" onClick={() => { setToOpen(v => !v); setFromOpen(false) }}
@@ -948,25 +956,6 @@ export default function NewTransfer() {
                   </div>
                 </div>
               </div>
-
-              {/* Comisión $0 */}
-              {liveResult && (
-                <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{background:'rgba(74,222,128,.08)', border:'1px solid rgba(74,222,128,.25)'}}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{background:'rgba(74,222,128,.18)'}}>
-                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#4ade80" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold" style={{color:'#4ade80'}}>Sin comisión</p>
-                      <p className="text-[10px]" style={{color:'rgba(74,222,128,.6)'}}>0% en esta transferencia</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-black" style={{color:'#4ade80'}}>$0</p>
-                    <p className="text-[10px] font-semibold" style={{color:'rgba(74,222,128,.7)'}}>GRATIS</p>
-                  </div>
-                </div>
-              )}
 
               {error && <p className="text-sm" style={{color:'#f87171'}}>{error}</p>}
 
@@ -1525,9 +1514,8 @@ export default function NewTransfer() {
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-center mt-3 pt-3 text-xs" style={{borderTop:'1px solid rgba(56,189,248,.15)', color:'#8aa0cc'}}>
+                  <div className="text-center mt-3 pt-3 text-xs" style={{borderTop:'1px solid rgba(56,189,248,.15)', color:'#8aa0cc'}}>
                     <div>Tasa: <span className="font-semibold" style={{color:'#aebfe2'}}>{calc.result.rate?.toFixed(4)}</span></div>
-                    <div>Comisión: <span className="font-semibold" style={{color:'#4ade80'}}>$0 ✓</span></div>
                   </div>
                 </div>
               )}

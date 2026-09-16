@@ -128,10 +128,6 @@ export default function OrderDetail() {
               <span className="font-medium" style={{color:'#eaf2ff'}}>{data.amount_sent.toLocaleString()} {data.currency_from}</span>
             </div>
             <div className="flex justify-between">
-              <span style={{color:'#8aa0cc'}}>Comisión</span>
-              <span className="font-semibold" style={{color:'#4ade80'}}>$0 ✓</span>
-            </div>
-            <div className="flex justify-between">
               <span style={{color:'#8aa0cc'}}>Tasa</span>
               <span className="font-medium" style={{color:'#eaf2ff'}}>1 {data.currency_from} = {data.exchange_rate.toFixed(4)} {data.currency_to}</span>
             </div>

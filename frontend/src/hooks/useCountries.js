@@ -28,15 +28,23 @@ export function useCountries() {
   // Origen: una entrada por moneda. Varios países comparten divisa (USD lo
   // usan Estados Unidos, Ecuador y Panamá) y el desplegable de origen elige
   // moneda, no país: sin esto saldría "USD" tres veces.
+  //
+  // Cuál de los tres pone la bandera importa. Se tomaba el primero de la lista,
+  // que viene ordenada por nombre, así que el dólar salía con la bandera de
+  // Ecuador. Para las divisas compartidas se nombra el país de referencia.
+  const PAIS_DE_LA_DIVISA = { USD: 'Estados Unidos', EUR: 'EURO' }
+
   const sendCurrencies = []
   const vistas = new Set()
-  for (const c of countries) {
-    if (!c.can_send || vistas.has(c.currency)) continue
+  const envian = countries.filter(c => c.can_send)
+  for (const c of envian) {
+    if (vistas.has(c.currency)) continue
     vistas.add(c.currency)
+    const referencia = envian.find(x => x.country === PAIS_DE_LA_DIVISA[c.currency]) || c
     sendCurrencies.push({
       code: c.currency,
-      iso2: c.iso2,
-      name: CURRENCY_NAMES[c.currency] || c.country,
+      iso2: referencia.iso2,
+      name: CURRENCY_NAMES[c.currency] || referencia.country,
     })
   }
 
