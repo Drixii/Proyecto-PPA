@@ -235,7 +235,13 @@ export default function Home() {
            globo. */
         @keyframes navBaja{from{opacity:0;transform:translateY(-110%)}to{opacity:1;transform:none}}
         .nav-entra{animation:navBaja .72s cubic-bezier(.16,1,.3,1) both;animation-delay:1.05s;}
-        @media (prefers-reduced-motion: reduce){.nav-entra{animation:none;}}
+        /* El header sigue ocupando sus 70px aunque no se vea, y ahi se colaba
+           una franja del fondo sobre el globo que parecia una sombra. Mientras
+           el header esta fuera, el globo sube a ocuparla y baja con el, al
+           mismo ritmo, asi que no hay salto. */
+        @keyframes globoBaja{from{margin-top:-70px}to{margin-top:0}}
+        .pin-entra{animation:globoBaja .72s cubic-bezier(.16,1,.3,1) both;animation-delay:1.05s;}
+        @media (prefers-reduced-motion: reduce){.nav-entra,.pin-entra{animation:none;}}
         /* Terminada la entrada se quita la animacion. Mientras esta puesta,
            aunque sea solo rellenando el ultimo fotograma, el envoltorio hace
            de bloque contenedor y el backdrop-filter de la calculadora deja de
@@ -333,7 +339,7 @@ export default function Home() {
       </nav>
 
       {/* ── PIN WRAP — scroll-storytelling hero (340 vh) ── */}
-      <div id="pin-wrap" style={{ height: '340vh', position: 'relative', zIndex: 1 }}>
+      <div id="pin-wrap" className={navListo ? undefined : 'pin-entra'} style={{ height: '340vh', position: 'relative', zIndex: 1 }}>
         <div id="sticky" style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}>
 
           {/* Canvas gestionado por globe.js */}
