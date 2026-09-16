@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { activarNotificaciones, revalidarNotificaciones } from '../../services/push'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import api from '../../services/api'
@@ -198,6 +199,7 @@ export default function Login() {
       const returning = !!localStorage.getItem(seenKey)
       localStorage.setItem(seenKey, '1')
       localStorage.setItem('ksa_welcome_pending', JSON.stringify({ name: firstName, returning }))
+      revalidarNotificaciones()
       navigate(dest)
     } catch (err) { setLoginError(err.response?.data?.detail || 'Error al iniciar sesión') }
     finally { setLoginLoading(false) }
@@ -228,6 +230,11 @@ export default function Login() {
       const firstName = res.data.data.user.full_name?.split(' ')[0] || 'Usuario'
       localStorage.setItem(`ksa_seen_${regForm.email}`, '1')
       localStorage.setItem('ksa_welcome_pending', JSON.stringify({ name: firstName, returning: false }))
+      // Se pide el permiso justo al crear la cuenta: es cuando la persona
+      // acaba de decidir usar el servicio y entiende para qué sirve el aviso.
+      // Pedirlo al entrar a la portada, sin contexto, se deniega casi siempre
+      // y el navegador no vuelve a preguntar nunca más.
+      activarNotificaciones()
       navigate('/dashboard')
     } catch (err) {
       setCodeError(err.response?.data?.detail || 'Código inválido')

@@ -14,3 +14,4 @@ pillow==11.2.1
 pillow-heif==0.21.0
 pg8000==1.31.2
 stripe==11.1.0
+pywebpush==2.0.3

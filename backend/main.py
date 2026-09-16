@@ -46,6 +46,17 @@ def _run_migrations():
         # portada). Se congela y se renueva cada 24 h.
         "ALTER TABLE exchange_rates ADD COLUMN ref_rate DOUBLE PRECISION",
         "ALTER TABLE exchange_rates ADD COLUMN ref_at TIMESTAMP WITH TIME ZONE",
+        # Navegadores suscritos a las notificaciones del sistema.
+        """CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            endpoint VARCHAR NOT NULL UNIQUE,
+            p256dh VARCHAR NOT NULL,
+            auth VARCHAR NOT NULL,
+            user_agent VARCHAR,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_push_subscriptions_user_id ON push_subscriptions(user_id)",
         # Tarjetas creadas antes de que existiera pendiente_pago: estaban en
         # en_aprobacion, esperando una aprobación que el admin no podía dar.
         """UPDATE orders SET status = 'pendiente_pago'

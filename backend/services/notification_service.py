@@ -55,6 +55,24 @@ def notify(db: Session, recipient_id: int, order_id: int, kind: str, title: str,
     db.add(n)
     if commit:
         db.commit()
+
+    # Y además al teléfono, si esa persona lo tiene permitido. Va aquí y no en
+    # cada sitio que avisa porque todos pasan por esta función: así no hay
+    # forma de añadir un aviso nuevo y olvidarse del push.
+    #
+    # Nunca falla hacia fuera: el aviso ya está guardado y se ve al entrar,
+    # aunque el móvil esté apagado o el permiso retirado.
+    try:
+        from services import push_service
+
+        push_service.enviar(
+            recipient_id, title, body,
+            url=f"/orders/{order_id}" if order_id else "/",
+            etiqueta=f"orden-{order_id}" if order_id else None,
+        )
+    except Exception:
+        log.exception("No se pudo encolar el push de %s", kind)
+
     return n
 
 

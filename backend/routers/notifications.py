@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
 from models.notification import Notification
+from models.push_subscription import PushSubscription
 from models.order import Order
 from models.user import User
 from auth.dependencies import get_current_user
@@ -77,3 +79,79 @@ def delete_one(notif_id: int, db: Session = Depends(get_db), current_user: User 
     ).delete()
     db.commit()
     return {"success": True, "data": None, "message": "Eliminada"}
+
+
+# ── Notificaciones del navegador (Web Push) ──────────────────────────────────
+
+class SuscripcionPushIn(BaseModel):
+    endpoint: str
+    keys: dict
+
+
+@router.get("/push/clave", response_model=dict)
+def clave_push():
+    """La clave pública que el navegador necesita para suscribirse.
+
+    Sin sesión a propósito: es pública por definición y la página la pide antes
+    de saber si va a pedir permiso. `activo` en false significa que el servidor
+    no tiene configuradas las claves y no hay nada que ofrecer.
+    """
+    from services import push_service
+
+    return {
+        "success": True,
+        "data": {"clave": push_service.clave_publica(), "activo": push_service.activo()},
+        "message": "",
+    }
+
+
+@router.post("/push/suscribir", response_model=dict)
+def suscribir_push(
+    data: SuscripcionPushIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Guarda este navegador para poder avisarle.
+
+    El endpoint es único por navegador, así que si ya estaba solo se reasigna:
+    el mismo equipo puede cambiar de manos —o de cuenta— y los avisos tienen
+    que seguir a quien lo usa ahora, no a quien lo registró.
+    """
+    claves = data.keys or {}
+    p256dh, auth = claves.get("p256dh"), claves.get("auth")
+    if not p256dh or not auth:
+        raise HTTPException(status_code=400, detail="Suscripción incompleta")
+
+    fila = db.query(PushSubscription).filter(
+        PushSubscription.endpoint == data.endpoint
+    ).first()
+    if fila:
+        fila.user_id = current_user.id
+        fila.p256dh = p256dh
+        fila.auth = auth
+    else:
+        db.add(PushSubscription(
+            user_id=current_user.id,
+            endpoint=data.endpoint,
+            p256dh=p256dh,
+            auth=auth,
+            user_agent=(request.headers.get("user-agent") or "")[:300],
+        ))
+    db.commit()
+    return {"success": True, "data": None, "message": "Notificaciones activadas"}
+
+
+@router.delete("/push/suscribir", response_model=dict)
+def desuscribir_push(
+    endpoint: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deja de avisar a este navegador."""
+    db.query(PushSubscription).filter(
+        PushSubscription.endpoint == endpoint,
+        PushSubscription.user_id == current_user.id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"success": True, "data": None, "message": "Notificaciones desactivadas"}
