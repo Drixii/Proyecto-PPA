@@ -13,19 +13,30 @@ import os
 from datetime import datetime
 
 import httpx
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
-FUENTES = "/usr/share/fonts/truetype/dejavu"
-NEGRITA = os.path.join(FUENTES, "DejaVuSans-Bold.ttf")
-NORMAL = os.path.join(FUENTES, "DejaVuSans.ttf")
+ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+FUENTES = os.path.join(ASSETS, "fonts")
+LOGO = os.path.join(ASSETS, "logo.png")
+CACHE_FONDOS = os.path.join(ASSETS, "fondos_cache")
 
-# Fondo azul de la marca, de arriba a abajo.
-FONDO_ARRIBA = (11, 31, 74)
-FONDO_ABAJO = (6, 13, 40)
+# Montserrat va con el logo. Si faltara el fichero se cae a DejaVu, que es lo
+# unico que trae el sistema: fea pero legible, mejor que no generar la imagen.
+DEJAVU = "/usr/share/fonts/truetype/dejavu"
+PESOS = {
+    "medium": (os.path.join(FUENTES, "Montserrat-Medium.ttf"), os.path.join(DEJAVU, "DejaVuSans.ttf")),
+    "semi": (os.path.join(FUENTES, "Montserrat-SemiBold.ttf"), os.path.join(DEJAVU, "DejaVuSans-Bold.ttf")),
+    "bold": (os.path.join(FUENTES, "Montserrat-Bold.ttf"), os.path.join(DEJAVU, "DejaVuSans-Bold.ttf")),
+    "extra": (os.path.join(FUENTES, "Montserrat-ExtraBold.ttf"), os.path.join(DEJAVU, "DejaVuSans-Bold.ttf")),
+    "black": (os.path.join(FUENTES, "Montserrat-Black.ttf"), os.path.join(DEJAVU, "DejaVuSans-Bold.ttf")),
+}
+
+AZUL = (10, 30, 88)            # azul de la marca, el de las pastillas oscuras
+AZUL_HONDO = (5, 16, 52)
 PILDORA = (255, 255, 255)
-TEXTO_PAIS = (11, 31, 74)
-TEXTO_TITULO = (234, 242, 255)
-TEXTO_SUAVE = (138, 160, 204)
+TEXTO_PAIS = (10, 30, 88)
+TEXTO_TITULO = (255, 255, 255)
+TEXTO_SUAVE = (186, 209, 245)
 
 # Tamano final, siempre el mismo: las dos vias —dibujada y por IA— terminan
 # aqui, asi que las imagenes son intercambiables y encajan donde se publiquen.
@@ -36,17 +47,64 @@ ANCHO_FINAL, ALTO_FINAL = 560, 827
 ESCALA = 2
 ANCHO = ANCHO_FINAL * ESCALA
 ALTO = ALTO_FINAL * ESCALA
-MARGEN = 28 * ESCALA
-ESPACIO = 7 * ESCALA
+MARGEN = 24 * ESCALA
+ESPACIO = 5 * ESCALA
 
 _banderas: dict[str, Image.Image] = {}
+_fondos: dict[str, Image.Image] = {}
 
 
-def _fuente(ruta: str, tam: int) -> ImageFont.FreeTypeFont:
-    try:
-        return ImageFont.truetype(ruta, tam)
-    except OSError:
-        return ImageFont.load_default()
+def _fuente(peso: str, tam: int) -> ImageFont.FreeTypeFont:
+    """Montserrat del peso pedido; DejaVu si no esta; la de Pillow si tampoco."""
+    for ruta in PESOS.get(peso, PESOS["bold"]):
+        try:
+            return ImageFont.truetype(ruta, tam)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _ancho(texto: str, fuente: ImageFont.FreeTypeFont, espaciado: int = 0) -> int:
+    base = fuente.getlength(texto)
+    return int(base + espaciado * max(len(texto) - 1, 0))
+
+
+def _encaja(peso: str, texto: str, tam: int, maximo: int, espaciado: int = 0):
+    """Baja el cuerpo hasta que el texto quepa. 'REPÚBLICA DOMINICANA' es largo."""
+    while tam > 8:
+        f = _fuente(peso, tam)
+        if _ancho(texto, f, espaciado) <= maximo:
+            return f
+        tam -= 1
+    return _fuente(peso, 8)
+
+
+SOMBRA = (6, 16, 46)
+
+
+def _escribe(d: ImageDraw.ImageDraw, xy, texto, fuente, fill, espaciado=0,
+             anchor="lm", sombra=False):
+    """Como draw.text, pero con espaciado entre letras (el 'D E S D E').
+
+    `sombra` dibuja una copia oscura desplazada: el texto de la cabecera va en
+    blanco encima de una foto, y sobre un cielo claro se perderia.
+    """
+    if sombra:
+        salto = max(int(fuente.size * 0.05), ESCALA)
+        _escribe(d, (xy[0] + salto, xy[1] + salto), texto, fuente, SOMBRA, espaciado, anchor)
+
+    if not espaciado:
+        d.text(xy, texto, font=fuente, fill=fill, anchor=anchor)
+        return
+    x, y = xy
+    total = _ancho(texto, fuente, espaciado)
+    if anchor[0] == "m":
+        x -= total // 2
+    elif anchor[0] == "r":
+        x -= total
+    for letra in texto:
+        d.text((x, y), letra, font=fuente, fill=fill, anchor="l" + anchor[1])
+        x += fuente.getlength(letra) + espaciado
 
 
 def _bandera(iso2: str, alto: int) -> Image.Image | None:
@@ -57,7 +115,7 @@ def _bandera(iso2: str, alto: int) -> Image.Image | None:
     if clave in _banderas:
         return _banderas[clave]
     try:
-        r = httpx.get(f"https://flagcdn.com/w160/{iso2.lower()}.png", timeout=10)
+        r = httpx.get(f"https://flagcdn.com/w320/{iso2.lower()}.png", timeout=10)
         if r.status_code != 200:
             return None
         img = Image.open(io.BytesIO(r.content)).convert("RGBA")
@@ -70,11 +128,101 @@ def _bandera(iso2: str, alto: int) -> Image.Image | None:
     arr = (img.height - lado) // 2
     img = img.crop((izq, arr, izq + lado, arr + lado)).resize((alto, alto), Image.LANCZOS)
 
-    mascara = Image.new("L", (alto, alto), 0)
-    ImageDraw.Draw(mascara).ellipse((0, 0, alto - 1, alto - 1), fill=255)
-    img.putalpha(mascara)
+    # El circulo se dibuja a 4x y se reduce: si no, el borde sale escalonado.
+    mascara = Image.new("L", (alto * 4, alto * 4), 0)
+    ImageDraw.Draw(mascara).ellipse((0, 0, alto * 4 - 1, alto * 4 - 1), fill=255)
+    img.putalpha(mascara.resize((alto, alto), Image.LANCZOS))
 
     _banderas[clave] = img
+    return img
+
+
+# Que foto lleva de fondo cada pais. Van articulos de un monumento o un barrio
+# concreto, no del pais ni de la capital: esos suelen llevar de portada un mapa,
+# la bandera o un collage de seis fotos, y de fondo eso queda fatal.
+FOTOS = {
+    "CL": "Costanera Center", "CO": "Cartagena de Indias",
+    "AR": "Obelisco de Buenos Aires", "VE": "Salto Ángel",
+    "PE": "Machu Picchu", "MX": "Paseo de la Reforma",
+    "BR": "Cristo Redentor", "EC": "Quito", "PA": "Ciudad de Panamá",
+    "US": "Puente de Brooklyn", "CA": "Torre CN",
+    "UY": "Rambla de Montevideo", "PY": "Asunción", "BO": "La Paz",
+    "CR": "Volcán Arenal", "DO": "Santo Domingo",
+    "EU": "Grand Place", "ES": "Gran Vía (Madrid)", "IT": "Coliseo",
+    "PT": "Torre de Belém", "FR": "Torre Eiffel", "DE": "Puerta de Brandeburgo",
+    "GB": "Tower Bridge",
+}
+
+# Wikipedia devuelve 403 a los agentes anonimos; su politica pide identificarse
+# con algo por donde contactar. Va el dominio, no un correo de nadie.
+AGENTE = {"User-Agent": "KSAGlobalEvolution/1.0 (https://ksaglobal-evolution.com)"}
+
+
+def _cubre(img: Image.Image, ancho: int, alto: int) -> Image.Image:
+    """Recorta y escala la foto para llenar el lienzo sin deformarla."""
+    escala = max(ancho / img.width, alto / img.height)
+    nueva = img.resize(
+        (max(round(img.width * escala), ancho), max(round(img.height * escala), alto)),
+        Image.LANCZOS,
+    )
+    izq = (nueva.width - ancho) // 2
+    arr = (nueva.height - alto) // 3      # un poco por encima del centro: el cielo manda
+    return nueva.crop((izq, arr, izq + ancho, arr + alto))
+
+
+def _fondo_pais(iso2: str, nombre: str) -> Image.Image | None:
+    """Foto de fondo del pais, ya recortada al tamano del lienzo.
+
+    Primero un fichero propio en assets/fondos/<iso2>.jpg —asi se puede poner
+    la que uno quiera—; si no lo hay, la foto de portada que Wikipedia tiene
+    para el monumento de FOTOS.
+
+    Se guarda recortada, no original: las de Wikipedia llegan a 8000x6000 y
+    tener varias enteras en memoria son cientos de megas para nada.
+    """
+    if not iso2:
+        return None
+    if iso2 in _fondos:
+        return _fondos[iso2]
+
+    propia = os.path.join(ASSETS, "fondos", f"{iso2.lower()}.jpg")
+    cacheada = os.path.join(CACHE_FONDOS, f"{iso2.lower()}.jpg")
+    if os.path.exists(cacheada):
+        try:
+            img = Image.open(cacheada).convert("RGB")
+            _fondos[iso2] = img
+            return img
+        except Exception:
+            pass
+
+    try:
+        if os.path.exists(propia):
+            img = Image.open(propia).convert("RGB")
+        else:
+            articulo = FOTOS.get(iso2.upper(), nombre)
+            url = "https://es.wikipedia.org/api/rest_v1/page/summary/" + articulo.replace(" ", "_")
+            datos = httpx.get(url, timeout=15, headers=AGENTE, follow_redirects=True).json()
+            fuente = (datos.get("originalimage") or datos.get("thumbnail") or {}).get("source")
+            if not fuente:
+                return None
+            crudo = httpx.get(fuente, timeout=30, headers=AGENTE, follow_redirects=True).content
+            img = Image.open(io.BytesIO(crudo)).convert("RGB")
+        img = _cubre(img, ANCHO, ALTO)
+        # Muchas fotos de Wikipedia son de atardecer o van subexpuestas, y bajo
+        # el velo azul quedan en un gris sucio. Se suben un punto para que se
+        # note que hay una ciudad detras.
+        img = ImageEnhance.Brightness(img).enhance(1.18)
+        img = ImageEnhance.Color(img).enhance(1.15)
+        img = ImageEnhance.Contrast(img).enhance(1.06)
+    except Exception:
+        return None
+
+    try:
+        os.makedirs(CACHE_FONDOS, exist_ok=True)
+        img.save(cacheada, "JPEG", quality=88)
+    except Exception:
+        pass  # sin cache se vuelve a pedir, no es grave
+    _fondos[iso2] = img
     return img
 
 
@@ -111,63 +259,164 @@ def _a_tamano_final(img: Image.Image) -> bytes:
     return salida.getvalue()
 
 
+def _lienzo_de_fondo(origen: dict) -> Image.Image:
+    """Foto del pais a toda pagina, con el velo azul que deja leer encima.
+
+    El velo es casi transparente arriba —ahi se ve la ciudad— y se cierra
+    hacia abajo, que es donde van las pastillas: sin eso, una foto clara deja
+    el texto blanco del titulo ilegible y una oscura apaga las banderas.
+    """
+    fondo = _fondo_pais(origen.get("iso2", ""), origen.get("name", ""))
+    if fondo is None:
+        # Sin foto, degradado liso: la imagen sale igual, solo mas sobria.
+        fondo = Image.new("RGB", (ANCHO, ALTO))
+        dd = ImageDraw.Draw(fondo)
+        for y in range(ALTO):
+            p = y / max(ALTO - 1, 1)
+            dd.line([(0, y), (ANCHO, y)],
+                    fill=tuple(int(a + (b - a) * p) for a, b in zip(AZUL, AZUL_HONDO)))
+        return fondo
+
+    velo = Image.new("RGBA", (ANCHO, ALTO))
+    dv = ImageDraw.Draw(velo)
+    for y in range(ALTO):
+        p = y / max(ALTO - 1, 1)
+        # Arriba casi no tapa —ahi se ve la ciudad— y abajo cierra del todo,
+        # que es donde van las pastillas y no puede competir nada con ellas.
+        alfa = int(255 * (0.14 + 0.72 * (p ** 1.7)))
+        color = tuple(int(a + (b - a) * p) for a, b in zip(AZUL, AZUL_HONDO))
+        dv.line([(0, y), (ANCHO, y)], fill=color + (alfa,))
+
+    # Sombra suave en la franja de arriba: el titulo va en blanco y ahi la foto
+    # suele ser cielo claro, donde el blanco sobre blanco no se lee. Va en su
+    # propia capa porque draw.line pisa el alfa en vez de sumarlo.
+    sombra = Image.new("RGBA", (ANCHO, ALTO))
+    ds = ImageDraw.Draw(sombra)
+    banda = int(ALTO * 0.46)
+    for y in range(banda):
+        alfa = int(255 * 0.34 * (1 - y / banda) ** 1.4)
+        ds.line([(0, y), (ANCHO, y)], fill=AZUL_HONDO + (alfa,))
+
+    fondo = Image.alpha_composite(fondo.convert("RGBA"), velo)
+    return Image.alpha_composite(fondo, sombra).convert("RGB")
+
+
+def _cabecera(img: Image.Image, d: ImageDraw.ImageDraw, origen: dict) -> int:
+    """Logo, DESDE <PAIS>, la pastilla de 'TASAS DE CAMBIO' y la fecha.
+
+    Devuelve la y donde puede empezar la lista.
+    """
+    centro = ANCHO // 2
+    y = MARGEN
+
+    # Logo: el globo a la izquierda y la marca a su derecha, todo centrado.
+    marca = _fuente("extra", int(26 * ESCALA))
+    bajo_marca = _fuente("semi", int(7 * ESCALA))
+    esp_bajo = int(2.6 * ESCALA)
+    try:
+        globo = Image.open(LOGO).convert("RGBA")
+        lado = int(34 * ESCALA)
+        globo = globo.resize((lado, int(globo.height * lado / globo.width)), Image.LANCZOS)
+    except Exception:
+        globo, lado = None, 0
+
+    ancho_texto = max(marca.getlength("KSA"), _ancho("GLOBAL EVOLUTION", bajo_marca, esp_bajo))
+    hueco = int(8 * ESCALA) if globo else 0
+    total = lado + hueco + ancho_texto
+    x = centro - total / 2
+    if globo:
+        img.paste(globo, (int(x), y), globo)
+        x += lado + hueco
+    _escribe(d, (x, y + int(4 * ESCALA)), "KSA", marca, TEXTO_TITULO, anchor="la", sombra=True)
+    _escribe(d, (x + int(1 * ESCALA), y + int(32 * ESCALA)), "GLOBAL EVOLUTION",
+             bajo_marca, TEXTO_SUAVE, esp_bajo, anchor="la", sombra=True)
+    y += int(52 * ESCALA)
+
+    # DESDE / PAIS
+    f_desde = _fuente("semi", int(20 * ESCALA))
+    _escribe(d, (centro, y), "DESDE", f_desde, TEXTO_TITULO, int(9 * ESCALA), anchor="ma", sombra=True)
+    y += int(28 * ESCALA)
+
+    nombre = origen["name"].upper()
+    f_pais = _encaja("black", nombre, int(54 * ESCALA), ANCHO - MARGEN * 2)
+    _escribe(d, (centro, y), nombre, f_pais, TEXTO_TITULO, anchor="ma", sombra=True)
+    y += int(f_pais.size * 1.02)
+
+    # Pastilla azul con la bandera del origen y 'TASAS DE CAMBIO'.
+    alto_p = int(30 * ESCALA)
+    f_tc = _fuente("bold", int(13 * ESCALA))
+    esp_tc = int(2 * ESCALA)
+    lado_b = int(alto_p * 0.86)
+    ancho_p = int(lado_b + 10 * ESCALA + _ancho("TASAS DE CAMBIO", f_tc, esp_tc) + 22 * ESCALA)
+    x0 = centro - ancho_p // 2
+    d.rounded_rectangle([(x0, y), (x0 + ancho_p, y + alto_p)], radius=alto_p // 2, fill=AZUL)
+    bandera = _bandera(origen.get("iso2", ""), lado_b)
+    if bandera:
+        img.paste(bandera, (x0 + (alto_p - lado_b) // 2, y + (alto_p - lado_b) // 2), bandera)
+    _escribe(d, (x0 + lado_b + int(12 * ESCALA), y + alto_p // 2), "TASAS DE CAMBIO",
+             f_tc, TEXTO_TITULO, esp_tc, anchor="lm")
+    y += alto_p + int(10 * ESCALA)
+
+    _escribe(d, (centro, y), "ACTUALIZADAS HOY", _fuente("semi", int(9 * ESCALA)),
+             TEXTO_SUAVE, int(3 * ESCALA), anchor="ma", sombra=True)
+    return y + int(20 * ESCALA)
+
+
+def _pie(d: ImageDraw.ImageDraw) -> int:
+    """Barra de abajo. Devuelve la y en la que empieza, para no pisarla."""
+    alto_b = int(26 * ESCALA)
+    y = ALTO - MARGEN - alto_b
+    d.rounded_rectangle([(MARGEN, y), (ANCHO - MARGEN, y + alto_b)],
+                        radius=alto_b // 2, fill=AZUL)
+    _escribe(d, (ANCHO // 2, y + alto_b // 2), "SEGURIDAD  •  CONFIANZA  •  MEJORES TASAS",
+             _fuente("semi", int(9 * ESCALA)), TEXTO_SUAVE, int(2 * ESCALA), anchor="mm")
+    return y
+
+
 def generar(origen: dict, filas: list[dict]) -> bytes:
     """PNG con una fila por destino: bandera, pais y a cuanto se cambia.
 
     `origen` es {name, iso2, currency}; cada fila, {name, iso2, currency, tasa}.
     """
-    alto = ALTO
-    # El alto es fijo, asi que las filas se reparten el espacio que queda bajo
-    # la cabecera. Con muchos destinos salen mas juntas, pero entran todas: es
-    # preferible a cortar la lista o a que la imagen cambie de tamano.
-    cabecera = 62 * ESCALA
-    disponible = alto - MARGEN * 2 - cabecera
-    n = max(len(filas), 1)
-    alto_fila = max(int(disponible / n) - ESPACIO, 18 * ESCALA)
-
-    img = Image.new("RGB", (ANCHO, alto), FONDO_ABAJO)
+    img = _lienzo_de_fondo(origen).convert("RGB")
     d = ImageDraw.Draw(img)
 
-    for y in range(alto):
-        p = y / max(alto - 1, 1)
-        d.line(
-            [(0, y), (ANCHO, y)],
-            fill=tuple(int(a + (b - a) * p) for a, b in zip(FONDO_ARRIBA, FONDO_ABAJO)),
-        )
+    arriba = _cabecera(img, d, origen)
+    abajo = _pie(d) - int(12 * ESCALA)
 
-    titulo = _fuente(NEGRITA, int(26 * ESCALA))
-    subtitulo = _fuente(NORMAL, int(12 * ESCALA))
-    f_pais = _fuente(NEGRITA, max(int(alto_fila * 0.34), 9 * ESCALA))
-    f_tasa = _fuente(NEGRITA, max(int(alto_fila * 0.40), 10 * ESCALA))
+    # El alto es fijo, asi que las filas se reparten lo que queda entre la
+    # cabecera y el pie. Con muchos destinos salen mas juntas, pero entran
+    # todas: preferible a cortar la lista o a que la imagen cambie de tamano.
+    n = max(len(filas), 1)
+    alto_fila = max(int((abajo - arriba) / n) - ESPACIO, 16 * ESCALA)
+    # Con pocos destinos no tiene sentido estirarlas hasta parecer botones;
+    # entonces sobra sitio y la lista se centra, que si no queda coja.
+    alto_fila = min(alto_fila, int(42 * ESCALA))
+    sobra = (abajo - arriba) - (alto_fila + ESPACIO) * n + ESPACIO
 
-    d.text((MARGEN, MARGEN), f"ENVÍOS DESDE {origen['name'].upper()}", font=titulo, fill=TEXTO_TITULO)
-    d.text(
-        (MARGEN, MARGEN + int(32 * ESCALA)),
-        f"Cuánto recibe el destinatario por cada 1 {origen['currency']}",
-        font=subtitulo, fill=TEXTO_SUAVE,
-    )
-
-    y = MARGEN + cabecera
+    y = arriba + max(sobra, 0) // 2
     for fila in filas:
-        d.rounded_rectangle(
-            [(MARGEN, y), (ANCHO - MARGEN, y + alto_fila)],
-            radius=alto_fila // 2, fill=PILDORA,
-        )
+        d.rounded_rectangle([(MARGEN, y), (ANCHO - MARGEN, y + alto_fila)],
+                            radius=alto_fila // 2, fill=PILDORA)
 
-        lado = int(alto_fila * 0.78)
+        lado = int(alto_fila * 0.80)
         bandera = _bandera(fila.get("iso2", ""), lado)
         if bandera:
             img.paste(bandera, (MARGEN + (alto_fila - lado) // 2, y + (alto_fila - lado) // 2), bandera)
 
-        d.text(
-            (MARGEN + lado + int(alto_fila * 0.35), y + alto_fila // 2),
-            fila["name"].upper(), font=f_pais, fill=TEXTO_PAIS, anchor="lm",
-        )
+        # La tasa manda: se dibuja primero y el nombre usa lo que sobre.
+        f_tasa = _fuente("extra", max(int(alto_fila * 0.42), 10 * ESCALA))
+        texto_tasa = formatea_tasa(fila.get("tasa"))
+        borde_tasa = ANCHO - MARGEN - int(alto_fila * 0.45)
+        d.text((borde_tasa, y + alto_fila // 2), texto_tasa,
+               font=f_tasa, fill=TEXTO_PAIS, anchor="rm")
 
-        d.text(
-            (ANCHO - MARGEN - int(alto_fila * 0.3), y + alto_fila // 2),
-            formatea_tasa(fila.get("tasa")), font=f_tasa, fill=TEXTO_PAIS, anchor="rm",
-        )
+        x_nombre = MARGEN + lado + int(alto_fila * 0.40)
+        hueco = borde_tasa - _ancho(texto_tasa, f_tasa) - int(10 * ESCALA) - x_nombre
+        f_nombre = _encaja("bold", fila["name"].upper(), max(int(alto_fila * 0.33), 9 * ESCALA), hueco)
+        d.text((x_nombre, y + alto_fila // 2), fila["name"].upper(),
+               font=f_nombre, fill=TEXTO_PAIS, anchor="lm")
+
         y += alto_fila + ESPACIO
 
     return _a_tamano_final(img)
@@ -194,19 +443,27 @@ def _hoy() -> str:
 # Lo que se le pide a la IA cuando nadie ha escrito una instruccion propia.
 # Es editable desde Ajustes -> IA; esto es solo el punto de partida.
 INSTRUCCION_POR_DEFECTO = (
-    "Tarjeta vertical de tasas de cambio, fondo azul marino con degradado.\n\n"
-    "ARRIBA, una cabecera: a la IZQUIERDA una foto real y reconocible de {pais} "
-    "(un paisaje o un monumento del país), recortada en un cuadrado de esquinas "
-    "redondeadas. A su DERECHA, tres líneas de texto en blanco:\n"
-    "  «Desde {pais}» — grande y en negrita\n"
-    "  «Tasas de cambio» — mediana\n"
-    "  «Actualizada hoy» — pequeña\n\n"
-    "DEBAJO, la lista de destinos: una fila por país, cada una dentro de una "
-    "píldora blanca de esquinas redondeadas. En cada fila, a la IZQUIERDA la "
-    "bandera circular del país y su nombre en mayúsculas en azul oscuro; a la "
-    "DERECHA, pegada al borde, la tasa en negrita y azul oscuro.\n\n"
-    "Diseño limpio, moderno, mucho contraste. Sin marcas de agua, sin logos y "
-    "sin ningún texto que no esté aquí."
+    "Cartel vertical de tasas de cambio.\n\n"
+    "FONDO: una foto real y reconocible de {pais} ocupando TODO el fondo, de "
+    "borde a borde —un paisaje, la ciudad o un monumento del país—, con un velo "
+    "azul marino por encima: suave arriba, donde se ve la foto, y cerrado abajo.\n\n"
+    "CABECERA, centrada y en blanco, de arriba abajo:\n"
+    "  · el logo: un globo terráqueo azul con una flecha gris, y al lado «KSA» "
+    "en mayúsculas muy gruesas con «GLOBAL EVOLUTION» debajo en letra pequeña "
+    "y espaciada\n"
+    "  · «DESDE» en letras separadas\n"
+    "  · «{PAIS}» enorme, en negrita muy gruesa\n"
+    "  · una pastilla azul oscuro con la bandera circular de {pais} y el texto "
+    "«TASAS DE CAMBIO»\n"
+    "  · «ACTUALIZADAS HOY» en letra pequeña y espaciada\n\n"
+    "LISTA, debajo: una fila por país, cada una en una píldora blanca de "
+    "esquinas totalmente redondeadas. En cada fila, a la IZQUIERDA la bandera "
+    "circular del país y su nombre en mayúsculas en azul oscuro; a la DERECHA, "
+    "pegada al borde, la tasa en negrita gruesa y azul oscuro.\n\n"
+    "PIE: una barra azul oscuro redondeada con «SEGURIDAD • CONFIANZA • "
+    "MEJORES TASAS».\n\n"
+    "Diseño limpio, moderno, mucho contraste. Sin marcas de agua y sin ningún "
+    "texto que no esté aquí."
 )
 
 
