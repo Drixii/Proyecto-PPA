@@ -1104,26 +1104,25 @@ function ImagenDeTasas({ origen }) {
   return (
     <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,.07)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <button onClick={() => generar(false)} disabled={cargando || !origen}
+        {/* Un solo botón. Con la IA encendida hace las dos cosas —el fondo lo
+            pinta OpenAI y el texto y la tabla los pinta el código—; apagada,
+            genera igual, solo que con la foto del país en vez del fondo hecho
+            a medida. */}
+        <button onClick={() => generar(!!ia?.activa)} disabled={cargando || !origen}
+          title={ia?.activa
+            ? 'El fondo lo pinta OpenAI; los textos y las cifras las pone el sistema, con los datos reales.'
+            : 'Se dibuja con la foto del país. Enciende la IA en Ajustes → IA para que el fondo lo haga OpenAI.'}
           style={{
             padding: '10px 20px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 700,
-            cursor: cargando ? 'wait' : 'pointer',
-            background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', color: '#fff',
+            cursor: cargando ? 'wait' : 'pointer', color: '#fff',
+            background: ia?.activa
+              ? 'linear-gradient(135deg,#a855f7,#6d28d9)'
+              : 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
           }}>
-          {cargando ? 'Generando…' : `Generar imagen de ${origen?.name || ''}`}
+          {cargando
+            ? (ia?.activa ? 'Generando con IA… (~1 min)' : 'Generando…')
+            : (ia?.activa ? 'Generar con IA + C' : `Generar imagen de ${origen?.name || ''}`)}
         </button>
-
-        {ia?.activa && (
-          <button onClick={() => generar(true)} disabled={cargando}
-            title="La dibuja OpenAI. Los números los redibuja el modelo: revísalos antes de mandarla."
-            style={{
-              padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
-              cursor: cargando ? 'wait' : 'pointer', background: 'transparent',
-              border: '1px solid rgba(168,85,247,.35)', color: '#c084fc',
-            }}>
-            Probar con IA
-          </button>
-        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <input
@@ -1154,9 +1153,9 @@ function ImagenDeTasas({ origen }) {
       {url && (
         <div style={{ marginTop: 14 }}>
           {hechaConIa && (
-            <p style={{ margin: '0 0 8px', fontSize: 11.5, color: '#fcd34d', lineHeight: 1.5 }}>
-              Hecha con IA: los números los redibujó el modelo y puede haberse equivocado.
-              Compáralos con la tabla de arriba antes de mandarla.
+            <p style={{ margin: '0 0 8px', fontSize: 11.5, color: '#c084fc', lineHeight: 1.5 }}>
+              El fondo lo hizo la IA. Los textos y las cifras las puso el sistema,
+              con los datos de la base: son las mismas que dan las calculadoras.
             </p>
           )}
           <img src={url} alt="Tasas" style={{ maxWidth: 380, width: '100%', borderRadius: 14, border: '1px solid rgba(255,255,255,.1)' }} />
