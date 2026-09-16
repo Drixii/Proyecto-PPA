@@ -1502,20 +1502,42 @@ def list_available_sub_admins(
 
 # ── Commission rules ──────────────────────────────────────────────────────────
 
-COMMISSION_CURRENCIES = ["CLP", "COP", "USD", "EUR", "PEN", "BRL", "MXN", "ARS", "CAD", "VES"]
+def _monedas_de_rutas(db: Session) -> dict:
+    """Monedas de origen y destino, sacadas de los paises dados de alta.
 
-CURRENCY_LABELS = {
-    "CLP": "Chile (CLP)", "COP": "Colombia (COP)", "USD": "EE.UU. (USD)",
-    "EUR": "España/Europa (EUR)", "PEN": "Perú (PEN)", "BRL": "Brasil (BRL)",
-    "MXN": "México (MXN)", "ARS": "Argentina (ARS)", "CAD": "Canadá (CAD)",
-    "VES": "Venezuela (VES)",
-}
+    Antes esto era una lista escrita a mano de diez monedas. Se desincronizo de
+    la tabla de paises: Ecuador no aparecia por ningun lado —comparte el dolar
+    con Estados Unidos y ahi no habia forma de verlo—, y Venezuela salia como
+    origen cuando tiene el envio desactivado.
 
-CURRENCY_FLAGS = {
-    "CLP": "🇨🇱", "COP": "🇨🇴", "USD": "🇺🇸", "EUR": "🇪🇸",
-    "PEN": "🇵🇪", "BRL": "🇧🇷", "MXN": "🇲🇽", "ARS": "🇦🇷",
-    "CAD": "🇨🇦", "VES": "🇻🇪",
-}
+    Varios paises comparten divisa, asi que la etiqueta los nombra a todos:
+    "USD · EE.UU., Ecuador, Panama". La bandera es la del primero.
+    """
+    paises = (
+        db.query(Country)
+        .filter(Country.active == True, Country.currency != None)
+        .order_by(Country.name)
+        .all()
+    )
+
+    origen, destino, nombres, banderas = [], [], {}, {}
+    for c in paises:
+        nombres.setdefault(c.currency, []).append(c.name)
+        banderas.setdefault(c.currency, c.iso2 or "")
+        if c.can_send and c.currency not in origen:
+            origen.append(c.currency)
+        if c.can_receive and c.currency not in destino:
+            destino.append(c.currency)
+
+    etiquetas = {
+        cur: f"{', '.join(lista)} ({cur})" for cur, lista in nombres.items()
+    }
+    return {
+        "origen": origen,
+        "destino": destino,
+        "etiquetas": etiquetas,
+        "banderas": banderas,
+    }
 
 
 class CommissionRuleIn(BaseModel):
@@ -1578,9 +1600,13 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
             return global_from_defaults[fc], "from_default_global"
         return global_default, "default"
 
+    rutas = _monedas_de_rutas(db)
+    CURRENCY_LABELS = rutas["etiquetas"]
+    CURRENCY_FLAGS = rutas["banderas"]
+
     matrix = []
-    for fc in COMMISSION_CURRENCIES:
-        for tc in COMMISSION_CURRENCIES:
+    for fc in rutas["origen"]:
+        for tc in rutas["destino"]:
             if fc == tc:
                 continue
             eff, src = _effective(fc, tc)
@@ -1604,7 +1630,11 @@ def get_commissions(db: Session = Depends(get_db), admin: User = Depends(require
             "global_default": global_default,
             "my_from_defaults": my_from_defaults,
             "global_from_defaults": global_from_defaults,
-            "currencies": COMMISSION_CURRENCIES,
+            # Se mantiene "currencies" por compatibilidad, con la union de
+            # ambas: la pantalla la usa para pintar la tabla entera.
+            "currencies": rutas["origen"] + [c for c in rutas["destino"] if c not in rutas["origen"]],
+            "from_currencies": rutas["origen"],
+            "to_currencies": rutas["destino"],
             "labels": CURRENCY_LABELS,
             "flags": CURRENCY_FLAGS,
         },
@@ -1619,8 +1649,9 @@ def get_all_rates_for_base(
     admin: User = Depends(require_super_admin),
 ):
     from services.exchange_service import get_rate
+    # Los destinos salen de los paises dados de alta, igual que la matriz.
     rates = {}
-    for tc in COMMISSION_CURRENCIES:
+    for tc in _monedas_de_rutas(db)["destino"]:
         if tc == from_currency:
             continue
         r = get_rate(db, from_currency, tc)

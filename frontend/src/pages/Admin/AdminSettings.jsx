@@ -141,7 +141,7 @@ function formateaMonto(valor, moneda) {
 const montoANumero = (valor) => parseInt(String(valor ?? '').replace(/\D/g, ''), 10) || 0
 
 function RateTester({ commData }) {
-  const currencies = commData?.currencies || []
+  const currencies = commData?.from_currencies || commData?.currencies || []
   const labels = commData?.labels || {}
   const [fromCur, setFromCur] = useState('CLP')
   const [toCur, setToCur]   = useState('COP')
@@ -164,10 +164,13 @@ function RateTester({ commData }) {
     setResult(null)
   }, [fromCur])
 
-  const fromOptions = currencies.map(c => ({ cur: c, label: labels[c] || c, rate: null }))
-  const toOptions   = currencies.filter(c => c !== fromCur).map(c => ({
-    cur: c, label: labels[c] || c, rate: ratesData?.[c] ?? null,
-  }))
+  // Origen solo entre las que pueden enviar, destino entre las que pueden
+  // recibir: simular una ruta que el sistema no deja crear no sirve de nada.
+  const fromOptions = (commData?.from_currencies || currencies)
+    .map(c => ({ cur: c, label: labels[c] || c, rate: null }))
+  const toOptions = (commData?.to_currencies || currencies)
+    .filter(c => c !== fromCur)
+    .map(c => ({ cur: c, label: labels[c] || c, rate: ratesData?.[c] ?? null }))
 
   const handleCalc = async () => {
     const amt = montoANumero(amount)
@@ -250,7 +253,11 @@ function CommissionMatrix({ data, onSaved }) {
   const globalFromDefaults = data?.global_from_defaults || {}
   const globalDefault = data?.global_default ?? 1.5
 
-  const destinations = currencies.filter(c => c !== fromCur)
+  // Origen y destino son listas distintas: un país puede recibir sin enviar
+  // —Ecuador, Venezuela, Panamá— y salía como origen de rutas que nadie puede
+  // usar. Las manda el backend desde los países dados de alta.
+  const origenes = data?.from_currencies || currencies
+  const destinations = (data?.to_currencies || currencies).filter(c => c !== fromCur)
 
   const getRow = (fc, tc) => matrix.find(r => r.from_currency === fc && r.to_currency === tc)
   const k = (fc, tc) => `${fc}_${tc}`
@@ -324,9 +331,9 @@ function CommissionMatrix({ data, onSaved }) {
         </div>
       </div>
 
-      {/* FROM tabs */}
+      {/* FROM tabs — solo las que pueden enviar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
-        {currencies.map(c => (
+        {origenes.map(c => (
           <button key={c} onClick={() => setFromCur(c)}
             style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: 6,
               background: fromCur === c ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.06)',
