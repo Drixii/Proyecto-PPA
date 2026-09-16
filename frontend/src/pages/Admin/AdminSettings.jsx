@@ -1067,16 +1067,12 @@ const ALTO_FILA_MAX = 42
 
 // Espejo de reparte_filas en services/imagen_tasas.py. Si cambia allí, cambia
 // aquí: lo que se arrastra dejaría de coincidir con lo que se genera.
-function reparteFilas(n, alto, letra = 1) {
+function reparteFilas(n, alto) {
   const cuantas = Math.max(n, 1)
-  let base = Math.max(Math.floor(alto / cuantas) - ESPACIO_FILA, ALTO_FILA_MIN)
-  base = Math.min(base, ALTO_FILA_MAX)
-  const altoFila = Math.max(Math.floor(base * Math.max(letra, 0.5)), 6)
-
-  const total = (altoFila + ESPACIO_FILA) * cuantas - ESPACIO_FILA
-  // Si ya no cabe, la lista crece hacia arriba: abajo suele estar el pie.
-  const desde = total <= alto ? (alto - total) / 2 : alto - total
-  return { altoFila, desde, total }
+  let altoFila = Math.max(Math.floor(alto / cuantas) - ESPACIO_FILA, ALTO_FILA_MIN)
+  altoFila = Math.min(altoFila, ALTO_FILA_MAX)
+  const sobra = alto - (altoFila + ESPACIO_FILA) * cuantas + ESPACIO_FILA
+  return { altoFila, desde: Math.max(sobra, 0) / 2 }
 }
 
 function ImagenDeTasas({ origen }) {
@@ -1256,7 +1252,7 @@ function ImagenDeTasas({ origen }) {
     return () => window.removeEventListener('resize', medir)
   }, [editor?.tiene_fondo, fondoUrl])
 
-  const { altoFila, desde } = reparteFilas(filas.length, posicion.alto, (posicion.letra || 100) / 100)
+  const { altoFila, desde } = reparteFilas(filas.length, posicion.alto)
   const escalaVista = anchoVista / lienzo.ancho
   const factorLetra = (posicion.letra || 100) / 100
   const negrita = posicion.negrita !== false
@@ -1388,12 +1384,12 @@ function ImagenDeTasas({ origen }) {
                       }} />
                   )}
                   <span style={{
-                    flex: 1, minWidth: 0, fontSize: Math.max(altoFila * 0.36 * escalaVista, 5),
+                    flex: 1, minWidth: 0, fontSize: Math.max(Math.min(altoFila * 0.34 * factorLetra, altoFila * 0.62) * escalaVista, 5),
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
                     {f.name.toUpperCase()}
                   </span>
-                  <span style={{ fontSize: Math.max(altoFila * 0.44 * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
+                  <span style={{ fontSize: Math.max(Math.min(altoFila * 0.42 * factorLetra, altoFila * 0.62) * escalaVista, 6), flexShrink: 0 }}>{f.tasa}</span>
                 </div>
               ))}
             </div>
