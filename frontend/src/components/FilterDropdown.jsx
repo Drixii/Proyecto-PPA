@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import Portal from './Portal'
+import { useEsMovil } from './SelectorBusqueda'
 import { flagUrl } from '../utils/flags'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
@@ -7,7 +8,24 @@ const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(25
 export default function FilterDropdown({ subAdmins, filterMode, onChange }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState(null)
+  const [busca, setBusca] = useState('')
   const btnRef = useRef()
+  const esMovil = useEsMovil()
+
+  // En el móvil no cuelga del botón: sube desde el borde de abajo, a lo ancho.
+  // Colgando, la lista de encargados se salía por el lado y quedaba cortada.
+  const caja = esMovil
+    ? { position: 'fixed', left: 0, right: 0, bottom: 0, width: 'auto',
+        borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+        maxHeight: '76dvh', overflowY: 'auto',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)' }
+    : { position: 'fixed', top: (rect?.bottom || 0) + 6, left: rect?.left || 0 }
+
+  const encargados = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    if (!q) return subAdmins
+    return subAdmins.filter(sa => (sa.full_name || '').toLowerCase().includes(q))
+  }, [subAdmins, busca])
 
   const toggle = () => {
     if (!open && btnRef.current) {
@@ -44,10 +62,23 @@ export default function FilterDropdown({ subAdmins, filterMode, onChange }) {
         <Portal>
           <div className="fixed inset-0 z-[600]" onClick={() => setOpen(false)} />
           <div
-            className="z-[601] rounded-2xl overflow-hidden w-64"
-            style={{ position: 'fixed', top: rect.bottom + 6, left: rect.left, ...GLASS }}
+            className={`z-[601] rounded-2xl overflow-hidden ${esMovil ? '' : 'w-64'}`}
+            style={{ ...GLASS, ...caja }}
             onClick={e => e.stopPropagation()}
           >
+            {esMovil && (
+              <div className="flex justify-center pt-2.5 pb-1">
+                <span style={{ width: 38, height: 4, borderRadius: 999, background: 'rgba(255,255,255,.18)' }} />
+              </div>
+            )}
+            {subAdmins.length > 4 && (
+              <div className="p-2" style={{ borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+                <input value={busca} onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar encargado..."
+                  className="w-full text-sm outline-none rounded-lg px-3 py-2"
+                  style={{ background: 'rgba(6,13,40,.85)', color: '#eaf2ff', border: 'none' }} />
+              </div>
+            )}
             {/* All countries option */}
             <button
               onClick={() => { onChange({ type: 'all' }); setOpen(false) }}
@@ -69,7 +100,7 @@ export default function FilterDropdown({ subAdmins, filterMode, onChange }) {
                 <div className="px-4 pt-2.5 pb-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider" style={{color:'#64748b'}}>Por encargado</p>
                 </div>
-                {subAdmins.map(sa => {
+                {encargados.map(sa => {
                   const isSelected = filterMode.type === 'subadmin' && filterMode.id === sa.id
                   return (
                     <button

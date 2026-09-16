@@ -16,7 +16,7 @@ import Portal from './Portal'
  * Cada opción es { clave, titulo, subtitulo, iso2 }. `iso2` pinta la bandera.
  */
 
-function useEsMovil() {
+export function useEsMovil() {
   const [esMovil, setEsMovil] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   )

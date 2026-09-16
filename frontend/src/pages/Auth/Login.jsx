@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { activarNotificaciones, revalidarNotificaciones } from '../../services/push'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
@@ -218,6 +219,21 @@ export default function Login() {
     } catch (err) {
       setRegError(err.response?.data?.detail || 'El correo no es el correcto')
     } finally { setRegLoading(false) }
+  }
+
+  // El tipo de documento cambia con el país: si el elegido no existe en el
+  // nuevo, se pone el primero que sí, y se limpia el número para no dejar un
+  // RUT metido en una casilla de CPF.
+  const cambiaPais = (c) => {
+    const tipos = [...(DOCS_POR_PAIS[c] || []), ['PP', 'Pasaporte']]
+    const sigueValiendo = tipos.some(([x]) => x === regForm.document_type)
+    setRegForm({
+      ...regForm,
+      country: c,
+      document_type: sigueValiendo ? regForm.document_type : tipos[0][0],
+      document_number: sigueValiendo ? regForm.document_number : '',
+    })
+    setPaisAbierto(false)
   }
 
   const submitWithCode = async () => {
@@ -444,40 +460,13 @@ export default function Login() {
                   </button>
 
                   {paisAbierto && (
-                    <>
-                      {/* Capa que cierra al pulsar fuera. */}
-                      <div onClick={() => setPaisAbierto(false)}
-                        style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, zIndex: 50,
-                        background: 'rgba(5,11,35,.98)', border: '1px solid rgba(56,189,248,.2)', borderRadius: 12,
-                        maxHeight: 220, overflowY: 'auto', boxShadow: '0 16px 40px rgba(0,0,0,.7)' }}>
-                        {REGISTER_COUNTRIES.map(c => (
-                          <button key={c} type="button"
-                            onClick={() => {
-                              // El tipo de documento cambia con el país: si el
-                              // elegido no existe en el nuevo, se pone el primero
-                              // que sí, y se limpia el número para no dejar un
-                              // RUT metido en una casilla de CPF.
-                              const tipos = [...(DOCS_POR_PAIS[c] || []), ['PP', 'Pasaporte']]
-                              const sigueValiendo = tipos.some(([x]) => x === regForm.document_type)
-                              setRegForm({
-                                ...regForm,
-                                country: c,
-                                document_type: sigueValiendo ? regForm.document_type : tipos[0][0],
-                                document_number: sigueValiendo ? regForm.document_number : '',
-                              })
-                              setPaisAbierto(false)
-                            }}
-                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                              padding: '10px 12px', background: regForm.country === c ? 'rgba(56,189,248,.12)' : 'transparent',
-                              border: 'none', borderBottom: '1px solid rgba(255,255,255,.04)', cursor: 'pointer',
-                              color: '#eaf2ff', fontSize: 14, textAlign: 'left' }}>
-                            <Bandera iso2={COUNTRY_CODE[c]} ancho={20} alto={14} />
-                            <span>{c}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
+                    <SelectorBusqueda
+                      titulo="¿En qué país vives?"
+                      placeholder="Buscar país..."
+                      valor={regForm.country}
+                      opciones={REGISTER_COUNTRIES.map(c => ({ clave: c, titulo: c, iso2: COUNTRY_CODE[c] }))}
+                      onElegir={o => cambiaPais(o.clave)}
+                      onCerrar={() => setPaisAbierto(false)} />
                   )}
                 </div>
               </div>

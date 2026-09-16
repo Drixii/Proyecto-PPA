@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -475,25 +476,13 @@ function TasaYAcciones({ countries, rateCountry, rateCurrency, rateData, actuali
               </button>
 
               {dropOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1.5 rounded-xl overflow-hidden z-[300]"
-                  style={{ background: 'rgba(5,11,35,.98)', border: '1px solid rgba(56,189,248,.2)', boxShadow: '0 16px 40px rgba(0,0,0,.7)', maxHeight: 220, overflowY: 'auto' }}>
-                  {disponibles.length === 0 && (
-                    <p className="text-xs text-center py-4" style={{ color: '#475569' }}>Cargando países...</p>
-                  )}
-                  {disponibles.map(c => (
-                    <button key={c.country}
-                      onClick={() => { onChange(c.country, c.currency); setDropOpen(false) }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors"
-                      style={{ borderBottom: '1px solid rgba(255,255,255,.04)', background: rateCountry === c.country ? 'rgba(56,189,248,.1)' : 'transparent' }}
-                      onMouseEnter={e => { if (rateCountry !== c.country) e.currentTarget.style.background = 'rgba(255,255,255,.04)' }}
-                      onMouseLeave={e => { if (rateCountry !== c.country) e.currentTarget.style.background = 'transparent' }}
-                    >
-                      <Bandera iso2={c.iso2} ancho={20} alto={14} />
-                      <p className="flex-1 text-xs font-semibold truncate" style={{ color: '#eaf2ff' }}>{c.country}</p>
-                      <span className="text-[10px] font-mono shrink-0" style={{ color: rateCountry === c.country ? '#38bdf8' : '#8aa0cc' }}>{c.currency}</span>
-                    </button>
-                  ))}
-                </div>
+                <SelectorBusqueda
+                  titulo="¿De qué país quieres ver la tasa?"
+                  placeholder="Buscar país..."
+                  valor={rateCountry}
+                  opciones={disponibles.map(c => ({ clave: c.country, titulo: c.country, subtitulo: c.currency, iso2: c.iso2, currency: c.currency }))}
+                  onElegir={o => onChange(o.clave, o.currency)}
+                  onCerrar={() => setDropOpen(false)} />
               )}
             </div>
 

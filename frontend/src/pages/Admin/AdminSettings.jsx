@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -1822,29 +1823,13 @@ function MercadoParalelo() {
         </button>
 
         {abierto && (
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 50,
-            maxHeight: 280, overflowY: 'auto', borderRadius: 12, padding: 4,
-            background: 'rgba(5,11,35,.98)', border: '1px solid rgba(56,189,248,.2)',
-            boxShadow: '0 16px 40px rgba(0,0,0,.6)',
-          }}>
-            {opciones.map(o => {
-              const activa = o.country === seleccion?.country
-              return (
-                <button key={o.country} type="button"
-                  onClick={() => { setSeleccion(o); setAbierto(false); setError(''); setMsg('') }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px',
-                    borderRadius: 9, border: 'none', cursor: 'pointer', textAlign: 'left',
-                    background: activa ? 'rgba(56,189,248,.12)' : 'transparent',
-                  }}>
-                  <Bandera iso2={o.iso2} ancho={20} alto={14} />
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>{o.country}</span>
-                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: activa ? '#38bdf8' : '#8aa0cc' }}>{o.currency}</span>
-                </button>
-              )
-            })}
-          </div>
+          <SelectorBusqueda
+            titulo="Elige un país"
+            placeholder="Buscar país o moneda..."
+            valor={seleccion?.country}
+            opciones={opciones.map(o => ({ clave: o.country, titulo: o.country, subtitulo: o.currency, iso2: o.iso2, original: o }))}
+            onElegir={o => { setSeleccion(o.original); setError(''); setMsg('') }}
+            onCerrar={() => setAbierto(false)} />
         )}
       </div>
 
