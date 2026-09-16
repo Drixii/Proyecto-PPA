@@ -74,14 +74,36 @@ export default function Home() {
 
   const [showHint, setShowHint] = useState(false)
 
-  // La entrada escalonada del hero dura poco mas de un segundo. Cuando
-  // acaba se retira, porque un elemento con animation puesta sigue siendo
-  // bloque contenedor y eso deja sin efecto el backdrop-filter de la
-  // calculadora, que se veia sin su cristal esmerilado.
+  // La primera vez que se abre la web en esta pestaña hay una presentación:
+  // primero se ve solo el globo, después baja el header y al final entra el
+  // texto con la calculadora. Se recuerda en sessionStorage para que volver
+  // a la portada desde otra pantalla no la repita; recargar sí la repite,
+  // que es lo que uno espera al recargar.
+  const presentacionRef = useRef(null)
+  if (presentacionRef.current === null) {
+    try {
+      presentacionRef.current = !sessionStorage.getItem('ksa-presentacion')
+      sessionStorage.setItem('ksa-presentacion', '1')
+    } catch { presentacionRef.current = true }   // modo incógnito o sin permiso
+  }
+  const presentacion = presentacionRef.current
+
+  // Cuánto espera el hero antes de empezar a entrar: lo que dura el globo
+  // solo más la bajada del header.
+  const ESPERA_HERO = presentacion ? 1.6 : 0
+
+  // Las animaciones se retiran en cuanto terminan. Un elemento con
+  // animation puesta, aunque solo esté rellenando el último fotograma, hace
+  // de bloque contenedor, y eso deja sin efecto el backdrop-filter del
+  // header y de la calculadora: el cristal esmerilado se ve plano.
+  const [navListo, setNavListo] = useState(!presentacion)
   const [heroListo, setHeroListo] = useState(false)
   useEffect(() => {
-    const t = setTimeout(() => setHeroListo(true), 1800)
-    return () => clearTimeout(t)
+    const relojes = [
+      setTimeout(() => setNavListo(true), presentacion ? 2000 : 0),
+      setTimeout(() => setHeroListo(true), (ESPERA_HERO + 1.8) * 1000),
+    ]
+    return () => relojes.forEach(clearTimeout)
   }, [])
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
 
@@ -206,7 +228,14 @@ export default function Home() {
            anima —o el usuario pidio menos movimiento— hay que devolverla a la
            vista a mano; de eso se encarga la regla de prefers-reduced-motion. */
         @keyframes heroEntra{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-        .hero-in{opacity:0;animation:heroEntra .72s cubic-bezier(.16,1,.3,1) both;animation-delay:var(--d,0s);}
+        .hero-in{opacity:0;animation:heroEntra .72s cubic-bezier(.16,1,.3,1) both;
+          animation-delay:calc(var(--d,0s) + var(--espera,0s));}
+        /* El header entra desde arriba. Mientras dura, el fotograma inicial
+           lo mantiene fuera de pantalla, así que al principio solo se ve el
+           globo. */
+        @keyframes navBaja{from{opacity:0;transform:translateY(-110%)}to{opacity:1;transform:none}}
+        .nav-entra{animation:navBaja .72s cubic-bezier(.16,1,.3,1) both;animation-delay:1.05s;}
+        @media (prefers-reduced-motion: reduce){.nav-entra{animation:none;}}
         /* Terminada la entrada se quita la animacion. Mientras esta puesta,
            aunque sea solo rellenando el ultimo fotograma, el envoltorio hace
            de bloque contenedor y el backdrop-filter de la calculadora deja de
@@ -276,7 +305,7 @@ export default function Home() {
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'radial-gradient(900px 600px at 75% -5%,rgba(37,99,235,.30),transparent 60%),radial-gradient(700px 700px at 6% 18%,rgba(56,189,248,.14),transparent 60%)' }} />
 
       {/* ── NAVBAR ── */}
-      <nav id="main-nav" style={{ position: 'sticky', top: 0, zIndex: 60, background: 'rgba(7,14,35,.45)', backdropFilter: 'blur(22px) saturate(170%)', WebkitBackdropFilter: 'blur(22px) saturate(170%)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+      <nav id="main-nav" className={navListo ? undefined : 'nav-entra'} style={{ position: 'sticky', top: 0, zIndex: 60, background: 'rgba(7,14,35,.45)', backdropFilter: 'blur(22px) saturate(170%)', WebkitBackdropFilter: 'blur(22px) saturate(170%)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
         <div className="nav-inner">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src={logoSrc} alt="Ksa Global" style={{ width: 40, height: 40, objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(56,189,248,.5))' }} />
@@ -312,7 +341,7 @@ export default function Home() {
 
           {/* Hero — globe.js lo desvanece al hacer scroll */}
           <div id="hero-content" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', alignItems: 'center' }}>
-            <div className={heroListo ? 'hero-fin' : undefined} style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 48 }}>
+            <div className={heroListo ? 'hero-fin' : undefined} style={{ '--espera': `${ESPERA_HERO}s`, maxWidth: 1200, margin: '0 auto', padding: '0 24px', width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 48 }}>
               <div className="hero-text">
                 <div className="hero-in" style={{ '--d': '.05s', display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 14px', borderRadius: 999, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.14)', marginBottom: 26 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38e1ff', animation: 'pulseDot 2s infinite' }} />
