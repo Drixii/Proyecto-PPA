@@ -1172,6 +1172,12 @@ function IAConfig() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
   })
 
+  // La instrucción llega del servidor, pero mientras se escribe manda el
+  // borrador local; si no, cada refresco de la consulta pisaría lo escrito.
+  const [instruccion, setInstruccion] = useState(null)
+  const texto = instruccion ?? data?.instruccion ?? ''
+  const cambiada = instruccion !== null && instruccion !== data?.instruccion
+
   const activa = !!data?.activa
   const configurada = !!data?.configurada
 
@@ -1259,6 +1265,52 @@ function IAConfig() {
             }}>
             {guardar.isPending ? 'Guardando…' : 'Guardar clave'}
           </button>
+
+          <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,.07)' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
+              Instrucción para la imagen de tasas
+            </label>
+            <p style={{ margin: '0 0 8px', fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
+              Cómo quieres que la IA dibuje la imagen. Puedes usar{' '}
+              <code style={{ color: '#8aa0cc' }}>{'{pais}'}</code>,{' '}
+              <code style={{ color: '#8aa0cc' }}>{'{moneda}'}</code> y{' '}
+              <code style={{ color: '#8aa0cc' }}>{'{fecha}'}</code>, que se reemplazan solos.
+              La lista de países y sus tasas se añade siempre al final, no hace falta escribirla.
+            </p>
+            <textarea
+              value={texto}
+              onChange={e => setInstruccion(e.target.value)}
+              rows={12}
+              style={{
+                width: '100%', padding: '11px 13px', borderRadius: 11, fontSize: 12.5,
+                lineHeight: 1.65, resize: 'vertical', fontFamily: 'inherit',
+                background: 'rgba(6,13,40,.8)', color: '#eaf2ff',
+                border: '1px solid rgba(255,255,255,.12)',
+              }} />
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => guardar.mutate({ instruccion: texto })}
+                disabled={!cambiada || guardar.isPending}
+                style={{
+                  padding: '9px 18px', borderRadius: 10, border: 'none',
+                  fontSize: 13, fontWeight: 700, cursor: cambiada ? 'pointer' : 'not-allowed',
+                  background: cambiada ? 'rgba(56,189,248,.16)' : 'rgba(255,255,255,.06)',
+                  color: cambiada ? '#38bdf8' : '#64748b',
+                }}>
+                {guardar.isPending ? 'Guardando…' : 'Guardar instrucción'}
+              </button>
+              <button
+                onClick={() => setInstruccion(data?.instruccion_defecto || '')}
+                style={{
+                  padding: '9px 16px', borderRadius: 10, fontSize: 12.5, fontWeight: 600,
+                  cursor: 'pointer', background: 'transparent',
+                  border: '1px solid rgba(255,255,255,.12)', color: '#8aa0cc',
+                }}>
+                Restaurar la del sistema
+              </button>
+            </div>
+          </div>
 
           {msg && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#4ade80' }}>{msg}</p>}
           {error && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#f87171' }}>{error}</p>}

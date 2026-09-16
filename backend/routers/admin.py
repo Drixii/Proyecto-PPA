@@ -1904,21 +1904,26 @@ def delete_commission_rule(
 class IAConfigIn(BaseModel):
     api_key: Optional[str] = None
     activa: Optional[bool] = None
+    instruccion: Optional[str] = None
 
 
 @router.get("/ia", response_model=dict)
 def get_ia(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
     """Estado de la integración con OpenAI. Nunca devuelve la clave entera."""
     from services import secret_store as ss
+    from services.imagen_tasas import INSTRUCCION_POR_DEFECTO
 
     clave = ss.get_secret(db, "openai_api_key")
     fila = db.query(Setting).filter(Setting.key == "ia_activa").first()
+    instr = db.query(Setting).filter(Setting.key == "ia_instruccion").first()
     return {
         "success": True,
         "data": {
             "api_key": ss.mask(clave),
             "configurada": bool(clave),
             "activa": bool(fila and str(fila.value).lower() == "true"),
+            "instruccion": (instr.value if instr and instr.value else INSTRUCCION_POR_DEFECTO),
+            "instruccion_defecto": INSTRUCCION_POR_DEFECTO,
         },
         "message": "",
     }
@@ -1953,6 +1958,18 @@ def set_ia(
             db.add(Setting(key="ia_activa", value=valor))
         db.commit()
         cambios.append("IA activada" if data.activa else "IA desactivada")
+
+    if data.instruccion is not None:
+        # Vacío = volver a la instrucción que trae el sistema, que es lo que
+        # devuelve el GET cuando no hay nada guardado.
+        texto = data.instruccion.strip()
+        fila = db.query(Setting).filter(Setting.key == "ia_instruccion").first()
+        if fila:
+            fila.value = texto
+        else:
+            db.add(Setting(key="ia_instruccion", value=texto))
+        db.commit()
+        cambios.append("instrucción guardada" if texto else "instrucción restaurada")
 
     return {"success": True, "data": None, "message": ", ".join(cambios) or "Sin cambios"}
 
@@ -2012,8 +2029,11 @@ def imagen_de_tasas(
         clave = ss.get_secret(db, "openai_api_key")
         if not clave:
             raise HTTPException(status_code=400, detail="Falta la clave de OpenAI en Ajustes → IA")
+        instr = db.query(Setting).filter(Setting.key == "ia_instruccion").first()
         try:
-            png = imagen_tasas.generar_con_ia(datos_origen, filas, clave)
+            png = imagen_tasas.generar_con_ia(
+                datos_origen, filas, clave, instr.value if instr else None
+            )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"OpenAI no pudo generarla: {e}")
     else:

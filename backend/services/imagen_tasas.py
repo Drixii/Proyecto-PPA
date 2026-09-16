@@ -10,6 +10,7 @@ compararlas. Ver `generar_con_ia`.
 """
 import io
 import os
+from datetime import datetime
 
 import httpx
 from PIL import Image, ImageDraw, ImageFont
@@ -172,8 +173,53 @@ def generar(origen: dict, filas: list[dict]) -> bytes:
     return _a_tamano_final(img)
 
 
-def generar_con_ia(origen: dict, filas: list[dict], api_key: str) -> bytes:
+def _rellena(texto: str, **valores) -> str:
+    """Sustituye {pais}, {moneda}, {fecha}... sin usar str.format.
+
+    La instruccion la escribe el super admin a mano y puede llevar llaves
+    sueltas; con format eso revienta, con un replace simple no.
+    """
+    for clave, valor in valores.items():
+        texto = texto.replace("{" + clave + "}", str(valor))
+    return texto
+
+
+def _hoy() -> str:
+    meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+             "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+    d = datetime.now()
+    return f"{d.day} de {meses[d.month - 1]} de {d.year}"
+
+
+# Lo que se le pide a la IA cuando nadie ha escrito una instruccion propia.
+# Es editable desde Ajustes -> IA; esto es solo el punto de partida.
+INSTRUCCION_POR_DEFECTO = (
+    "Tarjeta vertical de tasas de cambio, fondo azul marino con degradado.\n\n"
+    "ARRIBA, una cabecera: a la IZQUIERDA una foto real y reconocible de {pais} "
+    "(un paisaje o un monumento del país), recortada en un cuadrado de esquinas "
+    "redondeadas. A su DERECHA, tres líneas de texto en blanco:\n"
+    "  «Desde {pais}» — grande y en negrita\n"
+    "  «Tasas de cambio» — mediana\n"
+    "  «Actualizada hoy» — pequeña\n\n"
+    "DEBAJO, la lista de destinos: una fila por país, cada una dentro de una "
+    "píldora blanca de esquinas redondeadas. En cada fila, a la IZQUIERDA la "
+    "bandera circular del país y su nombre en mayúsculas en azul oscuro; a la "
+    "DERECHA, pegada al borde, la tasa en negrita y azul oscuro.\n\n"
+    "Diseño limpio, moderno, mucho contraste. Sin marcas de agua, sin logos y "
+    "sin ningún texto que no esté aquí."
+)
+
+
+def generar_con_ia(
+    origen: dict,
+    filas: list[dict],
+    api_key: str,
+    instruccion: str | None = None,
+) -> bytes:
     """La misma tabla, pero dibujada por OpenAI.
+
+    `instruccion` es el texto que el super admin escribe en Ajustes -> IA; se
+    le pega debajo la lista de paises y cifras, que no es negociable.
 
     Aviso que conviene tener presente: el modelo redibuja los numeros a mano
     alzada y suele equivocarse en alguno. Sirve para ver el estilo, no para
@@ -182,14 +228,18 @@ def generar_con_ia(origen: dict, filas: list[dict], api_key: str) -> bytes:
     lineas = "\n".join(
         f"{f['name']}: {formatea_tasa(f.get('tasa'))}" for f in filas
     )
+    texto = (instruccion or "").strip() or INSTRUCCION_POR_DEFECTO
+    texto = _rellena(
+        texto,
+        pais=origen["name"],
+        PAIS=origen["name"].upper(),
+        moneda=origen.get("currency", ""),
+        fecha=_hoy(),
+    )
     prompt = (
-        "Vertical exchange-rate board, dark blue gradient background. "
-        "A stacked list of white rounded pill rows. Each row: a circular country "
-        "flag on the left, the country name in bold dark blue uppercase next to it, "
-        "and the number on the right in large bold dark blue. "
-        "Clean, modern, high contrast, no extra text or watermarks. "
-        f"Header: 'ENVÍOS DESDE {origen['name'].upper()}'. Rows, in this exact order "
-        f"and with these exact numbers:\n{lineas}"
+        f"{texto}\n\n"
+        "Las filas, en este orden exacto y con estas cifras exactas, sin "
+        f"cambiar ni un dígito y sin saltarte ninguna:\n{lineas}"
     )
 
     r = httpx.post(
