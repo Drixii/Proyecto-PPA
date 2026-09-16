@@ -229,9 +229,6 @@ export default function NewTransfer() {
     clearTimeout(copiaRef.current)
     copiaRef.current = setTimeout(() => setCopiado(''), 2000)
   }
-  // Aviso de verificación por monto. Se enseña ANTES de pagar: retener un
-  // envío sin haberlo advertido es peor, porque el cliente ya puso el dinero.
-  const [avisoMonto, setAvisoMonto] = useState(false)
   // Cobro por QR pendiente de escanear (Ligo, SIP). No hay redirección:
   // el cliente paga desde su banco y la orden avanza con el aviso de Koywe.
   const [qrPago, setQrPago] = useState(null)
@@ -383,10 +380,14 @@ export default function NewTransfer() {
   useEffect(() => {
     if (step !== 3 || avisoMostrado.current) return
     avisoMostrado.current = true
+    let titularVisto = false
     try {
-      if (sessionStorage.getItem('aviso-titular') === 'visto') return
+      titularVisto = sessionStorage.getItem('aviso-titular') === 'visto'
     } catch { /* sin sessionStorage se enseña igual */ }
-    setAvisoPagador(true)
+    // Un único aviso: se abre si hay algo que decir. Lo de la verificación por
+    // monto se enseña siempre que aplique, aunque lo del titular ya se haya
+    // visto — es de este envío en concreto, no una regla general.
+    if (!titularVisto || superaUmbral) setAvisoPagador(true)
   }, [step])
 
   const cerrarAvisoPagador = () => {
@@ -674,30 +675,6 @@ export default function NewTransfer() {
 
   return (
     <FinexyLayout>
-      {avisoMonto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.82)'}}>
-          <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(168,85,247,.3)'}}>
-            <h3 className="font-semibold mb-3" style={{color:'#eaf2ff'}}>
-              Este envío pasará por verificación
-            </h3>
-            <p className="text-sm leading-relaxed mb-3" style={{color:'#aebfe2'}}>
-              Por ser tu primer envío y por el monto, lo revisaremos antes de entregarlo
-              al destinatario. Tu pago se procesa con normalidad.
-            </p>
-            <p className="text-xs leading-relaxed mb-5" style={{color:'#8aa0cc'}}>
-              Es un paso único: tus siguientes envíos no pasan por aquí. Si necesitamos
-              algo más, te escribimos al correo o al teléfono que registraste.
-            </p>
-            <button
-              onClick={() => setAvisoMonto(false)}
-              className="w-full text-sm font-semibold py-3 rounded-xl"
-              style={{background:'linear-gradient(135deg,#a855f7,#7e22ce)', border:'none', color:'#fff'}}>
-              Entendido, continuar
-            </button>
-          </div>
-        </div>
-      )}
-
       {qrPago && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.8)'}}>
           <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.25)'}}>
@@ -1495,7 +1472,6 @@ export default function NewTransfer() {
                       <button
                         onClick={() => {
                           setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult || calc.result }))
-                          if (superaUmbral) setAvisoMonto(true)
                           setShowConfirm(true)
                         }}
                         disabled={loading || faltaDelPagador.length > 0}
@@ -1679,16 +1655,34 @@ export default function NewTransfer() {
                 ⚠️
               </div>
               <h3 className="text-lg font-bold mb-2" style={{ color: '#eaf2ff' }}>
-                El pago debe salir de tu propia cuenta
+                Antes de pagar
               </h3>
               <p className="text-sm leading-relaxed mb-1" style={{ color: '#c8d8f0' }}>
                 La cuenta desde la que pagues tiene que estar <strong>a tu nombre</strong>, el
                 mismo con el que te registraste.
               </p>
-              <p className="text-xs leading-relaxed mb-5" style={{ color: '#8aa0cc' }}>
+              <p className="text-xs leading-relaxed mb-4" style={{ color: '#8aa0cc' }}>
                 Si el dinero llega desde la cuenta de otra persona, el envío queda retenido y
                 hay que devolverlo.
               </p>
+
+              {/* Lo de la verificación iba en un segundo aviso, encima de este.
+                  Dos ventanas seguidas se cierran sin leer ninguna. */}
+              {superaUmbral && (
+                <div className="rounded-xl p-3 mb-4 text-left"
+                  style={{ background: 'rgba(168,85,247,.07)', border: '1px solid rgba(168,85,247,.22)' }}>
+                  <p className="text-sm font-semibold mb-1" style={{ color: '#d8b4fe' }}>
+                    Este envío pasará por verificación
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: '#c8d8f0' }}>
+                    Por ser tu primer envío y por el monto, lo revisaremos antes de entregarlo
+                    al destinatario. Tu pago se procesa con normalidad.
+                  </p>
+                  <p className="text-[11px] leading-relaxed mt-2" style={{ color: '#8aa0cc' }}>
+                    Es un paso único: tus siguientes envíos no pasan por aquí.
+                  </p>
+                </div>
+              )}
               <button onClick={cerrarAvisoPagador}
                 className="w-full bg-gradient-to-r from-blue-400 to-blue-700 text-white font-semibold py-3 rounded-xl">
                 Entendido
