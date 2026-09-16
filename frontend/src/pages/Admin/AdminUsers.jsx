@@ -147,6 +147,25 @@ const ROLE_COLOR = {
 }
 const AVAILABLE_COUNTRIES = Object.keys(COUNTRY_CODE).filter(c => !['Peru', 'Mexico', 'Brazil', 'Panama'].includes(c))
 
+// Mensaje listo para pegarle al cliente por chat o correo.
+//
+// El enlace es la web a secas, no la URL de registro que devuelve la API: esa
+// lleva el correo del cliente como parámetro, y un enlace larguísimo con datos
+// personales dentro se ve peor y se reenvía a cualquiera. El código ya va
+// aparte, así que no se pierde nada.
+//
+// window.location.origin y no un dominio escrito a mano: así el mensaje dice la
+// dirección desde la que se está trabajando, aunque cambie.
+function mensajeInvitacion(codigo) {
+  const web = typeof window !== 'undefined' ? window.location.origin : ''
+  const dominio = web.replace(/^https?:\/\//, '')
+  return `Para registrarte en ${dominio}
+
+Usa este código único: ${codigo}
+
+Entra a la web por acá: ${web}`
+}
+
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -806,16 +825,23 @@ export default function AdminUsers() {
               <div className="rounded-xl p-4" style={{background:'rgba(74,222,128,.06)', border:'1px solid rgba(74,222,128,.2)'}}>
                 <p className="text-xs font-semibold mb-2" style={{color:'#4ade80'}}>✓ Código generado para {inviteResult.email}</p>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(inviteResult.code); setInviteCodeCopied(true); setTimeout(() => setInviteCodeCopied(false), 2000) }}
+                  onClick={() => { navigator.clipboard.writeText(mensajeInvitacion(inviteResult.code)); setInviteCodeCopied(true); setTimeout(() => setInviteCodeCopied(false), 2500) }}
                   className="w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors"
                   style={inviteCodeCopied
                     ? {background:'rgba(74,222,128,.15)', border:'1px solid rgba(74,222,128,.3)'}
                     : {background:'rgba(0,0,0,.3)', border:'1px solid rgba(252,211,77,.2)'}}>
                   <code className="text-base font-mono font-bold tracking-wider" style={{color:'#fcd34d'}}>{inviteResult.code}</code>
                   <span className="text-xs font-semibold shrink-0" style={{color: inviteCodeCopied ? '#4ade80' : '#8aa0cc'}}>
-                    {inviteCodeCopied ? '✓ Copiado' : 'Copiar código'}
+                    {inviteCodeCopied ? '✓ Mensaje copiado' : 'Copiar mensaje'}
                   </span>
                 </button>
+
+                {/* Lo que se va a copiar, a la vista: así se sabe qué se está
+                    mandando antes de pegarlo en un chat. */}
+                <pre className="mt-2 text-[11px] leading-relaxed whitespace-pre-wrap rounded-lg px-3 py-2"
+                  style={{background:'rgba(0,0,0,.25)', border:'1px solid rgba(255,255,255,.06)', color:'#8aa0cc', fontFamily:'inherit'}}>
+                  {mensajeInvitacion(inviteResult.code)}
+                </pre>
               </div>
             )}
 
