@@ -85,7 +85,10 @@ export default function HuinchaTasas() {
              luminosa con borde recto debajo. */
           box-shadow:0 10px 24px rgba(2,6,23,.45),inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.2);}
         .huincha.detras{z-index:1;transform:rotate(3deg);margin-top:-64px;padding:12px 0;
-          background:#0a1432;box-shadow:0 8px 20px rgba(2,6,23,.4);}
+          /* Se funde por abajo con el fondo de la sección siguiente: en el
+             teléfono va casi horizontal, y con un color plano su borde
+             inferior se leía como una línea que cortaba la página. */
+          background:linear-gradient(180deg,#0c1838 0%,#081230 55%,rgba(5,11,30,.6) 100%);}
 
         .huincha-pista{display:inline-flex;animation:huinchaIzq var(--dur) linear infinite;will-change:transform;}
         .huincha.detras .huincha-pista{animation-name:huinchaDer;}
