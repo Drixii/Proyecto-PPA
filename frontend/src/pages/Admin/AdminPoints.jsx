@@ -157,6 +157,8 @@ function ConfigSection() {
   const [feePct, setFeePct] = useState('')
   const [clpRate, setClpRate] = useState('')
   const [saved, setSaved] = useState(false)
+  // Monto de la calculadora de ejemplo. Solo vive en la pantalla.
+  const [ejemplo, setEjemplo] = useState('100000')
 
   const { data } = useQuery({
     queryKey: ['points-config'],
@@ -188,7 +190,7 @@ function ConfigSection() {
             <div>
               <label className="text-xs font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>% del fee → puntos</label>
               <div className="relative">
-                <input type="number" value={feePct} onChange={e => setFeePct(e.target.value)} min="0" max="100" step="1"
+                <input type="number" value={feePct} onChange={e => setFeePct(e.target.value)} min="0" max="100" step="0.01"
                   className="w-full rounded-xl px-4 py-3 pr-10 text-2xl font-bold focus:outline-none"
                   style={inputStyle} />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold" style={{ color: '#8aa0cc' }}>%</span>
@@ -207,13 +209,40 @@ function ConfigSection() {
             </div>
           </div>
 
+          {/* Calculadora, no un ejemplo fijo. Con 1.500 pesos clavados no se
+              podía ver qué sale en un envío de verdad, que es la pregunta:
+              cuánto regalo en una comisión de cien mil. */}
           {feePct && clpRate && !isNaN(parseFloat(feePct)) && !isNaN(parseFloat(clpRate)) && (
-            <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(253,211,77,.06)', border: '1px solid rgba(253,211,77,.15)' }}>
-              <p className="text-sm" style={{ color: '#fcd34d' }}>
-                Ejemplo: comisión de <strong>$1.500 CLP</strong> →{' '}
-                <strong>{Math.floor(1500 * parseFloat(feePct) / 100)} pts</strong> →{' '}
-                equivale a <strong>${(Math.floor(1500 * parseFloat(feePct) / 100) * parseFloat(clpRate)).toLocaleString('es-CL')} CLP</strong>
-              </p>
+            <div className="rounded-xl px-4 py-3.5" style={{ background: 'rgba(253,211,77,.06)', border: '1px solid rgba(253,211,77,.15)' }}>
+              <div className="flex items-center gap-2 flex-wrap mb-2.5">
+                <span className="text-xs font-semibold" style={{ color: '#fcd34d' }}>Si la comisión es de</span>
+                <div className="relative">
+                  <input
+                    value={ejemplo}
+                    onChange={e => setEjemplo(e.target.value.replace(/[^\d]/g, ''))}
+                    inputMode="numeric"
+                    className="rounded-lg pl-6 pr-3 py-1.5 text-sm font-bold focus:outline-none"
+                    style={{ ...inputStyle, width: 130 }} />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#8aa0cc' }}>$</span>
+                </div>
+                <span className="text-xs font-semibold" style={{ color: '#fcd34d' }}>CLP</span>
+              </div>
+              {(() => {
+                const base = parseFloat(ejemplo) || 0
+                const pts = Math.floor(base * parseFloat(feePct) / 100)
+                const vale = pts * parseFloat(clpRate)
+                return (
+                  <p className="text-sm" style={{ color: '#fcd34d' }}>
+                    el cliente gana <strong>{pts.toLocaleString('es-CL')} pts</strong>, que al canjear
+                    valen <strong>${vale.toLocaleString('es-CL')} CLP</strong>
+                    {base > 0 && (
+                      <span style={{ color: 'rgba(253,211,77,.7)' }}>
+                        {' '}— le devuelves el <strong>{(vale / base * 100).toFixed(1)}%</strong> de la comisión
+                      </span>
+                    )}
+                  </p>
+                )
+              })()}
             </div>
           )}
 

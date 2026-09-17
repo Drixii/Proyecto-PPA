@@ -141,7 +141,10 @@ export default function NewTransfer() {
     receiver_country: prefillReceiver?.receiver_country || prefill.toCountry || 'Colombia',
     receiver_bank_id: prefillReceiver?.receiver_bank_id || '',
     receiver_account: prefillReceiver?.receiver_account || '',
-    receiver_id_type: prefillReceiver?.receiver_id_type || 'Cédula de Ciudadanía',
+    // El primero del país de destino, no uno fijo: arrancaba siempre en
+    // 'Cédula de Ciudadanía' aunque el envío fuera a Chile.
+    receiver_id_type: prefillReceiver?.receiver_id_type
+      || (COUNTRY_ID_TYPES[prefill.toCountry || prefillReceiver?.receiver_country || 'Colombia'] || DEFAULT_ID_TYPES)[0],
     receiver_id_num: prefillReceiver?.receiver_id_num || '',
   })
 
@@ -442,7 +445,15 @@ export default function NewTransfer() {
 
   const handleCountryChange = (c) => {
     setCalc(prev => ({ ...prev, toCountry: c.country, toCurrency: c.currency }))
-    setReceiver(r => ({ ...r, receiver_country: c.country }))
+    // El tipo de documento es del país, así que al cambiarlo hay que cambiarlo
+    // también. Si no, quedaba el del país anterior —RUT con destino Colombia—
+    // y el número se formateaba y se validaba con las reglas equivocadas: el
+    // desplegable enseñaba los tipos nuevos y el valor seguía siendo el viejo.
+    setReceiver(r => {
+      const tipos = COUNTRY_ID_TYPES[c.country] || DEFAULT_ID_TYPES
+      if (tipos.includes(r.receiver_id_type)) return { ...r, receiver_country: c.country }
+      return { ...r, receiver_country: c.country, receiver_id_type: tipos[0], receiver_id_num: '' }
+    })
     setLiveResult(null)
   }
 
