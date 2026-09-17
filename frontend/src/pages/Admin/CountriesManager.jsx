@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../services/api'
+import SelectorBusqueda from '../../components/SelectorBusqueda'
+import { paisesDelMundo, normaliza } from '../../utils/paisesMundo'
 
 const GLASS = {
   background: 'rgba(255,255,255,0.03)',
@@ -60,6 +62,7 @@ export default function CountriesManager() {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', currency: '', iso2: '', can_send: false, can_receive: true })
   const [error, setError] = useState('')
+  const [buscando, setBuscando] = useState(false)
 
   const { data: countries = [], isLoading } = useQuery({
     queryKey: ['admin-countries'],
@@ -93,6 +96,23 @@ export default function CountriesManager() {
     },
     onError: (err) => setError(err.response?.data?.detail || 'No se pudo añadir'),
   })
+
+  // Países que se pueden añadir: los del mundo que todavía no están en la
+  // lista, ni activos ni quitados (los quitados se recuperan con ↺). Se compara
+  // por bandera y por nombre, porque «Perú» y «Peru» o el euro como «EURO»
+  // tienen que contar como ya añadidos.
+  const disponibles = useMemo(() => {
+    const isos = new Set(countries.map(c => (c.iso2 || '').toLowerCase()))
+    const nombres = new Set(countries.map(c => normaliza(c.name)))
+    return paisesDelMundo().filter(p => !isos.has(p.iso2) && !nombres.has(normaliza(p.guardarComo || p.nombre)))
+  }, [countries])
+
+  const elegirPais = (iso2) => {
+    const p = paisesDelMundo().find(x => x.iso2 === iso2)
+    if (p) setForm(f => ({ ...f, name: p.guardarComo || p.nombre, currency: p.moneda, iso2: p.iso2 }))
+    setBuscando(false)
+    setError('')
+  }
 
   const activos = countries.filter(c => c.active)
   const inactivos = countries.filter(c => !c.active)
@@ -146,7 +166,7 @@ export default function CountriesManager() {
           </p>
         </div>
         <button
-          onClick={() => { setAdding(a => !a); setError('') }}
+          onClick={() => { setAdding(a => !a); setError(''); setBuscando(false); setForm({ name: '', currency: '', iso2: '', can_send: false, can_receive: true }) }}
           style={{
             fontSize: 13, fontWeight: 600, padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
             background: adding ? 'rgba(255,255,255,.06)' : '#2563eb',
@@ -160,26 +180,40 @@ export default function CountriesManager() {
 
       {adding && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,.06)', background: 'rgba(56,189,248,.04)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, marginBottom: 12 }}>
-            <div>
-              <label style={{ fontSize: 11, color: '#8aa0cc', display: 'block', marginBottom: 4 }}>País</label>
-              <input style={{ ...INP, width: '100%' }} value={form.name} placeholder="Honduras"
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: '#8aa0cc', display: 'block', marginBottom: 4 }}>Moneda</label>
-              <input style={{ ...INP, width: '100%' }} value={form.currency} placeholder="HNL" maxLength={3}
+          {/* Se elige de la lista de países del mundo que aún no están: el
+              nombre, la moneda y la bandera vienen ya puestos. Antes había que
+              escribirlos a mano, con el código de bandera de dos letras. */}
+          <label style={{ fontSize: 11, color: '#8aa0cc', display: 'block', marginBottom: 4 }}>País</label>
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <button type="button" onClick={() => setBuscando(b => !b)}
+              style={{ ...INP, width: '100%', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left' }}>
+              {form.iso2 ? <Flag iso2={form.iso2} size={22} /> : <span style={{ fontSize: 16 }}>🌎</span>}
+              <span style={{ flex: 1, color: form.name ? '#eaf2ff' : '#64748b' }}>
+                {form.name || `Elegir entre ${disponibles.length} países`}
+              </span>
+              {form.currency && <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#8aa0cc' }}>{form.currency}</span>}
+              <span style={{ color: '#8aa0cc', fontSize: 11 }}>▾</span>
+            </button>
+            {buscando && (
+              <SelectorBusqueda
+                titulo="Añadir país"
+                placeholder="Buscar país o moneda..."
+                valor={form.iso2}
+                opciones={disponibles.map(p => ({ clave: p.iso2, titulo: p.nombre, subtitulo: p.moneda, iso2: p.iso2 }))}
+                onElegir={o => elegirPais(o.clave)}
+                onCerrar={() => setBuscando(false)} />
+            )}
+          </div>
+
+          {form.iso2 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, color: '#8aa0cc', display: 'block', marginBottom: 4 }}>
+                Moneda <span style={{ color: '#475569' }}>(cámbiala solo si en ese país se opera en otra, como dólares)</span>
+              </label>
+              <input style={{ ...INP, width: 110 }} value={form.currency} maxLength={3}
                 onChange={e => setForm(f => ({ ...f, currency: e.target.value.toUpperCase() }))} />
             </div>
-            <div>
-              <label style={{ fontSize: 11, color: '#8aa0cc', display: 'block', marginBottom: 4 }}>Bandera</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input style={{ ...INP, width: '100%' }} value={form.iso2} placeholder="hn" maxLength={2}
-                  onChange={e => setForm(f => ({ ...f, iso2: e.target.value.toLowerCase() }))} />
-                <Flag iso2={form.iso2.length === 2 ? form.iso2 : null} />
-              </div>
-            </div>
-          </div>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -193,8 +227,8 @@ export default function CountriesManager() {
           </div>
 
           <p style={{ margin: '0 0 12px', fontSize: 11.5, color: '#64748b' }}>
-            La bandera son las 2 letras del país (cl, co, hn). Hace falta que exista una tasa
-            de cambio para esa moneda, si no, el envío mostrará «tasa no disponible».
+            Hace falta que exista una tasa de cambio para esa moneda; si no, el envío mostrará
+            «tasa no disponible».
           </p>
 
           {error && (
@@ -212,7 +246,7 @@ export default function CountriesManager() {
               cursor: 'pointer', opacity: (!form.name.trim() || form.currency.length !== 3 || form.iso2.length !== 2) ? .4 : 1,
             }}
           >
-            {createMut.isPending ? 'Guardando...' : 'Añadir país'}
+            {createMut.isPending ? 'Añadiendo...' : form.name ? `Añadir ${form.name}` : 'Añadir'}
           </button>
         </div>
       )}
