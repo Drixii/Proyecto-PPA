@@ -529,12 +529,18 @@ export default function NewTransfer() {
       // Si el contacto está en el mismo país de origen no hay envío posible:
       // se mueve el origen a otra moneda en vez de dejar la orden incoherente.
       const chocaConOrigen = pais.currency === prev.fromCurrency
-      const otroOrigen = sendCurrencies.find(c => c.code !== pais.currency)
+      // `sendCountries`, no `sendCurrencies`: ese nombre dejó de existir al
+      // pasar a elegir país de origen y quedó aquí suelto. Tocar «editar» en
+      // un contacto guardado lanzaba ReferenceError y la pantalla se quedaba
+      // en blanco.
+      const otroOrigen = sendCountries.find(c => c.code !== pais.currency)
+      const mover = chocaConOrigen && otroOrigen
       return {
         ...prev,
         toCurrency: pais.currency,
         toCountry: pais.country,
-        fromCurrency: chocaConOrigen && otroOrigen ? otroOrigen.code : prev.fromCurrency,
+        fromCurrency: mover ? otroOrigen.code : prev.fromCurrency,
+        fromCountry: mover ? otroOrigen.country : prev.fromCountry,
       }
     })
   }
