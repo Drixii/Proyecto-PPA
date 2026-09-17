@@ -8,40 +8,59 @@ from auth.jwt import decode_token
 bearer_scheme = HTTPBearer()
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: Session = Depends(get_db)
-) -> User:
-    token = credentials.credentials
-    payload = decode_token(token)
+def _usuario_del_token(payload: dict | None, db: Session) -> tuple[User | None, str]:
+    """Quién es el dueño de un token, o (None, motivo) si no vale.
+
+    Única regla para la API y para el WebSocket del chat, que antes validaba
+    por su cuenta y se saltaba los controles de abajo.
+    """
     if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido o expirado")
+        return None, "Token inválido o expirado"
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
-    user = db.query(User).filter(User.id == int(user_id), User.is_active == True).first()
+        return None, "Token inválido"
+    user = db.query(User).filter(
+        User.id == int(user_id),
+        User.is_active == True,  # noqa: E712
+        # Una cuenta borrada no entra. Antes solo se miraba is_active, y un
+        # cliente enviado a la papelera seguía usando su sesión abierta.
+        User.deleted_at == None,  # noqa: E711
+    ).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
+        return None, "Usuario no encontrado"
+
+    emitido = payload.get("iat")
+
+    # Un token emitido antes de que existiera la cuenta no es de esta cuenta.
+    # El token solo lleva el número de usuario, y la base se rehízo en la
+    # migración con los números empezando otra vez desde 1: la sesión que
+    # alguien tenía abierta en la base anterior, firmada con la misma clave,
+    # entraba en la cuenta que hoy tiene ese número, que es de otra persona.
+    if user.created_at is not None:
+        # 5 s de margen por si el reloj de la base y el de la API difieren un
+        # poco: el token del propio registro se emite en el mismo segundo.
+        if emitido is None or emitido < int(user.created_at.timestamp()) - 5:
+            return None, "Tu sesión ya no es válida. Vuelve a iniciar sesión."
 
     # Un token emitido antes del último cambio de contraseña ya no vale. Sin
     # esto, cambiarle la clave a alguien no lo echaba de las sesiones abiertas:
     # si se la cambias porque le robaron la cuenta, el intruso seguía dentro.
-    # De paso arregla el aviso de "cambia tu contraseña", que tardaba en salir
-    # porque el navegador seguía con la sesión y los datos viejos en memoria.
+    # Truncado a segundos: 'iat' va en segundos enteros y password_changed_at
+    # lleva microsegundos; en crudo, el token emitido justo después del cambio
+    # salía «anterior» y el usuario no podía volver a entrar nunca.
     if user.password_changed_at:
-        emitido = payload.get("iat")
-        # Truncado a segundos: 'iat' se guarda en segundos enteros y
-        # password_changed_at lleva microsegundos, así que comparando en crudo
-        # el token emitido justo DESPUÉS del cambio salía "anterior" y el
-        # usuario no podía volver a entrar nunca. Se pierde el segundo exacto
-        # del cambio, que es un margen irrelevante al lado de dejar a alguien
-        # fuera de su cuenta.
-        cambiada = int(user.password_changed_at.timestamp())
-        if emitido is None or emitido < cambiada:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Tu contraseña cambió. Vuelve a iniciar sesión.",
-            )
+        if emitido is None or emitido < int(user.password_changed_at.timestamp()):
+            return None, "Tu contraseña cambió. Vuelve a iniciar sesión."
+    return user, ""
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    user, motivo = _usuario_del_token(decode_token(credentials.credentials), db)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=motivo)
     return user
 
 
@@ -94,10 +113,5 @@ def require_any_admin(current_user: User = Depends(get_current_user)) -> User:
 
 def get_user_from_ws_token(token: str, db: Session) -> User:
     """Para autenticar WebSocket via query param ?token="""
-    payload = decode_token(token)
-    if not payload:
-        return None
-    user_id = payload.get("sub")
-    if not user_id:
-        return None
-    return db.query(User).filter(User.id == int(user_id), User.is_active == True).first()
+    user, _ = _usuario_del_token(decode_token(token), db)
+    return user
