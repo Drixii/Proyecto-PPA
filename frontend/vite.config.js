@@ -51,7 +51,7 @@ export default defineConfig({
       // la web se recargaba sola en mitad de lo que estuvieras haciendo. Ahora
       // la version nueva espera y AvisoActualizacion ofrece tomarla.
       registerType: 'prompt',
-      includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'icons/app-192.png', 'icons/app-512.png', 'icons/app-maskable-192.png', 'icons/app-maskable-512.png'],
+      includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'icons/app2-192.png', 'icons/app2-512.png', 'icons/app2-maskable-192.png', 'icons/app2-maskable-512.png'],
       workbox: {
         // El service worker lo genera workbox en cada build, así que el
         // manejador de notificaciones no puede vivir dentro: se importa.
@@ -75,10 +75,10 @@ export default defineConfig({
         // globo quedaba cortado y pegado a los bordes. Nombres nuevos a
         // propósito, para que los teléfonos no sigan con los viejos en caché.
         icons: [
-          { src: '/icons/app-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icons/app-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icons/app-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/icons/app-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/app2-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/app2-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/app2-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/app2-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),
