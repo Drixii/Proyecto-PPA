@@ -207,11 +207,17 @@ export default function ClientHistory() {
                     <span className="truncate">{order.receiver_country}</span>
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_COLOR[order.status] || '#64748b' }} />
-                  <span className="text-xs whitespace-nowrap"
-                    style={{ color: ESTADO_PIDE_ACCION.has(order.status) ? '#f87171' : '#aebfe2', fontWeight: ESTADO_PIDE_ACCION.has(order.status) ? 600 : 400 }}>
-                    {ESTADO_LABEL[order.status] || order.status?.replace('_', ' ')}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_COLOR[order.status] || '#64748b' }} />
+                    <span className="text-xs whitespace-nowrap"
+                      style={{ color: ESTADO_PIDE_ACCION.has(order.status) ? '#f87171' : '#aebfe2', fontWeight: ESTADO_PIDE_ACCION.has(order.status) ? 600 : 400 }}>
+                      {ESTADO_LABEL[order.status] || order.status?.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {/* Fecha y hora del pedido, debajo del estado. */}
+                  <span className="text-[11px] whitespace-nowrap" style={{ color: '#64748b' }}>
+                    {fmtDateShort(order.created_at, tz)}
                   </span>
                 </div>
               </div>
@@ -298,6 +304,9 @@ export default function ClientHistory() {
                           {ESTADO_LABEL[order.status] || order.status?.replace('_', ' ')}
                         </span>
                       </div>
+                      <span className="block text-[11px] mt-1 whitespace-nowrap" style={{color:'#64748b'}}>
+                        {fmtDateShort(order.created_at, tz)}
+                      </span>
                     </td>
                     <td className="px-4 py-4">
                       {order.points_earned > 0

@@ -13,6 +13,7 @@ import { useStore } from '../store/useStore'
 import { fmtDate, userTz } from '../utils/timezone'
 import { esPagoExterno } from '../utils/payments'
 import ResenaEnvio from './ResenaEnvio'
+import CompartirArchivo from './CompartirArchivo'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -313,6 +314,8 @@ export function AdminOrderPanel({ order: initialOrder, onClose }) {
                   </div>
                 )}
               </div>
+              <CompartirArchivo url={cpUrl} nombre={`recibo-${order.order_number || order.id}`}
+                texto={`Recibo de pago · ${order.order_number || ''}`} />
             </div>
           )
         })()}
@@ -1123,6 +1126,10 @@ export function ClientOrderPanel({ order }) {
                   </div>
                 )}
               </div>
+            ) : null}
+            {completionProofUrl ? (
+              <CompartirArchivo url={completionProofUrl} nombre={`recibo-${order.order_number || order.id}`}
+                texto={`Recibo de pago de mi envío · ${order.order_number || ''}`} />
             ) : (
               <p className="text-sm text-center py-10" style={{color:'#8aa0cc'}}>Sin comprobante de envío aún</p>
             )}
