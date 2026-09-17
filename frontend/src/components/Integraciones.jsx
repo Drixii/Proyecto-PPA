@@ -20,9 +20,7 @@ export const INTEGRACIONES = [
   { id: 'koywe', logo: koywe, alto: 50, color: '#C8FF1E', titulo: 'Koywe', desc: 'Transferencias y pagos locales en Latinoamérica.' },
   { id: 'stripe', logo: stripe, nombre: 'Stripe', alto: 34, color: '#635BFF', titulo: 'Stripe', desc: 'Cobros con tarjetas de crédito y débito.' },
   { id: 'binance', logo: binance, nombre: 'BINANCE', alto: 34, color: '#F0B90B', titulo: 'Binance', desc: 'Tasas de mercado P2P en tiempo real.' },
-  // El logotipo de Haulmer es blanco; sobre la tarjeta clara se pinta del
-  // azul de la marca con un filtro, en vez de mantener dos archivos.
-  { id: 'haulmer', logo: haulmer, alto: 26, color: '#38BDF8', titulo: 'Haulmer', desc: 'Soluciones de pago para Chile.', oscurecer: true },
+  { id: 'haulmer', logo: haulmer, alto: 26, color: '#38BDF8', titulo: 'Haulmer', desc: 'Soluciones de pago para Chile.' },
 ]
 
 // Curvas de cada tarjeta al centro, en un lienzo de 1000×460 que se estira al
@@ -45,7 +43,7 @@ function Tarjeta({ m, lado, i }) {
     <div className={`int-tarjeta int-${lado}`} style={{ '--c': m.color, '--i': i }} onMouseMove={sigueRaton}>
       <div className="int-cara">
         <div className="int-logo">
-          <img src={m.logo} alt={m.titulo} className={m.oscurecer ? 'oscurecer' : undefined} style={{ height: m.alto }} />
+          <img src={m.logo} alt={m.titulo} style={{ height: m.alto }} />
           {m.nombre && <span className={`int-nombre int-nombre-${m.id}`}>{m.nombre}</span>}
         </div>
         <p className="int-desc">{m.desc}</p>
@@ -154,11 +152,17 @@ export default function Integraciones() {
 
         .int-logo{height:52px;display:flex;align-items:center;gap:10px;}
         .int-logo img{display:block;width:auto;max-width:100%;transition:transform .6s cubic-bezier(.16,1,.3,1);}
-        .int-logo img.oscurecer{filter:brightness(0) saturate(100%) invert(11%) sepia(46%) saturate(1800%) hue-rotate(196deg) brightness(95%) contrast(95%);}
         .int-tarjeta:hover .int-logo img{transform:scale(1.06);}
         .int-nombre{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#0b1c3f;line-height:1;}
         .int-nombre-binance{letter-spacing:.04em;color:#c98f00;}
         .int-desc{margin:0;font-size:13.5px;line-height:1.55;color:#5b6f96;}
+        /* Los logotipos vienen pensados para fondo oscuro —los de Koywe y
+           Haulmer llevan texto blanco—, así que en la tarjeta clara se apoyan
+           en una placa azul noche en vez de perderse contra el blanco. */
+        .seccion-clara .int-logo{height:auto;padding:14px 16px;border-radius:14px;justify-content:flex-start;
+          background:linear-gradient(135deg,#0d1b3d,#081026);box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
+        .seccion-clara .int-nombre{color:#fff;}
+        .seccion-clara .int-nombre-binance{color:#F0B90B;}
         .int-estado{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:#15803d;}
         .int-punto{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:intPing 2s infinite;}
 
