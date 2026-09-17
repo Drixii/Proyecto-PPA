@@ -157,8 +157,9 @@ function ConfigSection() {
   const [feePct, setFeePct] = useState('')
   const [clpRate, setClpRate] = useState('')
   const [saved, setSaved] = useState(false)
-  // Monto de la calculadora de ejemplo. Solo vive en la pantalla.
-  const [ejemplo, setEjemplo] = useState('100000')
+  // Calculadora de ejemplo. Solo vive en la pantalla, no se guarda nada.
+  const [envio, setEnvio] = useState('500000')
+  const [comisionPct, setComisionPct] = useState('4')
 
   const { data } = useQuery({
     queryKey: ['points-config'],
@@ -209,42 +210,85 @@ function ConfigSection() {
             </div>
           </div>
 
-          {/* Calculadora, no un ejemplo fijo. Con 1.500 pesos clavados no se
-              podía ver qué sale en un envío de verdad, que es la pregunta:
-              cuánto regalo en una comisión de cien mil. */}
-          {feePct && clpRate && !isNaN(parseFloat(feePct)) && !isNaN(parseFloat(clpRate)) && (
-            <div className="rounded-xl px-4 py-3.5" style={{ background: 'rgba(253,211,77,.06)', border: '1px solid rgba(253,211,77,.15)' }}>
-              <div className="flex items-center gap-2 flex-wrap mb-2.5">
-                <span className="text-xs font-semibold" style={{ color: '#fcd34d' }}>Si la comisión es de</span>
-                <div className="relative">
-                  <input
-                    value={ejemplo}
-                    onChange={e => setEjemplo(e.target.value.replace(/[^\d]/g, ''))}
-                    inputMode="numeric"
-                    className="rounded-lg pl-6 pr-3 py-1.5 text-sm font-bold focus:outline-none"
-                    style={{ ...inputStyle, width: 130 }} />
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#8aa0cc' }}>$</span>
+          {/* La cuenta entera, de principio a fin. Antes se entraba por la
+              comisión, que es un número que nadie tiene en la cabeza: uno
+              sabe lo que envía el cliente y lo que cobra por ello. Ahora se
+              escriben esos dos y la comisión sale sola, con los puntos
+              detrás. */}
+          {feePct && clpRate && !isNaN(parseFloat(feePct)) && !isNaN(parseFloat(clpRate)) && (() => {
+            const monto = parseFloat(envio) || 0
+            const pct = parseFloat(comisionPct) || 0
+            const comision = monto * pct / 100
+            // Truncado, como el servidor: int(fee * pct / 100).
+            const pts = Math.floor(comision * parseFloat(feePct) / 100)
+            const vale = pts * parseFloat(clpRate)
+            const miles = n => Math.round(n).toLocaleString('es-CL')
+
+            return (
+              <div className="rounded-xl px-4 py-4" style={{ background: 'rgba(253,211,77,.06)', border: '1px solid rgba(253,211,77,.15)' }}>
+                <p className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'rgba(253,211,77,.75)' }}>
+                  Ejemplo
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>
+                      El cliente envía
+                    </label>
+                    <div className="relative">
+                      <input
+                        value={envio}
+                        onChange={e => setEnvio(e.target.value.replace(/[^\d]/g, ''))}
+                        inputMode="numeric"
+                        className="w-full rounded-lg pl-6 pr-12 py-2 text-base font-bold focus:outline-none"
+                        style={inputStyle} />
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#8aa0cc' }}>$</span>
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold" style={{ color: '#8aa0cc' }}>CLP</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>
+                      Tu comisión
+                    </label>
+                    <div className="relative">
+                      <input
+                        value={comisionPct}
+                        onChange={e => setComisionPct(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'))}
+                        inputMode="decimal"
+                        className="w-full rounded-lg pl-3 pr-8 py-2 text-base font-bold focus:outline-none"
+                        style={inputStyle} />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#8aa0cc' }}>%</span>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-xs font-semibold" style={{ color: '#fcd34d' }}>CLP</span>
-              </div>
-              {(() => {
-                const base = parseFloat(ejemplo) || 0
-                const pts = Math.floor(base * parseFloat(feePct) / 100)
-                const vale = pts * parseFloat(clpRate)
-                return (
-                  <p className="text-sm" style={{ color: '#fcd34d' }}>
-                    el cliente gana <strong>{pts.toLocaleString('es-CL')} pts</strong>, que al canjear
-                    valen <strong>${vale.toLocaleString('es-CL')} CLP</strong>
-                    {base > 0 && (
-                      <span style={{ color: 'rgba(253,211,77,.7)' }}>
-                        {' '}— le devuelves el <strong>{(vale / base * 100).toFixed(1)}%</strong> de la comisión
-                      </span>
-                    )}
+
+                {/* Las tres cifras que interesan, una al lado de otra. */}
+                <div className="grid grid-cols-3 gap-2 mt-3.5">
+                  <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,.2)' }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Comisión</p>
+                    <p className="text-base font-bold mt-0.5" style={{ color: '#eaf2ff' }}>${miles(comision)}</p>
+                  </div>
+                  <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,.2)' }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Gana</p>
+                    <p className="text-base font-bold mt-0.5" style={{ color: '#fcd34d' }}>{pts.toLocaleString('es-CL')} pts</p>
+                  </div>
+                  <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,.2)' }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Al canjear</p>
+                    <p className="text-base font-bold mt-0.5" style={{ color: '#4ade80' }}>${miles(vale)}</p>
+                  </div>
+                </div>
+
+                {comision > 0 && (
+                  <p className="text-xs mt-3 leading-relaxed" style={{ color: 'rgba(253,211,77,.8)' }}>
+                    Le devuelves el <strong>{(vale / comision * 100).toFixed(1)}%</strong> de la comisión
+                    {monto > 0 && <> — el <strong>{(vale / monto * 100).toFixed(2)}%</strong> de lo que envió</>}.
+                    {pts === 0 && ' Con este envío no alcanza ni para un punto.'}
                   </p>
-                )
-              })()}
-            </div>
-          )}
+                )}
+              </div>
+            )
+          })()}
 
           <button type="submit" disabled={mut.isPending}
             className="text-sm font-semibold px-6 py-2.5 rounded-xl text-white disabled:opacity-60 transition-all"
