@@ -2,10 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
 import DemoEnvio from '../components/DemoEnvio'
+import HuinchaTasas from '../components/HuinchaTasas'
 import CintaDeTasas from '../components/CintaDeTasas'
-import { useQuery } from '@tanstack/react-query'
-import api from '../services/api'
-import { useCountries } from '../hooks/useCountries'
 import { useStore } from '../store/useStore'
 import logoSrc from '../assets/logo.png'
 
@@ -22,12 +20,6 @@ const STEPS = [
   { n: '3', title: 'Confirma el pago', desc: 'Transfiere y adjunta tu comprobante.' },
   { n: '✓', title: '¡Listo!', desc: 'Procesamos y notificamos cada paso.', green: true },
 ]
-// La cinta de tasas iba con números escritos a mano: decía 1 USD = 40 VES
-// cuando el real ronda los 880, y 4.100 COP cuando son 3.136. Es la primera
-// cifra que ve alguien que entra, y encima la página promete "tasas en tiempo
-// real" tres bloques más abajo. Ahora salen de la misma fuente que usa el
-// calculador; si no cargan, no se muestra nada en vez de inventar.
-const fmt = (n, c) => new Intl.NumberFormat('es-CL', { maximumFractionDigits: ['CLP','COP','VES','ARS','PYG'].includes(c)?0:2, minimumFractionDigits: 0 }).format(n)
 
 // Reveal inicial — globe.js aplica opacity:'1' + transform:'none' al entrar en viewport
 const R0 = { opacity: 0, transform: 'translateY(34px)', transition: 'opacity .8s cubic-bezier(.22,.61,.36,1),transform .8s cubic-bezier(.22,.61,.36,1)' }
@@ -35,33 +27,6 @@ const RD = (d) => ({ ...R0, transitionDelay: `${d}s,${d}s` })
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const { receiveCountries } = useCountries()
-  const { data: ratesRaw } = useQuery({
-    queryKey: ['rates-all'],
-    queryFn: () => api.get('/rates').then(r => r.data.data),
-    staleTime: 60000,
-  })
-
-  // 1 USD = X para cada moneda que la plataforma ofrece como destino. Antes la
-  // lista de pares también estaba fija e incluía el peso filipino, un país en
-  // el que no se opera.
-  const tickerItems = (() => {
-    const desdeUsd = {}
-    for (const r of ratesRaw || []) {
-      if (r.from_currency === 'USD') desdeUsd[r.to_currency] = r.rate
-    }
-    const vistas = new Set()
-    const items = []
-    for (const c of receiveCountries) {
-      if (c.currency === 'USD' || vistas.has(c.currency)) continue
-      const tasa = desdeUsd[c.currency]
-      if (!tasa) continue
-      vistas.add(c.currency)
-      items.push(`1 USD = ${fmt(tasa, c.currency)} ${c.currency}`)
-    }
-    return items
-  })()
-
   const navigate = useNavigate()
   const { user } = useStore()
   const deferredPrompt = useRef(null)
@@ -429,16 +394,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ── TICKER de divisas ── */}
-      <div style={{ position: 'relative', zIndex: 2, borderTop: '1px solid rgba(255,255,255,.08)', borderBottom: '1px solid rgba(255,255,255,.08)', background: 'rgba(7,14,35,.6)', overflow: 'hidden', padding: '14px 0' }}>
-        <div style={{ display: 'flex', width: 'max-content', animation: 'marquee 32s linear infinite' }}>
-          {[...tickerItems, ...tickerItems].map((t, i) => (
-            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: '#aebfe2', whiteSpace: 'nowrap', margin: '0 21px' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#38e1ff', flexShrink: 0 }} />{t}
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* ── Huinchas de tasas ── */}
+      <HuinchaTasas />
 
       {/* ── POR QUÉ KSA GLOBAL ── */}
       <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.82)' }}>
