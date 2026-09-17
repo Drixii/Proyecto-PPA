@@ -1411,23 +1411,29 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
 
   // La imagen de fondo va detrás de sesión, así que no se puede poner en un
   // <img src>: se pide con el token y se convierte en URL de objeto.
+  const idActiva = (editor?.fondos || []).find(f => f.activa)?.id
   useEffect(() => {
     let vivo = true
     let creada = null
-    setFondoUrl(u => { if (u) URL.revokeObjectURL(u); return null })
+    // No se vacía antes de tener la nueva: al encender otra categoría la vista
+    // parpadeaba en negro. Se sustituye cuando llega.
     if (origen?.name && editor?.tiene_fondo) {
       api.get('/admin/commissions/imagen/fondo', {
-        params: { from_country: origen.name, sentido }, responseType: 'blob',
+        params: { from_country: origen.name, sentido, ...(idActiva ? { fondo_id: idActiva } : {}) },
+        responseType: 'blob',
       }).then(r => {
         if (!vivo) return
         creada = URL.createObjectURL(r.data)
-        setFondoUrl(creada)
+        setFondoUrl(u => { if (u) URL.revokeObjectURL(u); return creada })
       }).catch(() => { /* sin fondo se enseña el aviso de arriba */ })
     }
-    return () => { vivo = false; if (creada) URL.revokeObjectURL(creada) }
+    // La URL se libera cuando la sustituye la siguiente, no aquí: liberarla
+    // al limpiar dejaba la vista en blanco hasta que llegaba la nueva.
+    else setFondoUrl(u => { if (u) URL.revokeObjectURL(u); return null })
+    return () => { vivo = false }
     // También al cambiar de categoría activa: si no, se encendía otra imagen
     // y la vista previa seguía enseñando la anterior.
-  }, [origen?.name, sentido, editor?.tiene_fondo, (editor?.fondos || []).find(f => f.activa)?.id, revision])
+  }, [origen?.name, sentido, editor?.tiene_fondo, idActiva, revision])
 
   // Al cambiar de país la imagen generada anterior deja de valer.
   useEffect(() => {
@@ -1520,7 +1526,11 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
   const usar = useMutation({
     mutationFn: (id) => api.patch(`/admin/commissions/imagen/fondo/${id}`, {},
       { params: { from_country: origen.name, sentido } }),
-    onSuccess: (r) => { refetch(); aviso(r.data.message) },
+    onSuccess: async (r) => {
+      aviso(r.data.message)
+      await refetch()
+      if (url) generar()
+    },
     onError: async (e) => setError(await detalleDeError(e, 'No se pudo cambiar')),
   })
 
@@ -1717,16 +1727,19 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
           Una categoría nueva también se abre como acordeón y pide primero el
           título: antes se iba directa al explorador de archivos y quedaba
           llamada «Nueva categoría» hasta que alguien se acordara de cambiarlo. */}
-      <div style={{ marginBottom: 16, maxWidth: 420 }}>
+      <div style={{ marginBottom: 16, maxWidth: 680 }}>
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.05em' }}>
           Imágenes de {origen?.name || ''}
         </p>
+
+        <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', alignItems: 'start' }}>
 
         {(editor?.fondos || []).map(f => {
           const desplegada = abierta === f.id
           return (
             <div key={f.id} style={{
-              borderRadius: 12, marginBottom: 8, overflow: 'hidden',
+              gridColumn: desplegada ? '1 / -1' : 'auto',
+              borderRadius: 12, overflow: 'hidden',
               background: f.activa ? 'rgba(56,189,248,.07)' : 'rgba(4,10,30,.5)',
               border: `1px solid ${f.activa ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.08)'}`,
             }}>
@@ -1812,7 +1825,8 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
 
         {abierta === 'nueva' ? (
           <div style={{
-            borderRadius: 12, marginBottom: 8, padding: 11,
+            gridColumn: '1 / -1',
+            borderRadius: 12, padding: 11,
             background: 'rgba(56,189,248,.05)', border: '1px dashed rgba(56,189,248,.35)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
@@ -1849,7 +1863,7 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
             onClick={() => { setTituloNuevo(''); setAbierta('nueva') }}
             disabled={subiendo}
             style={{
-              width: '100%', borderRadius: 12, padding: '12px 11px',
+              width: '100%', minHeight: 50, borderRadius: 12, padding: '12px 11px',
               cursor: subiendo ? 'wait' : 'pointer',
               background: 'rgba(56,189,248,.06)', border: '1px dashed rgba(56,189,248,.35)',
               color: '#38bdf8', fontSize: 12, fontWeight: 700,
@@ -1857,6 +1871,7 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
             + Agregar categoría
           </button>
         )}
+        </div>
       </div>
 
       {editor?.tiene_fondo && (

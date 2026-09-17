@@ -2222,7 +2222,8 @@ def imagen_de_tasas(
     datos = {"name": pais.name, "iso2": pais.iso2 or "", "currency": pais.currency}
     png = imagen_tasas.generar(datos, filas,
                                _posicion_guardada(db, pais.iso2, sentido), sentido)
-    return Response(content=png, media_type="image/png")
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
 
 
 @router.get("/commissions/imagen/editor", response_model=dict)
@@ -2291,7 +2292,8 @@ def ver_fondo(
         ruta = ruta_fondo(pais.iso2 or "", sentido)
     if not ruta:
         raise HTTPException(status_code=404, detail="Ese listado no tiene imagen de fondo")
-    return FileResponse(ruta, media_type="image/jpeg")
+    return FileResponse(ruta, media_type="image/jpeg",
+                        headers={"Cache-Control": "no-store"})
 
 
 # def (no async): lee el fichero y lo convierte con Pillow, que es bloqueante.
