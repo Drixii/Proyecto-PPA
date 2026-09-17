@@ -8,6 +8,7 @@ import FinexyLayout from '../../components/FinexyLayout'
 import CountriesManager from './CountriesManager'
 import api from '../../services/api'
 import { Bandera } from '../../utils/flags'
+import ModeracionResenas from '../../components/ModeracionResenas'
 
 const GLASS = {
   background: 'rgba(255,255,255,0.03)',
@@ -621,6 +622,12 @@ const SECTIONS = [
     icon: '✉️',
     title: 'Correo',
     desc: 'Servidor de envío y verificación del correo de los clientes',
+  },
+  {
+    key: 'resenas',
+    icon: '⭐',
+    title: 'Reseñas',
+    desc: 'Opiniones de clientes: decide cuáles se publican en la portada',
   },
 ]
 
@@ -3243,6 +3250,7 @@ export default function AdminSettings() {
         )}
         {section === 'pagos' && <><CuentasPropiasForm /><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
         {section === 'correo' && <SmtpForm />}
+        {section === 'resenas' && <ModeracionResenas glass={GLASS} />}
       </div>
     </FinexyLayout>
   )

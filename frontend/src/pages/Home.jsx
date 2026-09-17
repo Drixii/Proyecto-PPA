@@ -6,6 +6,7 @@ import HuinchaTasas from '../components/HuinchaTasas'
 import Integraciones from '../components/Integraciones'
 import QuienesSomos from '../components/QuienesSomos'
 import EnNumeros from '../components/EnNumeros'
+import Resenas from '../components/Resenas'
 import PiePagina from '../components/PiePagina'
 import { guardarEnvioPendiente, estadoNuevaTransferencia } from '../utils/envioPendiente'
 import CintaDeTasas from '../components/CintaDeTasas'
@@ -348,9 +349,8 @@ export default function Home() {
           <div id="hero-content" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', alignItems: 'center' }}>
             <div className={heroListo ? 'hero-fin' : undefined} style={{ '--espera': `${ESPERA_HERO}s`, maxWidth: 1200, margin: '0 auto', padding: '0 24px', width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 48 }}>
               <div className="hero-text">
-                <div className="hero-in" style={{ '--d': '.05s', display: 'inline-flex', alignItems: 'center', gap: 9, padding: '7px 14px', borderRadius: 999, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.14)', marginBottom: 26 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38e1ff', animation: 'pulseDot 2s infinite' }} />
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#bfe4ff' }}>Tasas en vivo · +50 países · 24/7</span>
+                <div className="hero-in" style={{ '--d': '.05s', marginBottom: 22 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Tasas en vivo · 24/7</span>
                 </div>
                 <h1 className="hero-in" style={{ '--d': '.18s', margin: '0 0 20px', fontSize: 'clamp(40px,5.4vw,68px)', lineHeight: 1.02, fontWeight: 700, letterSpacing: '-.025em', color: '#fff' }}>
                   Bienvenido a la<br />
@@ -369,17 +369,6 @@ export default function Home() {
                       <a href="#como" style={{ padding: '16px 24px', fontSize: 16, fontWeight: 600, color: '#e6efff', textDecoration: 'none', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 16 }}>Ver cómo funciona</a>
                     </>
                   )}
-                </div>
-                <div className="stats-row hero-hide-mobile">
-                  {[['2 min', 'tiempo promedio'], ['+50', 'países conectados'], ['0%', 'comisiones ocultas']].map(([val, label], i) => (
-                    <div key={i} className="hero-in" style={{ '--d': `${.54 + i * .09}s`, display: 'flex', alignItems: 'center', gap: 20 }}>
-                      {i > 0 && <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,.14)' }} />}
-                      <div>
-                        <p style={{ margin: 0, fontFamily: "'JetBrains Mono',monospace", fontSize: 26, fontWeight: 700, color: '#fff' }}>{val}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>{label}</p>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
               {/* La entrada va en envoltorios, no en .hero-calc: ese ya tiene su
@@ -445,8 +434,8 @@ export default function Home() {
       {/* ── EN NÚMEROS ── */}
       <EnNumeros />
 
-      {/* ── CTA ── */}
-      {!user && (
+      {/* ── RESEÑAS ── (sin ninguna publicada, la llamada a crear cuenta) */}
+      <Resenas sinResenas={!user && (
         <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)', textAlign: 'center' }}>
           <div data-reveal="" style={{ maxWidth: 1000, margin: '0 auto', ...R0, borderRadius: 32, overflow: 'hidden', padding: 'clamp(32px,6vw,64px) clamp(20px,5vw,40px)', background: 'linear-gradient(135deg,rgba(37,99,235,.35),rgba(56,189,248,.22))', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', border: '1px solid rgba(125,211,252,.28)', boxShadow: '0 36px 80px rgba(2,8,30,.5)' }}>
             <h2 style={{ margin: '0 0 13px', fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, color: '#fff' }}>¿Listo para enviar?</h2>
@@ -454,7 +443,7 @@ export default function Home() {
             <button onClick={() => navigate('/login', { state: { mode: 'register' } })} style={{ padding: '16px 36px', fontSize: 17, fontWeight: 700, color: '#061027', background: '#fff', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 14px 36px rgba(0,0,0,.28)' }}>Comenzar gratis →</button>
           </div>
         </section>
-      )}
+      )} />
 
       {/* ── FOOTER ── */}
       <PiePagina />

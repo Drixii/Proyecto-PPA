@@ -12,6 +12,7 @@ import { flagUrl } from '../utils/flags'
 import { useStore } from '../store/useStore'
 import { fmtDate, userTz } from '../utils/timezone'
 import { esPagoExterno } from '../utils/payments'
+import ResenaEnvio from './ResenaEnvio'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '22px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 4px 24px rgba(0,0,0,.35), inset 0 1.5px 0 rgba(255,255,255,.18)' }
 
@@ -927,6 +928,9 @@ export function ClientOrderPanel({ order }) {
           Enviar nuevamente
         </button>
       </div>
+
+      {/* Envío completado: se le pide su opinión. */}
+      <ResenaEnvio order={order} />
 
       {/* Pago sin completar: se creó la orden pero el cobro no llegó a pasar
           (cerró el formulario, falló la tarjeta, abandonó el portal...). Se

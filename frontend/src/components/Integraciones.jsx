@@ -87,10 +87,7 @@ export default function Integraciones() {
         .integraciones.visto .int-cab>*{opacity:1;transform:none;filter:none;}
         .integraciones.visto .int-cab>*:nth-child(2){transition-delay:.08s;}
         .integraciones.visto .int-cab>*:nth-child(3){transition-delay:.16s;}
-        .int-eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;padding:6px 14px;border-radius:999px;
-          font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#7dd3fc;
-          background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);}
-        .int-eyebrow i{width:6px;height:6px;border-radius:50%;background:#38bdf8;box-shadow:0 0 10px #38bdf8;animation:intLatido 2s infinite;}
+        .int-eyebrow{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#38bdf8;}
         .int-titulo{margin:0;font-size:clamp(30px,3.8vw,48px);font-weight:700;letter-spacing:-.025em;color:#fff;line-height:1.1;}
         .int-titulo span{background:linear-gradient(120deg,#38bdf8,#818cf8 60%,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent;}
         .int-sub{margin:16px auto 0;max-width:540px;font-size:16px;line-height:1.6;color:#9fb0d4;}
@@ -195,7 +192,7 @@ export default function Integraciones() {
       `}</style>
 
       <div className="int-cab">
-        <p className="int-eyebrow"><i />Integraciones</p>
+        <p className="int-eyebrow">Integraciones</p>
         <h2 className="int-titulo">Conectados con <span>los mejores</span></h2>
         <p className="int-sub">Trabajamos con plataformas líderes para que tu dinero se mueva rápido, seguro y a la tasa real.</p>
       </div>

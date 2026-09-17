@@ -9,12 +9,12 @@ import { useCountries } from '../hooks/useCountries'
 // baja hasta cero.
 //
 // Las cifras tienen que ser ciertas. Los países salen de la lista de la
-// plataforma, no de un número escrito a mano; el tiempo de envío es el que
-// se midió en los envíos completados. Una estadística inventada en la portada
+// plataforma, no de un número escrito a mano. El tiempo de envío lo fija la
+// casa como su promedio desde que se confirma el pago. Una estadística inventada en la portada
 // de un servicio de dinero es lo primero que hace desconfiar a alguien que
 // después lo comprueba.
 
-const MINUTOS_PROMEDIO = 5
+const MINUTOS_PROMEDIO = 3
 
 // Cuenta de `desde` a `hasta` cuando `activo` pasa a true.
 function useCuenta(hasta, activo, { desde = 0, ms = 1600, retraso = 0 } = {}) {
@@ -68,9 +68,7 @@ export default function EnNumeros() {
         .en-num-cab>*{opacity:0;transform:translateY(20px);filter:blur(6px);transition:opacity .8s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1),filter .8s;}
         .en-num.visto .en-num-cab>*{opacity:1;transform:none;filter:none;}
         .en-num.visto .en-num-cab>*:nth-child(2){transition-delay:.08s;}
-        .en-num-eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;padding:6px 14px;border-radius:999px;
-          font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#7dd3fc;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);}
-        .en-num-eyebrow i{width:6px;height:6px;border-radius:50%;background:#38bdf8;box-shadow:0 0 10px #38bdf8;}
+        .en-num-eyebrow{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#38bdf8;}
         .en-num-titulo{margin:0;font-size:clamp(30px,3.8vw,50px);font-weight:700;letter-spacing:-.03em;color:#fff;}
         .en-num-titulo span{background:linear-gradient(120deg,#38bdf8,#818cf8 55%,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent;}
 
@@ -152,7 +150,7 @@ export default function EnNumeros() {
       `}</style>
 
       <div className="en-num-cab">
-        <p className="en-num-eyebrow"><i />En números</p>
+        <p className="en-num-eyebrow">En números</p>
         <h2 className="en-num-titulo">Resultados que <span>hablan por sí solos</span></h2>
       </div>
 

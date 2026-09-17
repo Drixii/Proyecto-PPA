@@ -134,10 +134,7 @@ export default function QuienesSomos() {
         .qs.visto .qs-sube{opacity:1;transform:none;filter:none;}
 
         /* Columna de texto */
-        .qs-eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 18px;padding:6px 14px;border-radius:999px;
-          font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#7dd3fc;
-          background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);}
-        .qs-eyebrow i{width:6px;height:6px;border-radius:50%;background:#38bdf8;box-shadow:0 0 10px #38bdf8;}
+        .qs-eyebrow{margin:0 0 16px;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#38bdf8;}
         .qs-titulo{margin:0 0 20px;font-size:clamp(32px,4vw,52px);line-height:1.05;font-weight:700;letter-spacing:-.03em;color:#fff;}
         .qs-titulo span{background:linear-gradient(120deg,#38bdf8,#818cf8 55%,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent;}
         .qs-texto{margin:0 0 30px;max-width:470px;font-size:16.5px;line-height:1.7;color:#9fb0d4;}
@@ -252,7 +249,7 @@ export default function QuienesSomos() {
 
       <div className="qs-in">
         <div>
-          <p className="qs-eyebrow qs-sube"><i />Quiénes somos</p>
+          <p className="qs-eyebrow qs-sube">Quiénes somos</p>
           <h2 className="qs-titulo qs-sube" style={{ '--d': .08 }}>
             Movemos tu dinero <span>entre países</span>, sin fricción
           </h2>

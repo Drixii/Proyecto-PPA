@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from database import engine
 import models  # noqa: F401 — registra todos los modelos en Base
 from database import Base
-from routers import auth, rates, orders, admin, chat, notifications, sub_admin, points, flights, payments
+from routers import auth, rates, orders, admin, chat, notifications, sub_admin, points, flights, payments, reviews
 import logging
 import os
 
@@ -240,6 +240,7 @@ app.include_router(notifications.router)
 app.include_router(points.router)
 app.include_router(flights.router)
 app.include_router(payments.router)
+app.include_router(reviews.router)
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
