@@ -61,7 +61,9 @@ export default function Home() {
 
   // Cuánto espera el hero antes de empezar a entrar: lo que dura el globo
   // solo más la bajada del header.
-  const ESPERA_HERO = presentacion ? 1.6 : 0
+  // Acortada de 1,6 s: el título es lo que Google mide como carga de la página
+  // (LCP), y la espera entera contaba como página lenta. Mismo orden, menos pausa.
+  const ESPERA_HERO = presentacion ? 0.9 : 0
 
   // Las animaciones se retiran en cuanto terminan. Un elemento con
   // animation puesta, aunque solo esté rellenando el último fotograma, hace
@@ -71,7 +73,7 @@ export default function Home() {
   const [heroListo, setHeroListo] = useState(false)
   useEffect(() => {
     const relojes = [
-      setTimeout(() => setNavListo(true), presentacion ? 2000 : 0),
+      setTimeout(() => setNavListo(true), presentacion ? 1300 : 0),
       setTimeout(() => setHeroListo(true), (ESPERA_HERO + 1.8) * 1000),
     ]
     return () => relojes.forEach(clearTimeout)
@@ -227,13 +229,13 @@ export default function Home() {
            lo mantiene fuera de pantalla, así que al principio solo se ve el
            globo. */
         @keyframes navBaja{from{opacity:0;transform:translateY(-110%)}to{opacity:1;transform:none}}
-        .nav-entra{animation:navBaja .72s cubic-bezier(.16,1,.3,1) both;animation-delay:1.05s;}
+        .nav-entra{animation:navBaja .72s cubic-bezier(.16,1,.3,1) both;animation-delay:.45s;}
         /* El header sigue ocupando sus 70px aunque no se vea, y ahi se colaba
            una franja del fondo sobre el globo que parecia una sombra. Mientras
            el header esta fuera, el globo sube a ocuparla y baja con el, al
            mismo ritmo, asi que no hay salto. */
         @keyframes globoBaja{from{margin-top:-70px}to{margin-top:0}}
-        .pin-entra{animation:globoBaja .72s cubic-bezier(.16,1,.3,1) both;animation-delay:1.05s;}
+        .pin-entra{animation:globoBaja .72s cubic-bezier(.16,1,.3,1) both;animation-delay:.45s;}
         @media (prefers-reduced-motion: reduce){.nav-entra,.pin-entra{animation:none;}}
         /* Terminada la entrada se quita la animacion. Mientras esta puesta,
            aunque sea solo rellenando el ultimo fotograma, el envoltorio hace

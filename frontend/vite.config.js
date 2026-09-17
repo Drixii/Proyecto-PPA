@@ -19,12 +19,30 @@ function sinComentariosCss() {
   }
 }
 
+// globe.js vive en public/ y se copia tal cual, sin pasar por el minificador:
+// llegaba con espacios y nombres largos. Se minifica la copia de dist.
+function minificarGlobo() {
+  return {
+    name: 'minificar-globo',
+    apply: 'build',
+    async closeBundle() {
+      const { readFile, writeFile } = await import('node:fs/promises')
+      const { minify } = await import('terser')
+      const ruta = new URL('./dist/globe.js', import.meta.url)
+      const fuente = await readFile(ruta, 'utf8')
+      const { code } = await minify(fuente, { compress: true, mangle: true })
+      await writeFile(ruta, code)
+    },
+  }
+}
+
 // index.html: las etiquetas Open Graph llevan el dominio escrito a mano
 // (WhatsApp y Facebook exigen URLs absolutas). Si el dominio cambia, hay que
 // cambiarlo ahí, en sitemap.xml, robots.txt y llms.txt.
 export default defineConfig({
   plugins: [
     sinComentariosCss(),
+    minificarGlobo(),
     react(),
     tailwindcss(),
     VitePWA({
