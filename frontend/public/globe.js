@@ -126,6 +126,17 @@
   function ease(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 
+  // Colores segun el modo. En claro, los puntos y el contorno del globo van en
+  // azul oscuro: los celestes del modo oscuro sobre fondo blanco casi no se
+  // ven. El resto (banderas, arcos, badges) se queda igual.
+  var claro = document.documentElement.getAttribute('data-tema') === 'claro';
+  window.addEventListener('ksa-tema', function(e){ claro = e.detail === 'claro'; });
+  function tono(){
+    return claro
+      ? {frente:'11,28,63', atras:'70,89,126', halo:'37,99,235', aro:'30,64,140', nombre:'#0b1c3f'}
+      : {frente:'125,211,252', atras:'90,130,210', halo:'56,189,248', aro:'120,180,255', nombre:'#dbe6ff'};
+  }
+
   var lastCv=null;
   function refresh(){
     var nc=document.getElementById('globe-cv');
@@ -290,10 +301,11 @@
     ctx.clearRect(0,0,W,H);
 
     if(inv>0.01){
+      var col=tono();
       var g=ctx.createRadialGradient(cx,cy,R*0.1,cx,cy,R*1.55);
-      g.addColorStop(0,'rgba(56,189,248,'+(0.10*inv)+')');g.addColorStop(1,'rgba(56,189,248,0)');
+      g.addColorStop(0,'rgba('+col.halo+','+(0.10*inv)+')');g.addColorStop(1,'rgba('+col.halo+',0)');
       ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*1.55,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='rgba(120,180,255,'+(0.18*inv)+')';ctx.lineWidth=1.2;
+      ctx.strokeStyle='rgba('+col.aro+','+((claro?0.3:0.18)*inv)+')';ctx.lineWidth=1.2;
       ctx.beginPath();ctx.arc(cx,cy,R*(1+morph*0.5),0,Math.PI*2);ctx.stroke();
     }
 
@@ -310,7 +322,8 @@
       else { nb=Math.min(NIV_P-1,Math.floor(a*0.45/0.36*NIV_P)); cubB[nb].push(px,py,pr); }
     }
     for(nb=0;nb<NIV_P;nb++){
-      var lotes=[[cubF[nb],'rgba(125,211,252,'+((nb+0.5)/NIV_P*0.8).toFixed(3)+')'],[cubB[nb],'rgba(90,130,210,'+((nb+0.5)/NIV_P*0.36).toFixed(3)+')']];
+      var c2=tono();
+      var lotes=[[cubF[nb],'rgba('+c2.frente+','+((nb+0.5)/NIV_P*0.8).toFixed(3)+')'],[cubB[nb],'rgba('+c2.atras+','+((nb+0.5)/NIV_P*0.36).toFixed(3)+')']];
       for(var li=0;li<2;li++){
         var c0=lotes[li][0]; if(!c0.length)continue;
         ctx.fillStyle=lotes[li][1]; ctx.beginPath();
@@ -381,7 +394,7 @@
       if(morph>0.45){
         ctx.save();
         ctx.globalAlpha=clamp((morph-0.45)/0.52,0,1);
-        ctx.fillStyle='#dbe6ff';
+        ctx.fillStyle=tono().nombre;
         var fs=gr.fs;
         ctx.font='600 '+fs+'px \'Space Grotesk\',system-ui,sans-serif';
         ctx.textAlign='center';

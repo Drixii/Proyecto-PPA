@@ -1,0 +1,218 @@
+/* Modo claro de la portada.
+ *
+ * Todo cuelga de html[data-tema="claro"], así que con el atributo quitado la
+ * web queda exactamente como estaba: el oscuro no se toca.
+ *
+ * Va casi todo con !important porque los componentes llevan sus colores en
+ * estilos en línea (style={{color:'#fff'}}), y un estilo en línea gana a
+ * cualquier hoja salvo que se marque así.
+ *
+ * Paleta: blanco y gris muy claro de fondo, azul oscuro de la marca para
+ * títulos y palabras importantes, azules medios para lo secundario.
+ */
+
+html[data-tema="claro"] {
+  --c-fondo: #f3f6fc;
+  --c-fondo-2: #ffffff;
+  --c-fondo-3: #e9eff8;
+  --c-tinta: #0b1c3f;      /* títulos y palabras fuertes */
+  --c-tinta-2: #46597e;    /* texto corriente */
+  --c-tinta-3: #7085a6;    /* texto menor */
+  --c-linea: rgba(11, 28, 63, .12);
+  --c-tarjeta: #ffffff;
+  --c-sombra: 0 10px 30px rgba(11, 28, 63, .08);
+}
+
+html[data-tema="claro"],
+html[data-tema="claro"] body {
+  background: var(--c-fondo) !important;
+  color: var(--c-tinta-2) !important;
+}
+
+/* ── Portada: fondo y resplandores ─────────────────────────────────────── */
+html[data-tema="claro"] #root > div:first-child { background: var(--c-fondo) !important; }
+html[data-tema="claro"] #globe-cv { background: transparent; }
+
+/* ── Cabecera flotante ─────────────────────────────────────────────────── */
+html[data-tema="claro"] .nav-inner {
+  background: rgba(255, 255, 255, .82) !important;
+  border-color: var(--c-linea) !important;
+  box-shadow: 0 10px 30px rgba(11, 28, 63, .1), inset 0 1px 0 rgba(255, 255, 255, .7) !important;
+}
+html[data-tema="claro"] .nav-inner.nav-bajado {
+  background: rgba(255, 255, 255, .95) !important;
+  box-shadow: 0 14px 36px rgba(11, 28, 63, .14) !important;
+}
+html[data-tema="claro"] .nav-inner p { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .nav-text-link { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .nav-text-link:hover { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .nav-auth button:first-child {
+  background: rgba(11, 28, 63, .04) !important;
+  border-color: var(--c-linea) !important;
+  color: var(--c-tinta) !important;
+}
+
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+html[data-tema="claro"] .hero-text h1 { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .hero-text p { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .hero-text > div:first-child span { color: #1d4ed8 !important; }
+html[data-tema="claro"] .hero-buttons a {
+  background: rgba(11, 28, 63, .04) !important;
+  border-color: var(--c-linea) !important;
+  color: var(--c-tinta) !important;
+}
+html[data-tema="claro"] .mob-scroll-hint span { color: #35507f !important; }
+html[data-tema="claro"] .mob-scroll-hint svg { stroke: #35507f; }
+html[data-tema="claro"] #scroll-hint span { color: #35507f !important; }
+html[data-tema="claro"] #grid-title p { color: #1d4ed8 !important; }
+html[data-tema="claro"] #grid-title h2 { color: var(--c-tinta) !important; }
+
+/* ── Calculadora ───────────────────────────────────────────────────────── */
+html[data-tema="claro"] .calc-card {
+  background: rgba(255, 255, 255, .88) !important;
+  border-color: var(--c-linea) !important;
+  box-shadow: 0 16px 44px rgba(11, 28, 63, .12), inset 0 1.5px 0 rgba(255, 255, 255, .9) !important;
+}
+html[data-tema="claro"] .calc-title { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .calc-panel { background: #f1f5fc !important; border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .calc-panel p { color: var(--c-tinta-3) !important; }
+html[data-tema="claro"] .calc-panel button { background: #fff !important; border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .calc-panel button span { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .calc-amount { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .calc-received { color: #1d4ed8 !important; }
+html[data-tema="claro"] .calc-divider > div:first-child,
+html[data-tema="claro"] .calc-divider > div:last-child { background: linear-gradient(90deg, transparent, var(--c-linea)) !important; }
+html[data-tema="claro"] .calc-divider > div:nth-child(2) { background: rgba(37, 99, 235, .08) !important; border-color: rgba(37, 99, 235, .25) !important; }
+html[data-tema="claro"] .calc-divider span { color: #1d4ed8 !important; }
+html[data-tema="claro"] .calc-footer { color: var(--c-tinta-3) !important; }
+
+/* ── Cinta de tasas sobre la calculadora ───────────────────────────────── */
+html[data-tema="claro"] .cinta-tasas {
+  background: rgba(255, 255, 255, .85) !important;
+  border-color: var(--c-linea) !important;
+}
+html[data-tema="claro"] .cinta-tasas strong { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .cinta-tasas span > span { color: var(--c-tinta-2) !important; }
+
+/* ── Huinchas grandes ──────────────────────────────────────────────────── */
+html[data-tema="claro"] .huinchas {
+  background: linear-gradient(180deg, rgba(243, 246, 252, 0) 0%, rgba(233, 239, 248, .7) 45%, var(--c-fondo-2) 100%) !important;
+}
+html[data-tema="claro"] .huincha.detras {
+  background: linear-gradient(180deg, #e9eff8 0%, #eef3fb 55%, rgba(255, 255, 255, .6) 100%) !important;
+}
+html[data-tema="claro"] .huincha.detras .huincha-par,
+html[data-tema="claro"] .huincha.detras .huincha-precio { color: #5c72a0 !important; }
+html[data-tema="claro"] .huincha.detras .huincha-bandera { box-shadow: 0 0 0 2px rgba(11, 28, 63, .12) !important; }
+html[data-tema="claro"] .huincha.detras .huincha-sep { color: #1d4ed8 !important; }
+
+/* ── Secciones: blanco y gris claro alternados ─────────────────────────── */
+html[data-tema="claro"] .seccion-alt,
+html[data-tema="claro"] .integraciones,
+html[data-tema="claro"] .car { background: var(--c-fondo-2) !important; }
+html[data-tema="claro"] .qs,
+html[data-tema="claro"] .en-num { background: var(--c-fondo-3) !important; }
+html[data-tema="claro"] .qs::before,
+html[data-tema="claro"] .qs::after { opacity: .5; }
+
+/* Títulos y textos comunes de todas las secciones */
+html[data-tema="claro"] h2,
+html[data-tema="claro"] h3,
+html[data-tema="claro"] .qs-titulo,
+html[data-tema="claro"] .int-titulo,
+html[data-tema="claro"] .en-num-titulo,
+html[data-tema="claro"] .car-titulo { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .qs-texto,
+html[data-tema="claro"] .int-sub,
+html[data-tema="claro"] .car-resumen { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .qs-texto b { color: var(--c-tinta) !important; }
+
+/* Pasos (sección Cómo funciona) */
+html[data-tema="claro"] .paso-demo { background: var(--c-tarjeta) !important; border-color: var(--c-linea) !important; box-shadow: var(--c-sombra) !important; }
+html[data-tema="claro"] .paso-demo.visto.activo { background: linear-gradient(135deg, #fff, #eaf1ff) !important; border-color: rgba(37, 99, 235, .45) !important; box-shadow: 0 18px 40px rgba(37, 99, 235, .16) !important; }
+html[data-tema="claro"] .paso-cuerpo h3 { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .paso-cuerpo p { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .paso-etiqueta { color: #1d4ed8 !important; }
+html[data-tema="claro"] .pasos-riel, html[data-tema="claro"] .paso-barra { background: rgba(11, 28, 63, .1) !important; }
+html[data-tema="claro"] .paso-icono { color: #8195b5 !important; background: rgba(11, 28, 63, .04) !important; border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .paso-insignia { box-shadow: 0 8px 20px rgba(56, 189, 248, .3), 0 0 0 3px var(--c-fondo-2) !important; }
+
+/* Quiénes somos */
+html[data-tema="claro"] .qs-eyebrow, html[data-tema="claro"] .int-eyebrow,
+html[data-tema="claro"] .en-num-eyebrow, html[data-tema="claro"] .car-rotulo,
+html[data-tema="claro"] .res-eyebrow { color: #1d4ed8 !important; }
+html[data-tema="claro"] .qs-dato { background: var(--c-tarjeta) !important; border-color: var(--c-linea) !important; box-shadow: var(--c-sombra); }
+html[data-tema="claro"] .qs-dato b { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .qs-dato small { color: var(--c-tinta-3) !important; }
+html[data-tema="claro"] .qs-cara { background: var(--c-tarjeta) !important; box-shadow: var(--c-sombra); }
+html[data-tema="claro"] .qs-card { background: linear-gradient(160deg, rgba(11, 28, 63, .16), rgba(11, 28, 63, .05) 45%, rgba(11, 28, 63, .12)) !important; }
+html[data-tema="claro"] .qs-txt h3 { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .qs-txt p { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .qs-estado small { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .qs-bolita { background: #e6ecf7 !important; border-color: rgba(11, 28, 63, .14) !important; }
+html[data-tema="claro"] .qs-riel { background: rgba(11, 28, 63, .1) !important; }
+html[data-tema="claro"] .qs-recibo { background: rgba(37, 99, 235, .04) !important; border-color: rgba(37, 99, 235, .22) !important; }
+html[data-tema="claro"] .qs-fila { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .qs-fila b { color: #1d4ed8 !important; }
+html[data-tema="claro"] .qs-par { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .qs-par b { color: var(--c-tinta) !important; }
+
+/* Integraciones: los logotipos son para fondo oscuro, van sobre placa */
+html[data-tema="claro"] .int-cara { background: var(--c-tarjeta) !important; box-shadow: var(--c-sombra); }
+html[data-tema="claro"] .int-tarjeta { background: linear-gradient(160deg, rgba(11, 28, 63, .16), rgba(11, 28, 63, .05) 45%, rgba(11, 28, 63, .12)) !important; }
+html[data-tema="claro"] .int-logo { padding: 14px 16px; border-radius: 14px; height: auto; justify-content: flex-start;
+  background: linear-gradient(135deg, #0d1b3d, #081026); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+html[data-tema="claro"] .int-desc { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .int-estado { color: #15803d !important; }
+html[data-tema="claro"] .int-base { stroke: rgba(11, 28, 63, .16) !important; }
+html[data-tema="claro"] .int-marca b { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .int-marca small { color: #1d4ed8 !important; }
+html[data-tema="claro"] .integraciones::before {
+  background:
+    radial-gradient(520px 320px at 50% 55%, rgba(37, 99, 235, .1), transparent 70%),
+    linear-gradient(rgba(11, 28, 63, .05) 1px, transparent 1px) 0 0 / 46px 46px,
+    linear-gradient(90deg, rgba(11, 28, 63, .05) 1px, transparent 1px) 0 0 / 46px 46px !important;
+}
+
+/* En números */
+html[data-tema="claro"] .en-banda { border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .en-caja { border-color: var(--c-linea) !important; background: linear-gradient(180deg, rgba(255, 255, 255, .7), transparent) !important; }
+html[data-tema="claro"] .en-cifra { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .en-etq { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .en-nota { color: var(--c-tinta-3) !important; }
+html[data-tema="claro"] .en-banderas img { border-color: var(--c-fondo-3) !important; }
+html[data-tema="claro"] .en-horas i { background: rgba(11, 28, 63, .12); }
+
+/* Reseñas */
+html[data-tema="claro"] .car-card { background: var(--c-tarjeta) !important; border-color: var(--c-linea) !important; box-shadow: 0 22px 50px rgba(11, 28, 63, .12) !important; }
+html[data-tema="claro"] .car-texto { color: #33456b !important; }
+html[data-tema="claro"] .car-quien b { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .car-quien small { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .car-autor { border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .car-flecha { background: #fff !important; border-color: var(--c-linea) !important; color: var(--c-tinta) !important; box-shadow: var(--c-sombra) !important; }
+html[data-tema="claro"] .car-punto { background: rgba(11, 28, 63, .16) !important; }
+html[data-tema="claro"] .car-resumen b { color: var(--c-tinta) !important; }
+
+/* Pie */
+html[data-tema="claro"] .pie { background: linear-gradient(180deg, var(--c-fondo-3), #dfe7f4) !important; border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .pie-marca b { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .pie-lema, html[data-tema="claro"] .pie-enlace { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .pie-enlace:hover { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .pie-col h4 { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .pie-pais { background: #fff !important; border-color: var(--c-linea) !important; color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .pie-franja { border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .pie-rotulo { color: var(--c-tinta-3) !important; }
+html[data-tema="claro"] .pie-logo { filter: grayscale(1) brightness(.45) !important; opacity: .65; }
+html[data-tema="claro"] .pie-logo:hover { filter: none !important; opacity: 1; }
+html[data-tema="claro"] .pie-logo span { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .pie-chile { background: #fff !important; border-color: var(--c-linea) !important; }
+html[data-tema="claro"] .pie-chile b { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .pie-chile small, html[data-tema="claro"] .pie-copy { color: var(--c-tinta-3) !important; }
+html[data-tema="claro"] .pie-arriba { background: #fff !important; border-color: var(--c-linea) !important; color: var(--c-tinta) !important; }
+html[data-tema="claro"] .pie::before { background: linear-gradient(90deg, transparent, rgba(37, 99, 235, .5), rgba(99, 102, 241, .5), transparent) !important; }
+
+/* Avisos flotantes */
+html[data-tema="claro"] .aviso-notif { background: rgba(255, 255, 255, .97) !important; border-color: rgba(37, 99, 235, .3) !important; box-shadow: 0 18px 50px rgba(11, 28, 63, .18) !important; }
+html[data-tema="claro"] .aviso-notif b { color: var(--c-tinta) !important; }
+html[data-tema="claro"] .aviso-notif p { color: var(--c-tinta-2) !important; }
+html[data-tema="claro"] .aviso-notif .secundario { color: var(--c-tinta-2) !important; border-color: var(--c-linea) !important; }

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
+import InterruptorTema from '../components/InterruptorTema'
 
 // Lo que queda debajo del inicio se descarga aparte, justo después de pintar
 // la primera pantalla. Así el globo, el título y la calculadora no esperan a
@@ -328,6 +329,7 @@ export default function Home() {
             </div>
           </div>
           <div className="nav-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <InterruptorTema />
             {/* Con scrollIntoView y no con el ancla sola: el ancla salta de
                 golpe y deja el título debajo del header flotante. */}
             <a href="#como" className="nav-text-link" onClick={e => { e.preventDefault(); document.getElementById('como')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>Pasos</a>
