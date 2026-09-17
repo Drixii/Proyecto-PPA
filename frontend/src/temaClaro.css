@@ -46,7 +46,7 @@ html[data-tema="claro"] .nav-inner.nav-bajado {
 html[data-tema="claro"] .nav-inner p { color: var(--c-tinta) !important; }
 html[data-tema="claro"] .nav-text-link { color: var(--c-tinta-2) !important; }
 html[data-tema="claro"] .nav-text-link:hover { color: var(--c-tinta) !important; }
-html[data-tema="claro"] .nav-auth button:first-child {
+html[data-tema="claro"] .btn-sesion {
   background: rgba(11, 28, 63, .04) !important;
   border-color: var(--c-linea) !important;
   color: var(--c-tinta) !important;
@@ -216,3 +216,36 @@ html[data-tema="claro"] .aviso-notif { background: rgba(255, 255, 255, .97) !imp
 html[data-tema="claro"] .aviso-notif b { color: var(--c-tinta) !important; }
 html[data-tema="claro"] .aviso-notif p { color: var(--c-tinta-2) !important; }
 html[data-tema="claro"] .aviso-notif .secundario { color: var(--c-tinta-2) !important; border-color: var(--c-linea) !important; }
+
+/* Ajustes finos del modo claro ─────────────────────────────────────────── */
+
+/* Las palabras destacadas de los títulos: el degradado celeste del modo
+   oscuro se pierde sobre blanco, así que va en azules de marca. */
+html[data-tema="claro"] .hero-text h1 span,
+html[data-tema="claro"] .qs-titulo span,
+html[data-tema="claro"] .int-titulo span,
+html[data-tema="claro"] .en-num-titulo span {
+  background: linear-gradient(120deg, #1d4ed8, #4f46e5 55%, #7c3aed) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+html[data-tema="claro"] .car-titulo span {
+  background: linear-gradient(120deg, #d97706, #b45309) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+
+/* El cero de «Sorpresas» es verde: que no se lo lleve la regla de arriba. */
+html[data-tema="claro"] .qs-cero { color: #15803d !important; }
+
+/* Chip «Sin letra chica»: el ámbar claro sobre blanco no se leía. */
+html[data-tema="claro"] .en-chip { color: #92400e !important; background: rgba(245, 158, 11, .12) !important; border-color: rgba(245, 158, 11, .35) !important; }
+
+/* Logotipos del pie: son blancos, así que en claro se pintan oscuros. */
+html[data-tema="claro"] .pie-logo { filter: grayscale(1) brightness(.25) !important; opacity: .8; }
+html[data-tema="claro"] .pie-logo:hover { filter: none !important; }
+html[data-tema="claro"] .pie-logo-haulmer img,
+html[data-tema="claro"] .pie-logo-koywe img { filter: brightness(.2) !important; }
+html[data-tema="claro"] .pie-logo:hover img { filter: none !important; }

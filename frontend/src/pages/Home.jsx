@@ -342,7 +342,7 @@ export default function Home() {
               </button>
             ) : (
               <>
-                <button onClick={() => navigate('/login')} style={{ padding: '9px 16px', fontSize: 14, fontWeight: 500, color: '#dbe6ff', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 12, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>Iniciar sesión</button>
+                <button onClick={() => navigate('/login')} className="btn-sesion" style={{ padding: '9px 16px', fontSize: 14, fontWeight: 500, color: '#dbe6ff', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 12, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>Iniciar sesión</button>
                 <button onClick={() => navigate('/login', { state: { mode: 'register' } })} style={{ padding: '9px 18px', fontSize: 14, fontWeight: 600, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8)', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 8px 24px rgba(56,189,248,.4)', whiteSpace: 'nowrap', flexShrink: 0 }}>Crear cuenta →</button>
               </>
             )}
