@@ -15,7 +15,9 @@ Hay dos formas de fondo:
   y el pie dibujados tambien aqui.
 """
 import io
+import json
 import os
+import uuid
 from datetime import datetime
 
 import httpx
@@ -533,16 +535,87 @@ def clave_imagen(iso2: str, sentido: str = "envia") -> str:
     return base if sentido != "recibe" else f"{base}-recibe"
 
 
+# ── Fondos por pais ──────────────────────────────────────────────────────────
+#
+# Un pais tiene VARIOS fondos, cada uno con su titulo, y uno activo: el normal
+# de todo el ano, el de fiestas patrias, el de Halloween, el del Cyber. Se
+# cambia el activo el dia que toca y se vuelve al normal despues, sin volver a
+# subir nada.
+#
+# El indice vive en un JSON junto a las imagenes y no en la base a proposito:
+# las imagenes ya estan en disco, y tener la mitad del dato en un sitio y la
+# otra mitad en otro es como se acaba con carpetas llenas de huerfanos.
+
+def _carpeta(clave: str) -> str:
+    return os.path.join(FONDOS_SUBIDOS, clave)
+
+
+def _ruta_indice(clave: str) -> str:
+    return os.path.join(_carpeta(clave), "fondos.json")
+
+
+def _leer_indice(clave: str) -> list:
+    try:
+        with open(_ruta_indice(clave), encoding="utf-8") as f:
+            datos = json.load(f)
+        return datos if isinstance(datos, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _escribir_indice(clave: str, lista: list) -> None:
+    os.makedirs(_carpeta(clave), exist_ok=True)
+    with open(_ruta_indice(clave), "w", encoding="utf-8") as f:
+        json.dump(lista, f, ensure_ascii=False)
+
+
+def _adoptar_antigua(clave: str) -> list:
+    """Rescata la imagen suelta de cuando solo habia una por pais.
+
+    Antes se guardaba como <clave>.jpg y sin titulo. Se mueve dentro de la
+    carpeta como una categoria mas para no perderla ni obligar a resubirla.
+    """
+    suelta = os.path.join(FONDOS_SUBIDOS, f"{clave}.jpg")
+    if not os.path.exists(suelta):
+        return []
+    ident = uuid.uuid4().hex[:12]
+    os.makedirs(_carpeta(clave), exist_ok=True)
+    os.replace(suelta, os.path.join(_carpeta(clave), f"{ident}.jpg"))
+    lista = [{"id": ident, "titulo": "Principal", "activa": True}]
+    _escribir_indice(clave, lista)
+    return lista
+
+
+def listar_fondos(iso2: str, sentido: str = "envia") -> list:
+    """Los fondos de ese cartel: id, titulo y cual esta activo."""
+    if not iso2:
+        return []
+    clave = clave_imagen(iso2, sentido)
+    lista = _leer_indice(clave) or _adoptar_antigua(clave)
+    # Solo los que siguen teniendo su fichero: un borrado a mano en el servidor
+    # no debe dejar una categoria que al usarla no pinta nada.
+    return [f for f in lista if os.path.exists(_ruta_de(clave, f["id"]))]
+
+
+def _ruta_de(clave: str, ident: str) -> str:
+    return os.path.join(_carpeta(clave), f"{ident}.jpg")
+
+
 def ruta_fondo(iso2: str, sentido: str = "envia") -> str | None:
-    """Fichero de la imagen subida para ese cartel, si la hay."""
+    """Fichero del fondo ACTIVO, si lo hay."""
     if not iso2:
         return None
-    ruta = os.path.join(FONDOS_SUBIDOS, f"{clave_imagen(iso2, sentido)}.jpg")
-    return ruta if os.path.exists(ruta) else None
+    clave = clave_imagen(iso2, sentido)
+    fondos = listar_fondos(iso2, sentido)
+    if not fondos:
+        return None
+    activo = next((f for f in fondos if f.get("activa")), fondos[0])
+    return _ruta_de(clave, activo["id"])
 
 
-def guardar_fondo(iso2: str, datos: bytes, sentido: str = "envia") -> None:
-    """Deja la imagen subida lista para usarse: recortada a 560x827.
+def guardar_fondo(iso2: str, datos: bytes, sentido: str = "envia",
+                  titulo: str = "", fondo_id: str = None) -> dict:
+    """Guarda una imagen, recortada a 560x827, como categoria de ese pais.
 
     Se guarda ya recortada para que lo que se ve en el editor y lo que sale al
     generar sean exactamente lo mismo.
@@ -551,16 +624,82 @@ def guardar_fondo(iso2: str, datos: bytes, sentido: str = "envia") -> None:
     # Las fotos de movil vienen giradas con una etiqueta EXIF en vez de con los
     # pixeles girados; sin esto se guardan tumbadas.
     img = ImageOps.exif_transpose(img).convert("RGB")
-    os.makedirs(FONDOS_SUBIDOS, exist_ok=True)
-    nombre = f"{clave_imagen(iso2, sentido)}.jpg"
-    _cubre(img, ANCHO, ALTO).save(os.path.join(FONDOS_SUBIDOS, nombre), "JPEG", quality=92)
+
+    clave = clave_imagen(iso2, sentido)
+    lista = listar_fondos(iso2, sentido)
+    os.makedirs(_carpeta(clave), exist_ok=True)
+
+    ident = fondo_id or uuid.uuid4().hex[:12]
+    _cubre(img, ANCHO, ALTO).save(_ruta_de(clave, ident), "JPEG", quality=92)
+
+    entrada = next((f for f in lista if f["id"] == ident), None)
+    if entrada:
+        if titulo:
+            entrada["titulo"] = titulo[:60]
+    else:
+        entrada = {
+            "id": ident,
+            "titulo": (titulo or "Sin titulo")[:60],
+            # La primera queda activa sola: subir una y que no se use no tiene
+            # ninguna gracia.
+            "activa": not lista,
+        }
+        lista.append(entrada)
+
+    _escribir_indice(clave, lista)
+    return entrada
 
 
-def borrar_fondo(iso2: str, sentido: str = "envia") -> bool:
-    ruta = ruta_fondo(iso2, sentido)
-    if not ruta:
+def activar_fondo(iso2: str, ident: str, sentido: str = "envia") -> bool:
+    """Deja activo uno y apaga los demas: solo puede haber un fondo en uso."""
+    clave = clave_imagen(iso2, sentido)
+    lista = listar_fondos(iso2, sentido)
+    if not any(f["id"] == ident for f in lista):
         return False
-    os.remove(ruta)
+    for f in lista:
+        f["activa"] = f["id"] == ident
+    _escribir_indice(clave, lista)
+    return True
+
+
+def renombrar_fondo(iso2: str, ident: str, titulo: str, sentido: str = "envia") -> bool:
+    clave = clave_imagen(iso2, sentido)
+    lista = listar_fondos(iso2, sentido)
+    entrada = next((f for f in lista if f["id"] == ident), None)
+    if not entrada:
+        return False
+    entrada["titulo"] = (titulo or "Sin titulo")[:60]
+    _escribir_indice(clave, lista)
+    return True
+
+
+def borrar_fondo(iso2: str, sentido: str = "envia", ident: str = None) -> bool:
+    """Borra un fondo. Sin `ident`, borra el activo.
+
+    Si el borrado era el que estaba en uso, pasa a estarlo el primero que
+    quede: el cartel no puede quedarse sin fondo por un borrado.
+    """
+    clave = clave_imagen(iso2, sentido)
+    lista = listar_fondos(iso2, sentido)
+    if not lista:
+        return False
+
+    if not ident:
+        ident = next((f["id"] for f in lista if f.get("activa")), lista[0]["id"])
+
+    entrada = next((f for f in lista if f["id"] == ident), None)
+    if not entrada:
+        return False
+
+    try:
+        os.remove(_ruta_de(clave, ident))
+    except OSError:
+        pass
+
+    quedan = [f for f in lista if f["id"] != ident]
+    if entrada.get("activa") and quedan:
+        quedan[0]["activa"] = True
+    _escribir_indice(clave, quedan)
     return True
 
 

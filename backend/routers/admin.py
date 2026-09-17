@@ -2230,7 +2230,7 @@ def editor_de_imagen(
     arrastra en pantalla sea lo mismo que va a salir.
     """
     from services.imagen_tasas import (
-        ANCHO_FINAL, ALTO_FINAL, abrevia, formatea_tasa, ruta_fondo,
+        ANCHO_FINAL, ALTO_FINAL, abrevia, formatea_tasa, listar_fondos, ruta_fondo,
     )
 
     pais = _pais_del_cartel(db, from_country, sentido)
@@ -2239,6 +2239,9 @@ def editor_de_imagen(
         "data": {
             "lienzo": {"ancho": ANCHO_FINAL, "alto": ALTO_FINAL},
             "tiene_fondo": bool(ruta_fondo(pais.iso2 or "", sentido)),
+            # Las imágenes guardadas de este país: la normal, la de fiestas
+            # patrias, la del Cyber... y cuál está en uso.
+            "fondos": listar_fondos(pais.iso2 or "", sentido),
             "posicion": _posicion_guardada(db, pais.iso2, sentido),
             # El orden completo, no solo el de estas filas: quien reordene
             # desde aqui tiene que devolver la lista entera o los paises que no
@@ -2263,6 +2266,7 @@ def editor_de_imagen(
 def ver_fondo(
     from_country: str,
     sentido: str = "envia",
+    fondo_id: Optional[str] = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
@@ -2271,7 +2275,12 @@ def ver_fondo(
     from services.imagen_tasas import ruta_fondo
 
     pais = _pais_del_cartel(db, from_country, sentido)
-    ruta = ruta_fondo(pais.iso2 or "", sentido)
+    if fondo_id:
+        from services.imagen_tasas import _carpeta, clave_imagen
+        ruta = os.path.join(_carpeta(clave_imagen(pais.iso2 or "", sentido)), f"{fondo_id}.jpg")
+        ruta = ruta if os.path.exists(ruta) else None
+    else:
+        ruta = ruta_fondo(pais.iso2 or "", sentido)
     if not ruta:
         raise HTTPException(status_code=404, detail="Ese listado no tiene imagen de fondo")
     return FileResponse(ruta, media_type="image/jpeg")
@@ -2283,6 +2292,8 @@ def ver_fondo(
 def subir_fondo(
     from_country: str,
     sentido: str = "envia",
+    titulo: str = "",
+    fondo_id: Optional[str] = None,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
@@ -2306,17 +2317,18 @@ def subir_fondo(
     if len(datos) > 12 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="La imagen pesa más de 12 MB")
     try:
-        guardar_fondo(pais.iso2, datos, sentido)
+        entrada = guardar_fondo(pais.iso2, datos, sentido, titulo or "", fondo_id)
     except Exception:
         raise HTTPException(status_code=400, detail="No se pudo leer esa imagen")
 
-    return {"success": True, "data": None, "message": f"Fondo de {pais.name} guardado"}
+    return {"success": True, "data": entrada, "message": f"Imagen de {pais.name} guardada"}
 
 
 @router.delete("/commissions/imagen/fondo", response_model=dict)
 def quitar_fondo(
     from_country: str,
     sentido: str = "envia",
+    fondo_id: Optional[str] = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
@@ -2324,9 +2336,42 @@ def quitar_fondo(
     from services.imagen_tasas import borrar_fondo
 
     pais = _pais_del_cartel(db, from_country, sentido)
-    if not borrar_fondo(pais.iso2 or "", sentido):
-        raise HTTPException(status_code=404, detail="Ese listado no tiene imagen de fondo")
-    return {"success": True, "data": None, "message": f"Fondo de {pais.name} eliminado"}
+    if not borrar_fondo(pais.iso2 or "", sentido, fondo_id):
+        raise HTTPException(status_code=404, detail="Esa imagen no existe")
+    return {"success": True, "data": None, "message": "Imagen eliminada"}
+
+
+class FondoIn(BaseModel):
+    titulo: Optional[str] = None
+
+
+@router.patch("/commissions/imagen/fondo/{fondo_id}", response_model=dict)
+def usar_fondo(
+    fondo_id: str,
+    from_country: str,
+    data: FondoIn = None,
+    sentido: str = "envia",
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Pone esa imagen como la que se usa, o le cambia el título.
+
+    Con `titulo` renombra; sin él, la activa. Solo puede haber una activa: es
+    la que sale en el cartel hasta que se elija otra.
+    """
+    from services.imagen_tasas import activar_fondo, renombrar_fondo
+
+    pais = _pais_del_cartel(db, from_country, sentido)
+    iso2 = pais.iso2 or ""
+
+    if data and data.titulo is not None:
+        if not renombrar_fondo(iso2, fondo_id, data.titulo, sentido):
+            raise HTTPException(status_code=404, detail="Esa imagen no existe")
+        return {"success": True, "data": None, "message": "Nombre guardado"}
+
+    if not activar_fondo(iso2, fondo_id, sentido):
+        raise HTTPException(status_code=404, detail="Esa imagen no existe")
+    return {"success": True, "data": None, "message": "Ahora se usa esta imagen"}
 
 
 class PosicionTablaIn(BaseModel):
