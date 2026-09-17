@@ -106,7 +106,10 @@ export default function Home() {
   useEffect(() => {
     const onScroll = () => {
       const nav = document.getElementById('main-nav')
-      if (nav) nav.style.background = window.scrollY > 20 ? 'rgba(7,14,35,.88)' : 'rgba(7,14,35,.45)'
+      // El fondo va en la píldora, no en la barra: la barra es transparente
+      // para que el header se vea flotando con aire alrededor.
+      const pildora = nav?.querySelector('.nav-inner')
+      if (pildora) pildora.classList.toggle('nav-bajado', window.scrollY > 20)
       // Mobile: si vuelve al inicio del todo, re-bloquear hero
       if (window.innerWidth <= 768 && document.body.style.position !== 'fixed' && window.scrollY < 10) {
         window.scrollTo(0, 0)
@@ -203,8 +206,18 @@ export default function Home() {
         @keyframes marquee  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
         @keyframes hintBob  { 0%,100%{transform:translateX(-50%) translateY(0);opacity:.55} 50%{transform:translateX(-50%) translateY(7px);opacity:1} }
         *{box-sizing:border-box;}
-        #main-nav{transition:background .35s ease;}
-        .nav-inner{max-width:1200px;margin:0 auto;padding:0 24px;height:70px;display:flex;align-items:center;justify-content:space-between;}
+        /* Header flotante: una píldora separada de los bordes, con vidrio y
+           borde fino, en vez de una barra pegada arriba de lado a lado. La
+           barra sigue midiendo 70px (10 de aire + 60 de píldora) porque el
+           globo y el hero del móvil están calculados con esa altura. */
+        #main-nav{height:70px;box-sizing:border-box;padding:10px 16px 0;pointer-events:none;}
+        .nav-inner{pointer-events:auto;max-width:1200px;height:60px;box-sizing:border-box;margin:0 auto;padding:0 12px 0 18px;
+          display:flex;align-items:center;justify-content:space-between;border-radius:18px;
+          background:rgba(7,14,35,.55);border:1px solid rgba(255,255,255,.09);
+          backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+          box-shadow:0 10px 30px rgba(0,4,20,.35),inset 0 1px 0 rgba(255,255,255,.06);
+          transition:background .35s ease,box-shadow .35s ease,border-color .35s ease;}
+        .nav-inner.nav-bajado{background:rgba(7,14,35,.86);border-color:rgba(255,255,255,.11);box-shadow:0 14px 40px rgba(0,4,20,.55),inset 0 1px 0 rgba(255,255,255,.06);}
         .nav-text-link{padding:9px 14px;font-size:14px;font-weight:500;color:#b9c8ec;text-decoration:none;border-radius:10px;}
         .hero-text{flex:1 1 340px;min-width:0;}
         /* Entrada del hero: cada pieza aparece un poco despues que la anterior,
@@ -242,7 +255,8 @@ export default function Home() {
           .section-pad{padding:72px 20px;}
         }
         @media(max-width:768px){
-          .nav-inner{padding:0 14px;}
+          #main-nav{padding:8px 10px 0;}
+          .nav-inner{height:62px;padding:0 8px 0 12px;border-radius:16px;}
           .hero-text{flex:none;width:100%;}
           .hero-calc{flex:none;width:100%;max-width:460px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:0!important;animation:none;}
           /* En un iPhone la pista quedaba 170px por debajo del borde de la
@@ -287,7 +301,7 @@ export default function Home() {
         }
         @media(max-width:480px){
           .section-pad{padding:44px 12px;}
-          .nav-inner{padding:0 10px;}
+          .nav-inner{padding:0 6px 0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
           #hero-content>div{padding:10px 12px calc(22px + env(safe-area-inset-bottom, 0px))!important;gap:8px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
@@ -302,7 +316,7 @@ export default function Home() {
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'radial-gradient(900px 600px at 75% -5%,rgba(37,99,235,.30),transparent 60%),radial-gradient(700px 700px at 6% 18%,rgba(56,189,248,.14),transparent 60%)' }} />
 
       {/* ── NAVBAR ── */}
-      <nav id="main-nav" className={navListo ? undefined : 'nav-entra'} style={{ position: 'sticky', top: 0, zIndex: 60, background: 'rgba(7,14,35,.45)', backdropFilter: 'blur(22px) saturate(170%)', WebkitBackdropFilter: 'blur(22px) saturate(170%)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+      <nav id="main-nav" className={navListo ? undefined : 'nav-entra'} style={{ position: 'sticky', top: 0, zIndex: 60 }}>
         <div className="nav-inner">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src={logoSrc} alt="Ksa Global" style={{ width: 40, height: 40, objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(56,189,248,.5))' }} />
