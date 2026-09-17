@@ -530,8 +530,12 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Mobile floating PWA install button */}
-      <div className="mob-fab" style={{ position:'fixed', bottom:24, right:20, zIndex:200, flexDirection:'column', alignItems:'flex-end', gap:8 }}>
+      {/* Mobile floating PWA install button.
+          Redondo y sin texto: con «Instalar app» escrito ocupaba la mitad del
+          ancho justo a la altura de «Toca aquí para más información», y tapaba
+          el final de la frase. El texto de cómo instalar sigue saliendo al
+          tocarlo. */}
+      <div className="mob-fab" style={{ position:'fixed', bottom:'calc(16px + env(safe-area-inset-bottom, 0px))', right:14, zIndex:200, flexDirection:'column', alignItems:'flex-end', gap:8 }}>
         {showHint && (
           <div style={{ background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.3)', borderRadius:14, padding:'12px 14px', maxWidth:220, fontSize:13, color:'#aebfe2', lineHeight:1.5, boxShadow:'0 8px 24px rgba(0,0,0,.5)' }}>
             {isIOS
@@ -542,19 +546,20 @@ export default function Home() {
         )}
         <button
           onClick={handleInstall}
+          aria-label="Instalar app"
+          title="Instalar app"
           style={{
-            display:'flex', alignItems:'center', gap:6,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            width:42, height:42, padding:0,
             background:'linear-gradient(135deg,#1d4ed8,#38bdf8)',
-            color:'#fff', border:'none', borderRadius:40,
-            padding:'8px 13px', fontSize:12, fontWeight:700,
+            color:'#fff', border:'none', borderRadius:'50%',
             boxShadow:'0 6px 18px rgba(56,189,248,.45)',
-            cursor:'pointer', whiteSpace:'nowrap',
+            cursor:'pointer',
           }}
         >
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <svg width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          Instalar app
         </button>
       </div>
 
