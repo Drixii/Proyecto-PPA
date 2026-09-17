@@ -13,7 +13,7 @@ export default defineConfig({
       // la web se recargaba sola en mitad de lo que estuvieras haciendo. Ahora
       // la version nueva espera y AvisoActualizacion ofrece tomarla.
       registerType: 'prompt',
-      includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'icons/app-192.png', 'icons/app-512.png', 'icons/app-maskable-192.png', 'icons/app-maskable-512.png'],
       workbox: {
         // El service worker lo genera workbox en cada build, así que el
         // manejador de notificaciones no puede vivir dentro: se importa.
@@ -31,10 +31,16 @@ export default defineConfig({
         background_color: '#060d22',
         theme_color: '#38bdf8',
         orientation: 'portrait',
+        // Iconos con fondo de la marca y el logo con aire alrededor. Los de
+        // antes eran el logo transparente llenando todo el cuadro, y el mismo
+        // archivo servía de «maskable»: Android lo recortaba al círculo y el
+        // globo quedaba cortado y pegado a los bordes. Nombres nuevos a
+        // propósito, para que los teléfonos no sigan con los viejos en caché.
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/app-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/app-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/app-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/app-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),
