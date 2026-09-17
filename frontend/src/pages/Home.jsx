@@ -313,6 +313,15 @@ export default function Home() {
           #hero-content>div{padding:10px 12px calc(22px + env(safe-area-inset-bottom, 0px))!important;gap:8px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
+          /* En pantallas de 390px el interruptor no cabía y se montaba encima
+             del nombre. Se achica la marca: sin "EVOLUTION" y con el logo más
+             chico hay sitio para los tres controles en una sola fila. */
+          .nav-inner>div:first-child{gap:8px!important;min-width:0;}
+          .nav-logo{width:32px!important;height:32px!important;}
+          .nav-marca p:first-child{font-size:13px!important;}
+          .nav-marca p:last-child{display:none!important;}
+          .nav-auth .interruptor-tema{width:30px!important;height:30px!important;}
+          .nav-auth .interruptor-tema svg{width:14px!important;height:14px!important;}
           .mob-fab{display:flex!important;}
         }
         @media(min-width:769px){ .mob-fab{display:none!important;}.mob-scroll-hint{display:none!important;} }
@@ -326,8 +335,8 @@ export default function Home() {
       <nav id="main-nav" className={navListo ? undefined : 'nav-entra'} style={{ position: 'sticky', top: 0, zIndex: 60 }}>
         <div className="nav-inner">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src={logoSrc} alt="Ksa Global" style={{ width: 40, height: 40, objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(56,189,248,.5))' }} />
-            <div>
+            <img src={logoSrc} alt="Ksa Global" className="nav-logo" style={{ width: 40, height: 40, objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(56,189,248,.5))' }} />
+            <div className="nav-marca">
               <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#fff' }}>Ksa Global</p>
               <p style={{ margin: 0, fontSize: '9.5px', fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', background: 'linear-gradient(90deg,#38bdf8,#818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>EVOLUTION</p>
             </div>
