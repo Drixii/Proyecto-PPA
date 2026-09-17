@@ -152,149 +152,146 @@ function RewardModal({ reward, clpRate, onClose, onSaved }) {
 }
 
 // ── Section: Config ───────────────────────────────────────
+//
+// Dos preguntas y nada más: qué parte de lo que envía el cliente le vuelve en
+// puntos, y cuánto vale un punto. Antes se configuraba un porcentaje de la
+// comisión, y para saber cuánto se regalaba en un envío había que pasar de
+// cabeza por la comisión de ese país. Ahora la calculadora de abajo responde
+// lo que de verdad se pregunta: «si me mandan diez millones, ¿cuánto le doy?».
+const miles = n => Math.round(n || 0).toLocaleString('es-CL')
+const soloNumero = v => v.replace(/[^\d]/g, '')
+const decimal = v => v.replace(/[^\d.,]/g, '').replace(',', '.')
+
 function ConfigSection() {
   const qc = useQueryClient()
-  const [feePct, setFeePct] = useState('')
-  const [clpRate, setClpRate] = useState('')
+  const [pct, setPct] = useState('')
+  const [valorPunto, setValorPunto] = useState('')
+  const [envio, setEnvio] = useState('10000000')
   const [saved, setSaved] = useState(false)
-  // Calculadora de ejemplo. Solo vive en la pantalla, no se guarda nada.
-  const [envio, setEnvio] = useState('500000')
-  const [comisionPct, setComisionPct] = useState('4')
+  const [error, setError] = useState('')
 
   const { data } = useQuery({
     queryKey: ['points-config'],
     queryFn: () => api.get('/admin/points/config').then(r => r.data.data),
   })
   useEffect(() => {
-    if (data) { setFeePct(String(data.points_fee_pct)); setClpRate(String(data.points_clp_rate)) }
+    if (!data) return
+    setPct(data.points_envio_pct != null ? String(data.points_envio_pct) : '')
+    setValorPunto(String(data.points_clp_rate))
   }, [data])
 
   const mut = useMutation({
     mutationFn: (body) => api.put('/admin/points/config', body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['points-config'] }); setSaved(true); setTimeout(() => setSaved(false), 3000) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['points-config'] })
+      setError(''); setSaved(true); setTimeout(() => setSaved(false), 3000)
+    },
+    onError: (e) => setError(e.response?.data?.detail || 'No se pudo guardar'),
   })
 
-  const handleSubmit = (e) => {
+  const p = parseFloat(pct)
+  const v = parseFloat(valorPunto)
+  const monto = parseFloat(envio) || 0
+  const valido = !isNaN(p) && p >= 0 && !isNaN(v) && v > 0
+
+  // Igual que el servidor: primero los pesos que se devuelven, después los
+  // puntos enteros que caben, y lo que valen esos puntos de verdad.
+  const pesos = valido ? monto * p / 100 : 0
+  const pts = valido ? Math.floor(pesos / v) : 0
+  const vale = pts * (valido ? v : 0)
+
+  const guardar = (e) => {
     e.preventDefault()
-    const fp = parseFloat(feePct), cr = parseFloat(clpRate)
-    if (isNaN(fp) || isNaN(cr)) return
-    mut.mutate({ points_fee_pct: fp, points_clp_rate: cr })
+    if (!valido) { setError('Revisa los dos números'); return }
+    mut.mutate({ points_envio_pct: p, points_clp_rate: v })
   }
+
+  const caja = 'w-full rounded-xl px-4 py-3 text-2xl font-bold focus:outline-none'
 
   return (
     <div className="max-w-xl space-y-4">
       <div className="rounded-2xl p-6" style={GLASS}>
-        <h3 className="font-semibold mb-1" style={{ color: '#eaf2ff' }}>Conversión de puntos</h3>
-        <p className="text-xs mb-5" style={{ color: '#8aa0cc' }}>Define cómo se calculan los puntos y su valor en pesos</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <h3 className="font-semibold mb-1" style={{ color: '#eaf2ff' }}>Puntos</h3>
+        <p className="text-xs mb-5" style={{ color: '#8aa0cc' }}>
+          Cuánto le devuelves al cliente por cada envío
+        </p>
+
+        {data && data.points_envio_pct == null && (
+          <p className="text-xs mb-4 px-3 py-2.5 rounded-lg leading-relaxed"
+            style={{ color: '#fcd34d', background: 'rgba(253,211,77,.06)', border: '1px solid rgba(253,211,77,.18)' }}>
+            Ahora se calcula sobre la comisión ({data.points_fee_pct}% de ella). Al guardar
+            pasa a calcularse sobre lo que envía el cliente.
+          </p>
+        )}
+
+        <form onSubmit={guardar} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>% del fee → puntos</label>
+              <label className="text-xs font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>
+                Le devuelves
+              </label>
               <div className="relative">
-                <input type="number" value={feePct} onChange={e => setFeePct(e.target.value)} min="0" max="100" step="0.01"
-                  className="w-full rounded-xl px-4 py-3 pr-10 text-2xl font-bold focus:outline-none"
-                  style={inputStyle} />
+                <input value={pct} onChange={e => setPct(decimal(e.target.value))}
+                  inputMode="decimal" placeholder="0.05"
+                  className={`${caja} pr-10`} style={inputStyle} />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold" style={{ color: '#8aa0cc' }}>%</span>
               </div>
-              <p className="text-[11px] mt-1" style={{ color: '#8aa0cc' }}>Del fee cobrado al cliente</p>
+              <p className="text-[11px] mt-1" style={{ color: '#8aa0cc' }}>de lo que envía</p>
             </div>
+
             <div>
-              <label className="text-xs font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>1 punto = ? CLP</label>
+              <label className="text-xs font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>
+                1 punto vale
+              </label>
               <div className="relative">
-                <input type="number" value={clpRate} onChange={e => setClpRate(e.target.value)} min="1" step="1"
-                  className="w-full rounded-xl px-4 py-3 pr-14 text-2xl font-bold focus:outline-none"
-                  style={inputStyle} />
+                <input value={valorPunto} onChange={e => setValorPunto(soloNumero(e.target.value))}
+                  inputMode="numeric" placeholder="10"
+                  className={`${caja} pr-14`} style={inputStyle} />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#8aa0cc' }}>CLP</span>
               </div>
-              <p className="text-[11px] mt-1" style={{ color: '#8aa0cc' }}>Valor del punto al canjear</p>
+              <p className="text-[11px] mt-1" style={{ color: '#8aa0cc' }}>al canjear</p>
             </div>
           </div>
 
-          {/* La cuenta entera, de principio a fin. Antes se entraba por la
-              comisión, que es un número que nadie tiene en la cabeza: uno
-              sabe lo que envía el cliente y lo que cobra por ello. Ahora se
-              escriben esos dos y la comisión sale sola, con los puntos
-              detrás. */}
-          {feePct && clpRate && !isNaN(parseFloat(feePct)) && !isNaN(parseFloat(clpRate)) && (() => {
-            const monto = parseFloat(envio) || 0
-            const pct = parseFloat(comisionPct) || 0
-            const comision = monto * pct / 100
-            // Truncado, como el servidor: int(fee * pct / 100).
-            const pts = Math.floor(comision * parseFloat(feePct) / 100)
-            const vale = pts * parseFloat(clpRate)
-            const miles = n => Math.round(n).toLocaleString('es-CL')
+          {/* La calculadora: se escribe un envío y sale lo que se lleva. */}
+          <div className="rounded-xl px-4 py-4" style={{ background: 'rgba(253,211,77,.06)', border: '1px solid rgba(253,211,77,.15)' }}>
+            <label className="text-xs font-semibold block mb-1.5" style={{ color: '#fcd34d' }}>
+              Si el cliente envía
+            </label>
+            <div className="relative">
+              <input value={envio ? miles(envio) : ''}
+                onChange={e => setEnvio(soloNumero(e.target.value))}
+                inputMode="numeric"
+                className="w-full rounded-lg pl-7 pr-14 py-2.5 text-xl font-bold focus:outline-none"
+                style={inputStyle} />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold" style={{ color: '#8aa0cc' }}>$</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold" style={{ color: '#8aa0cc' }}>CLP</span>
+            </div>
 
-            return (
-              <div className="rounded-xl px-4 py-4" style={{ background: 'rgba(253,211,77,.06)', border: '1px solid rgba(253,211,77,.15)' }}>
-                <p className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'rgba(253,211,77,.75)' }}>
-                  Ejemplo
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>
-                      El cliente envía
-                    </label>
-                    <div className="relative">
-                      <input
-                        value={envio}
-                        onChange={e => setEnvio(e.target.value.replace(/[^\d]/g, ''))}
-                        inputMode="numeric"
-                        className="w-full rounded-lg pl-6 pr-12 py-2 text-base font-bold focus:outline-none"
-                        style={inputStyle} />
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#8aa0cc' }}>$</span>
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold" style={{ color: '#8aa0cc' }}>CLP</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold block mb-1.5" style={{ color: '#aebfe2' }}>
-                      Tu comisión
-                    </label>
-                    <div className="relative">
-                      <input
-                        value={comisionPct}
-                        onChange={e => setComisionPct(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'))}
-                        inputMode="decimal"
-                        className="w-full rounded-lg pl-3 pr-8 py-2 text-base font-bold focus:outline-none"
-                        style={inputStyle} />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#8aa0cc' }}>%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Las tres cifras que interesan, una al lado de otra. */}
-                <div className="grid grid-cols-3 gap-2 mt-3.5">
-                  <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,.2)' }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Comisión</p>
-                    <p className="text-base font-bold mt-0.5" style={{ color: '#eaf2ff' }}>${miles(comision)}</p>
-                  </div>
-                  <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,.2)' }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Gana</p>
-                    <p className="text-base font-bold mt-0.5" style={{ color: '#fcd34d' }}>{pts.toLocaleString('es-CL')} pts</p>
-                  </div>
-                  <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,.2)' }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Al canjear</p>
-                    <p className="text-base font-bold mt-0.5" style={{ color: '#4ade80' }}>${miles(vale)}</p>
-                  </div>
-                </div>
-
-                {comision > 0 && (
-                  <p className="text-xs mt-3 leading-relaxed" style={{ color: 'rgba(253,211,77,.8)' }}>
-                    Le devuelves el <strong>{(vale / comision * 100).toFixed(1)}%</strong> de la comisión
-                    {monto > 0 && <> — el <strong>{(vale / monto * 100).toFixed(2)}%</strong> de lo que envió</>}.
-                    {pts === 0 && ' Con este envío no alcanza ni para un punto.'}
-                  </p>
-                )}
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <div className="rounded-lg px-3 py-3" style={{ background: 'rgba(0,0,0,.2)' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Gana</p>
+                <p className="text-xl font-bold mt-0.5" style={{ color: '#fcd34d' }}>{pts.toLocaleString('es-CL')} pts</p>
               </div>
-            )
-          })()}
+              <div className="rounded-lg px-3 py-3" style={{ background: 'rgba(0,0,0,.2)' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#8aa0cc' }}>Que valen</p>
+                <p className="text-xl font-bold mt-0.5" style={{ color: '#4ade80' }}>${miles(vale)} CLP</p>
+              </div>
+            </div>
+
+            {valido && monto > 0 && pts === 0 && (
+              <p className="text-xs mt-2.5" style={{ color: 'rgba(253,211,77,.8)' }}>
+                Con este envío no alcanza para un punto (le tocarían ${miles(pesos)} y el punto vale ${miles(v)}).
+              </p>
+            )}
+          </div>
 
           <button type="submit" disabled={mut.isPending}
             className="text-sm font-semibold px-6 py-2.5 rounded-xl text-white disabled:opacity-60 transition-all"
             style={{ background: 'linear-gradient(135deg,#ca8a04,#eab308)' }}>
-            {mut.isPending ? 'Guardando...' : 'Guardar configuración'}
+            {mut.isPending ? 'Guardando...' : 'Guardar'}
           </button>
+          {error && <p className="text-sm" style={{ color: '#f87171' }}>{error}</p>}
           {saved && (
             <div className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl" style={{ background: 'rgba(74,222,128,.08)', border: '1px solid rgba(74,222,128,.2)', color: '#4ade80' }}>
               <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>

@@ -139,6 +139,7 @@ def redeem_reward(body: RedeemRequest, db: Session = Depends(get_db), current_us
 
 class PointsConfigUpdate(BaseModel):
     points_fee_pct: Optional[float] = None
+    points_envio_pct: Optional[float] = None
     points_clp_rate: Optional[float] = None
 
 
@@ -156,8 +157,11 @@ class ManualAwardRequest(BaseModel):
 
 @router.get("/admin/points/config")
 def get_points_config(db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
+    fila = db.query(Setting).filter(Setting.key == "points_envio_pct").first()
     return {"data": {
         "points_fee_pct": float(_setting(db, "points_fee_pct")),
+        # None mientras siga la regla vieja, sobre la comisión.
+        "points_envio_pct": float(fila.value) if fila and fila.value else None,
         "points_clp_rate": float(_setting(db, "points_clp_rate")),
     }}
 
@@ -166,7 +170,13 @@ def get_points_config(db: Session = Depends(get_db), _: User = Depends(require_s
 def update_points_config(body: PointsConfigUpdate, db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
     if body.points_fee_pct is not None:
         _set_setting(db, "points_fee_pct", str(body.points_fee_pct))
+    if body.points_envio_pct is not None:
+        if body.points_envio_pct < 0 or body.points_envio_pct > 100:
+            raise HTTPException(status_code=400, detail="El porcentaje va de 0 a 100")
+        _set_setting(db, "points_envio_pct", str(body.points_envio_pct))
     if body.points_clp_rate is not None:
+        if body.points_clp_rate <= 0:
+            raise HTTPException(status_code=400, detail="El punto tiene que valer algo")
         _set_setting(db, "points_clp_rate", str(body.points_clp_rate))
     db.commit()
     return {"data": {"ok": True}}

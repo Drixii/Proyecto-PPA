@@ -283,12 +283,47 @@ def create_order(db: Session, data, client: User) -> Order:
 STATUS_FLOW = ["pendiente_pago", "en_aprobacion", "en_proceso", "completado"]
 
 
+def puntos_de_envio(db: Session, monto: float, moneda: str, fee: float = 0) -> int:
+    """Puntos que gana un envío.
+
+    La regla es «devuelves un X% de lo que envía el cliente, en puntos que
+    valen Y pesos cada uno». Antes era un porcentaje de la comisión, y nadie
+    sabía decir de memoria cuánto regalaba en un envío de diez millones: había
+    que pasar por la comisión, que depende del país, para llegar a la cifra.
+
+    Los montos van a pesos antes de repartir, porque el punto vale en pesos:
+    un envío de 1.000 USD no puede dar los mismos puntos que uno de 1.000 CLP.
+
+    Mientras no se guarde la regla nueva se sigue con la vieja, sobre la
+    comisión. Sin eso, el día del despliegue el 1% que había configurado
+    pasaría a ser el 1% del envío entero, cien veces más de lo que se daba.
+    """
+    def leer(clave):
+        fila = db.query(Setting).filter(Setting.key == clave).first()
+        try:
+            return float(fila.value) if fila and fila.value not in (None, "") else None
+        except ValueError:
+            return None
+
+    pct_envio = leer("points_envio_pct")
+    if pct_envio is None:
+        pct_fee = leer("points_fee_pct")
+        return int((fee or 0) * (10.0 if pct_fee is None else pct_fee) / 100)
+
+    valor_punto = leer("points_clp_rate") or 0
+    if valor_punto <= 0:
+        return 0
+    tasa = get_rate(db, moneda, "CLP")
+    if not tasa:
+        return 0
+    pesos = (monto or 0) * tasa * pct_envio / 100
+    return int(pesos / valor_punto)
+
+
 def _award_points(db: Session, order: Order):
     try:
         from models.point import PointAccount, PointTransaction
-        fee_pct_row = db.query(Setting).filter(Setting.key == "points_fee_pct").first()
-        fee_pct = float(fee_pct_row.value) if fee_pct_row else 10.0
-        points = int(order.fee * fee_pct / 100)
+        points = puntos_de_envio(db, order.amount_sent, order.currency_from, order.fee)
         if points <= 0:
             return
         acc = db.query(PointAccount).filter(PointAccount.user_id == order.client_id).first()

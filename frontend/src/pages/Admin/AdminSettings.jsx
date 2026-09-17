@@ -1295,6 +1295,44 @@ function reparteFilas(n, alto) {
   return { altoFila, desde: Math.max(sobra, 0) / 2 }
 }
 
+// Miniatura de una categoría de fondo.
+//
+// La imagen va detrás de sesión, así que no vale un <img src> directo: se
+// pide con el token y se convierte en URL de objeto. Se guarda por pais,
+// sentido, id y revisión, para que la cabecera y el panel abierto no la pidan
+// dos veces y para que al reemplazarla se vuelva a pedir.
+const cacheMiniaturas = new Map()
+
+function MiniaturaFondo({ pais, sentido, fondoId, revision, ancho = 30, redondeo = 6 }) {
+  const [src, setSrc] = useState(null)
+
+  useEffect(() => {
+    if (!pais || !fondoId) return
+    const clave = `${pais}|${sentido}|${fondoId}|${revision}`
+    let vivo = true
+    if (!cacheMiniaturas.has(clave)) {
+      cacheMiniaturas.set(clave, api.get('/admin/commissions/imagen/fondo', {
+        params: { from_country: pais, sentido, fondo_id: fondoId }, responseType: 'blob',
+      }).then(r => URL.createObjectURL(r.data)).catch(() => {
+        cacheMiniaturas.delete(clave)
+        return null
+      }))
+    }
+    cacheMiniaturas.get(clave).then(u => { if (vivo) setSrc(u) })
+    return () => { vivo = false }
+  }, [pais, sentido, fondoId, revision])
+
+  return (
+    <div style={{
+      width: ancho, aspectRatio: '560 / 827', borderRadius: redondeo, flexShrink: 0,
+      overflow: 'hidden', background: 'rgba(255,255,255,.06)',
+      border: '1px solid rgba(255,255,255,.1)',
+    }}>
+      {src && <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+    </div>
+  )
+}
+
 function ImagenDeTasas({ origen, sentido = 'envia' }) {
   const [url, setUrl] = useState(null)
   const [fondoUrl, setFondoUrl] = useState(null)
@@ -1608,6 +1646,8 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
               border: `1px solid ${f.activa ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.08)'}`,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px' }}>
+                <MiniaturaFondo pais={origen?.name} sentido={sentido} fondoId={f.id} revision={revision} />
+
                 {/* El nombre se edita en el sitio; no hace falta abrir nada. */}
                 <input
                   value={titulos[f.id] ?? f.titulo}
@@ -1654,6 +1694,9 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
 
               {desplegada && (
                 <div style={{ padding: '0 11px 11px' }}>
+                  <div style={{ display: 'flex', gap: 11, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                  <MiniaturaFondo pais={origen?.name} sentido={sentido} fondoId={f.id}
+                    revision={revision} ancho={120} redondeo={10} />
                   <div
                     onClick={() => elegirArchivo(f.id)}
                     onDragOver={alArrastrarEncima(f.id)}
@@ -1661,6 +1704,7 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
                     onDragLeave={alSalir}
                     onDrop={alSoltarArchivo(f.id)}
                     style={{
+                      flex: '1 1 180px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
                       padding: '18px 16px', borderRadius: 12, textAlign: 'center',
                       cursor: subiendo ? 'wait' : 'pointer',
                       border: `1.5px dashed ${encima === f.id ? 'rgba(56,189,248,.85)' : 'rgba(255,255,255,.16)'}`,
@@ -1675,6 +1719,7 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
                     <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>
                       Arrástrala hasta aquí o haz clic para elegirla. JPG, PNG, WEBP o HEIC.
                     </p>
+                  </div>
                   </div>
 
                   <button onClick={() => quitarFondo(f.id)}
