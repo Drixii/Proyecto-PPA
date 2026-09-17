@@ -63,7 +63,7 @@ export default function CintaDeTasas() {
   const segundos = Math.max(filas.length * 4, 20)
 
   return (
-    <div style={{
+    <div className="cinta-tasas" style={{
       width: '100%', overflow: 'hidden', marginBottom: 12,
       borderRadius: 14, padding: '9px 0',
       background: 'rgba(8,16,44,.75)',

@@ -261,24 +261,26 @@ export default function Home() {
           .nav-inner{padding:0 14px;}
           .hero-text{flex:none;width:100%;}
           .hero-calc{flex:none;width:100%;max-width:460px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:0!important;animation:none;}
-          .mob-scroll-hint{display:flex!important;flex-direction:column;align-items:center;gap:6px;cursor:pointer;margin-top:18px!important;margin-bottom:300px!important;opacity:.7;transition:opacity .2s;}
+          /* En un iPhone la pista quedaba 170px por debajo del borde de la
+             pantalla y nadie sabía que había algo más abajo. Todo lo de este
+             bloque está medido para que quepa en 664px de alto visible. */
+          .mob-scroll-hint{display:flex!important;flex-direction:row;align-items:center;gap:5px;cursor:pointer;margin-top:10px!important;margin-bottom:300px!important;opacity:.85;transition:opacity .2s;}
           .mob-scroll-hint:active{opacity:1;}
           .hero-hide-mobile{display:none;}
           .section-pad{padding:56px 16px;}
           .hero-buttons{gap:8px;margin-bottom:14px;flex-wrap:nowrap!important;}
-          .hero-buttons button,.hero-buttons a{font-size:13px!important;padding:12px 14px!important;border-radius:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
+          .hero-buttons button,.hero-buttons a{font-size:13px!important;padding:10px 14px!important;border-radius:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           /* Globe structure mobile */
           #pin-wrap{height:320vh!important;}
           #sticky{position:sticky!important;top:70px!important;height:calc(100svh - 70px)!important;overflow:visible!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
-          #hero-content>div{flex-direction:column;align-items:center;padding:12px 16px 180px;gap:14px!important;}
-          .hero-text>div:first-child{padding:3px 10px!important;margin-bottom:6px!important;gap:6px!important;}
-          .hero-text>div:first-child>span:last-child{font-size:10px!important;}
-          .hero-text>div:first-child>span:first-child{width:6px!important;height:6px!important;}
-          .hero-text h1{margin-bottom:10px!important;}
+          #hero-content>div{flex-direction:column;align-items:center;padding:10px 16px 180px;gap:8px!important;}
+          .hero-text>div:first-child{display:none!important;}
+          .hero-text h1{font-size:32px!important;margin-bottom:8px!important;}
           .hero-buttons{margin-bottom:0!important;}
-          .hero-calc{margin-top:20px!important;}
+          .hero-calc{margin-top:4px!important;}
+          .cinta-tasas{padding:6px 0!important;margin-bottom:8px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{padding-top:5vh!important;}
           .features-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important;}
@@ -298,7 +300,7 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
-          #hero-content>div{padding:12px 12px 180px!important;gap:10px!important;}
+          #hero-content>div{padding:10px 12px 180px!important;gap:8px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}

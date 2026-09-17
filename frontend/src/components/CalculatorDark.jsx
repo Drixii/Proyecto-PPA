@@ -151,16 +151,20 @@ export default function CalculatorDark({ onSend }) {
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
         @media(max-width:768px){
-          .calc-dark-wrap .calc-card{padding:16px!important;background:rgba(6,14,40,0.07)!important;border:1px solid rgba(255,255,255,.07)!important;backdrop-filter:blur(8px) saturate(120%)!important;}
-          .calc-dark-wrap .calc-header{margin-bottom:12px!important;}
+          .calc-dark-wrap .calc-card{padding:11px 13px!important;border-radius:22px!important;background:rgba(6,14,40,0.07)!important;border:1px solid rgba(255,255,255,.07)!important;backdrop-filter:blur(8px) saturate(120%)!important;}
+          .calc-dark-wrap .calc-header{margin-bottom:8px!important;}
           .calc-dark-wrap .calc-title{font-size:15px!important;}
           .calc-dark-wrap .calc-badge{padding:4px 8px!important;font-size:10px!important;}
-          .calc-dark-wrap .calc-panel{padding:11px 12px!important;}
-          .calc-dark-wrap .calc-amount{font-size:24px!important;}
-          .calc-dark-wrap .calc-received{font-size:24px!important;}
-          .calc-dark-wrap .calc-divider{padding:10px 4px!important;}
-          .calc-dark-wrap .calc-cta{padding:12px!important;font-size:14px!important;margin-top:12px!important;}
-          .calc-dark-wrap .calc-footer{margin-top:8px!important;font-size:11px!important;}
+          .calc-dark-wrap .calc-panel{padding:8px 11px!important;border-radius:14px!important;}
+          .calc-dark-wrap .calc-panel>p:first-child{margin-bottom:4px!important;font-size:10px!important;}
+          .calc-dark-wrap .calc-panel button{padding:6px 10px!important;}
+          .calc-dark-wrap .calc-amount{font-size:22px!important;}
+          .calc-dark-wrap .calc-received{font-size:22px!important;}
+          .calc-dark-wrap .calc-divider{padding:6px 4px!important;}
+          .calc-dark-wrap .calc-cta{padding:11px!important;font-size:14px!important;margin-top:9px!important;border-radius:13px!important;}
+          /* Fuera en móvil: son 22px que dejaban la pista de abajo fuera de
+             la pantalla, y el candado no cambia lo que se decide aquí. */
+          .calc-dark-wrap .calc-footer{display:none!important;}
         }
       `}</style>
 
