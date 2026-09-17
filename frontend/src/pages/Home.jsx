@@ -248,12 +248,10 @@ export default function Home() {
         .stats-row{display:flex;flex-wrap:wrap;gap:28px;}
         .hero-hide-mobile{}
         .section-pad{padding:96px 24px;}
-        /* Secciones claras. Gris azulado, no blanco: el blanco puro al lado de
-           las secciones azul noche deslumbra y parece de otra web. Por lo mismo
-           las tarjetas son blanco roto. El texto va en el azul oscuro de la
-           marca y no en negro. */
-        .seccion-clara{background:linear-gradient(180deg,#e4edfc,#d6e4fa);color:#33486e;}
-        .seccion-clara h2,.seccion-clara h3,.seccion-clara b,.seccion-clara strong{color:#0b1c3f;}
+        /* Dos azules que se alternan de «En 4 pasos» hacia abajo. El fondo de
+           la web es #050f25; estas secciones van un punto más claras, lo justo
+           para que se note dónde empieza cada una sin cambiar de paleta. */
+        .seccion-alt{background:#0c1b3a;}
         @media(max-width:1024px){
           .nav-text-link{display:none;}
           .section-pad{padding:72px 20px;}
@@ -422,13 +420,11 @@ export default function Home() {
       <Suspense fallback={null}><HuinchaTasas /></Suspense>
 
       {/* ── CÓMO FUNCIONA ── */}
-      {/* Fondo claro: de aquí abajo las secciones alternan claro y oscuro
-          para que la página no se lea como un solo bloque azul. */}
-      <section id="como" className="section-pad seccion-clara" style={{ position: 'relative', zIndex: 2, scrollMarginTop: 80 }}>
+      <section id="como" className="section-pad seccion-alt" style={{ position: 'relative', zIndex: 2, scrollMarginTop: 80 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div data-reveal="" style={{ textAlign: 'center', marginBottom: 56, ...R0 }}>
-            <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#2563eb' }}>Simple y transparente</p>
-            <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#0b1c3f' }}>En 4 pasos, tu dinero llega</h2>
+            <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Simple y transparente</p>
+            <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>En 4 pasos, tu dinero llega</h2>
           </div>
           {/* A la izquierda, un teléfono que hace un envío de principio a fin;
               a la derecha, los pasos apareciendo a su ritmo. Tocar uno lleva

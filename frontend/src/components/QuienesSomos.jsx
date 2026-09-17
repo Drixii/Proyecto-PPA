@@ -121,7 +121,7 @@ export default function QuienesSomos() {
   return (
     <section id="nosotros" ref={ref} className={`section-pad qs${visto ? ' visto' : ''}`}>
       <style>{`
-        .qs{position:relative;z-index:2;overflow:hidden;background:rgba(4,10,30,.82);scroll-margin-top:80px;}
+        .qs{position:relative;z-index:2;overflow:hidden;background:#050f25;scroll-margin-top:80px;}
         .qs::before{content:'';position:absolute;right:-10%;top:10%;width:720px;height:720px;border-radius:50%;pointer-events:none;
           background:radial-gradient(closest-side,rgba(99,102,241,.14),transparent);}
         .qs::after{content:'';position:absolute;left:-15%;bottom:-20%;width:620px;height:620px;border-radius:50%;pointer-events:none;

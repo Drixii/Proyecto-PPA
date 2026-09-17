@@ -112,34 +112,34 @@ export default function Resenas() {
   const actual = items[activa]
 
   return (
-    <section className="section-pad car seccion-clara" ref={zona}>
+    <section className="section-pad car" ref={zona}>
       <style>{`
-        .car{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#e4edfc,#d6e4fa);}
+        .car{position:relative;z-index:2;overflow:hidden;background:#0c1b3a;}
         .car::before{content:'';position:absolute;left:50%;top:38%;width:1000px;height:560px;transform:translate(-50%,-50%);pointer-events:none;
           background:radial-gradient(closest-side,rgba(251,191,36,.09),transparent 70%);}
         .car-cab{position:relative;text-align:center;max-width:720px;margin:0 auto 34px;}
-        .car-rotulo{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;}
-        .car-titulo{margin:0;font-size:clamp(30px,3.8vw,48px);font-weight:700;letter-spacing:-.03em;color:#0b1c3f;line-height:1.1;}
-        .car-titulo span{background:linear-gradient(120deg,#f59e0b,#d97706 50%,#b45309);-webkit-background-clip:text;background-clip:text;color:transparent;}
-        .car-resumen{display:inline-flex;align-items:center;gap:12px;margin-top:18px;font-size:14px;color:#5b6f96;flex-wrap:wrap;justify-content:center;}
-        .car-resumen b{font-family:'JetBrains Mono',monospace;font-size:26px;color:#0b1c3f;}
+        .car-rotulo{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#38bdf8;}
+        .car-titulo{margin:0;font-size:clamp(30px,3.8vw,48px);font-weight:700;letter-spacing:-.03em;color:#fff;line-height:1.1;}
+        .car-titulo span{background:linear-gradient(120deg,#fde68a,#fbbf24 50%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;}
+        .car-resumen{display:inline-flex;align-items:center;gap:12px;margin-top:18px;font-size:14px;color:#9fb0d4;flex-wrap:wrap;justify-content:center;}
+        .car-resumen b{font-family:'JetBrains Mono',monospace;font-size:26px;color:#fff;}
 
         /* Escenario en perspectiva */
         .car-escena{position:relative;height:360px;perspective:1600px;touch-action:pan-y;user-select:none;cursor:grab;}
         .car-escena:active{cursor:grabbing;}
         .car-card{position:absolute;left:50%;top:50%;width:min(560px,86vw);box-sizing:border-box;margin:0;
           padding:34px 34px 28px;border-radius:26px;
-          background:#f5f9ff;
-          border:1px solid rgba(11,28,63,.14);box-shadow:0 22px 50px rgba(11,28,63,.12);
+          background:linear-gradient(160deg,rgba(20,32,70,.96),rgba(8,14,36,.98));
+          border:1px solid rgba(255,255,255,.09);box-shadow:0 30px 70px rgba(0,4,20,.55);
           transition:transform .8s cubic-bezier(.16,1,.3,1),opacity .6s ease,filter .6s ease;
           will-change:transform;}
-        .car-card.frente{border-color:rgba(245,158,11,.45);
-          box-shadow:0 34px 80px rgba(11,28,63,.18),0 0 0 1px rgba(245,158,11,.25);}
+        .car-card.frente{border-color:rgba(251,191,36,.28);
+          box-shadow:0 40px 90px rgba(0,4,20,.6),0 0 0 1px rgba(251,191,36,.12),inset 0 1px 0 rgba(255,255,255,.08);}
         .car-card::before{content:'”';position:absolute;right:26px;bottom:-62px;font:700 150px/1 Georgia,serif;
-          background:linear-gradient(180deg,rgba(245,158,11,.4),rgba(245,158,11,0));-webkit-background-clip:text;background-clip:text;color:transparent;pointer-events:none;}
+          background:linear-gradient(180deg,rgba(251,191,36,.35),rgba(251,191,36,0));-webkit-background-clip:text;background-clip:text;color:transparent;pointer-events:none;}
         /* Brillo que cruza la tarjeta cuando pasa al frente */
         .car-card::after{content:'';position:absolute;inset:0;border-radius:26px;pointer-events:none;opacity:0;
-          background:linear-gradient(115deg,transparent 30%,rgba(37,99,235,.1) 48%,transparent 66%);background-size:250% 100%;}
+          background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.07) 48%,transparent 66%);background-size:250% 100%;}
         .car-card.frente::after{animation:carBrillo 1.4s .25s ease both;}
 
         .car-cabeza{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
@@ -149,30 +149,30 @@ export default function Resenas() {
         .car-card.frente .car-estrellas svg:nth-child(3){animation-delay:.12s}
         .car-card.frente .car-estrellas svg:nth-child(4){animation-delay:.18s}
         .car-card.frente .car-estrellas svg:nth-child(5){animation-delay:.24s}
-        .car-fecha{margin-left:auto;font-size:12px;color:#8fa0c0;}
-        .car-texto{margin:0 0 24px;font-size:clamp(16px,1.6vw,19px);line-height:1.6;color:#33415c;
+        .car-fecha{margin-left:auto;font-size:12px;color:#64748b;}
+        .car-texto{margin:0 0 24px;font-size:clamp(16px,1.6vw,19px);line-height:1.6;color:#e2e9fb;
           display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;min-height:3.2em;}
-        .car-autor{display:flex;align-items:center;gap:13px;padding-top:18px;border-top:1px solid rgba(11,28,63,.08);}
+        .car-autor{display:flex;align-items:center;gap:13px;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);}
         .car-avatar{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;font-size:18px;font-weight:800;color:#fff;
           box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 6px 18px rgba(0,0,0,.35);}
         .car-quien{min-width:0;display:flex;flex-direction:column;gap:4px;}
-        .car-quien b{font-size:15.5px;color:#0b1c3f;}
+        .car-quien b{font-size:15.5px;color:#fff;}
         .car-ok{display:inline-grid;place-items:center;width:16px;height:16px;margin-left:5px;border-radius:50%;font-size:10px;color:#052e16;background:#4ade80;vertical-align:1px;}
-        .car-quien small{display:flex;align-items:center;gap:5px;font-size:12.5px;color:#5b6f96;white-space:nowrap;}
+        .car-quien small{display:flex;align-items:center;gap:5px;font-size:12.5px;color:#8fa3cc;white-space:nowrap;}
         .car-quien small img{width:15px;height:15px;border-radius:50%;object-fit:cover;}
         .car-quien small i{font-style:normal;color:#475569;}
 
         /* Controles */
         .car-controles{position:relative;display:flex;align-items:center;justify-content:center;gap:18px;margin-top:26px;}
-        .car-flecha{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#0b1c3f;
-          background:#f5f9ff;border:1px solid rgba(11,28,63,.12);box-shadow:0 6px 18px rgba(11,28,63,.1);
+        .car-flecha{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#dbe6ff;
+          background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
           backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:background .25s,border-color .25s,transform .25s;}
-        .car-flecha:hover{background:#fff7e6;border-color:rgba(245,158,11,.5);transform:scale(1.06);}
+        .car-flecha:hover{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.45);transform:scale(1.06);}
         .car-puntos{display:flex;align-items:center;gap:7px;}
         .car-punto{position:relative;width:8px;height:8px;padding:0;border:none;border-radius:999px;cursor:pointer;overflow:hidden;
-          background:rgba(11,28,63,.18);transition:width .45s cubic-bezier(.16,1,.3,1),background .3s;}
-        .car-punto.activo{width:38px;background:rgba(11,28,63,.12);}
-        .car-punto.activo span{position:absolute;inset:0;transform-origin:left;background:linear-gradient(90deg,#f59e0b,#d97706);
+          background:rgba(255,255,255,.18);transition:width .45s cubic-bezier(.16,1,.3,1),background .3s;}
+        .car-punto.activo{width:38px;background:rgba(255,255,255,.14);}
+        .car-punto.activo span{position:absolute;inset:0;transform-origin:left;background:linear-gradient(90deg,#fde68a,#fbbf24);
           animation:carBarra ${INTERVALO_MS}ms linear both;}
         
         @keyframes carBrillo{from{opacity:1;background-position:120% 0}to{opacity:0;background-position:-40% 0}}

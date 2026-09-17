@@ -63,7 +63,7 @@ export default function EnNumeros() {
   return (
     <section ref={ref} className={`en-num${visto ? ' visto' : ''}`}>
       <style>{`
-        .en-num{position:relative;z-index:2;background:rgba(3,8,24,.92);padding:88px 0 0;overflow:hidden;}
+        .en-num{position:relative;z-index:2;background:#050f25;padding:88px 0 0;overflow:hidden;}
         .en-num-cab{text-align:center;padding:0 24px;margin-bottom:52px;}
         .en-num-cab>*{opacity:0;transform:translateY(20px);filter:blur(6px);transition:opacity .8s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1),filter .8s;}
         .en-num.visto .en-num-cab>*{opacity:1;transform:none;filter:none;}
