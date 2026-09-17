@@ -1333,11 +1333,45 @@ function MiniaturaFondo({ pais, sentido, fondoId, revision, ancho = 30, redondeo
   )
 }
 
+// Barra de subida de una imagen.
+//
+// Dos tramos: mientras viaja el fichero, el porcentaje real que da el
+// navegador; cuando llega al 100% todavía falta que el servidor la recorte y
+// la guarde, y una barra llena y quieta ahí parece colgada. Por eso ese tramo
+// late y dice que se está procesando.
+function BarraSubida({ progreso }) {
+  const procesando = progreso >= 100
+  return (
+    <div style={{ width: '100%' }}>
+      <style>{`@keyframes barra-late { 0%,100% { opacity: 1 } 50% { opacity: .45 } }`}</style>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8' }}>
+          {procesando ? 'Procesando imagen…' : 'Subiendo…'}
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#c3d2ee', fontVariantNumeric: 'tabular-nums' }}>
+          {Math.min(100, Math.round(progreso || 0))}%
+        </span>
+      </div>
+      <div style={{ height: 7, borderRadius: 999, overflow: 'hidden', background: 'rgba(255,255,255,.1)' }}>
+        <div style={{
+          height: '100%', borderRadius: 999,
+          width: `${Math.min(100, progreso || 0)}%`,
+          background: 'linear-gradient(90deg,#38bdf8,#22c55e)',
+          transition: 'width .2s ease-out',
+          animation: procesando ? 'barra-late 1s ease-in-out infinite' : 'none',
+        }} />
+      </div>
+    </div>
+  )
+}
+
 function ImagenDeTasas({ origen, sentido = 'envia' }) {
   const [url, setUrl] = useState(null)
   const [fondoUrl, setFondoUrl] = useState(null)
   const [cargando, setCargando] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
+  // Porcentaje de la subida en curso, de 0 a 100.
+  const [progreso, setProgreso] = useState(0)
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
   const [pos, setPos] = useState(null)
@@ -1349,6 +1383,8 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
   // una existente, o 'nueva' para crear otra.
   const [abierta, setAbierta] = useState(null)
   const [destino, setDestino] = useState(null)
+  // Título de la categoría nueva, que se pide antes que la foto.
+  const [tituloNuevo, setTituloNuevo] = useState('')
   // Sube al cambiar cualquier imagen. Sin esto, reemplazar la foto de la
   // categoría que ya estaba en uso no cambiaba ninguna dependencia y la vista
   // previa seguía enseñando la anterior.
@@ -1429,6 +1465,10 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
   const subirFondo = async (archivo, aDonde = null) => {
     if (!archivo || !origen) return
     const cual = aDonde || destino || 'nueva'
+    // También al soltar un fichero, que no pasa por elegirArchivo: sin esto la
+    // barra no sabía en qué categoría pintarse.
+    setDestino(cual)
+    setProgreso(0)
     setSubiendo(true); setError('')
     const cuerpo = new FormData()
     cuerpo.append('file', archivo)
@@ -1437,12 +1477,15 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
       await api.post('/admin/commissions/imagen/fondo', cuerpo, {
         params: {
           from_country: origen.name, sentido,
-          titulo: existente?.titulo || 'Nueva categoría',
+          titulo: existente?.titulo || tituloNuevo.trim() || 'Nueva categoría',
           ...(existente ? { fondo_id: existente.id } : {}),
         },
+        onUploadProgress: (ev) => {
+          if (ev.total) setProgreso(ev.loaded / ev.total * 100)
+        },
       })
-      setDestino(null)
       setRevision(n => n + 1)
+      if (!existente) setTituloNuevo('')
       const antes = (editor?.fondos || []).map(f => f.id)
       const datos = await refetch()
       // La recién creada se abre sola: se acaba de subir para ponerle nombre.
@@ -1454,6 +1497,8 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
       setError(await detalleDeError(e, 'No se pudo subir la imagen'))
     } finally {
       setSubiendo(false)
+      setDestino(null)
+      setProgreso(0)
       if (ficheroRef.current) ficheroRef.current.value = ''
     }
   }
@@ -1591,6 +1636,43 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
     else setError('Eso no es una imagen')
   }
 
+  // Zona para soltar o elegir la imagen de una categoría. `bloqueada` es para
+  // la nueva mientras no tiene título: se pide primero el nombre.
+  const zonaSubida = (cual, texto, bloqueada = false) => {
+    const aqui = encima === cual
+    const subiendoAqui = subiendo && destino === cual
+    return (
+      <div
+        onClick={() => { if (!bloqueada) elegirArchivo(cual) }}
+        onDragOver={bloqueada ? e => e.preventDefault() : alArrastrarEncima(cual)}
+        onDragEnter={bloqueada ? e => e.preventDefault() : alArrastrarEncima(cual)}
+        onDragLeave={alSalir}
+        onDrop={bloqueada ? e => e.preventDefault() : alSoltarArchivo(cual)}
+        style={{
+          flex: '1 1 180px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          padding: '18px 16px', borderRadius: 12, textAlign: 'center',
+          cursor: bloqueada ? 'not-allowed' : (subiendo ? 'wait' : 'pointer'),
+          opacity: bloqueada ? .45 : 1,
+          border: `1.5px dashed ${aqui ? 'rgba(56,189,248,.85)' : 'rgba(255,255,255,.16)'}`,
+          background: aqui ? 'rgba(56,189,248,.10)' : 'rgba(6,13,40,.45)',
+          transition: 'background .15s, border-color .15s, opacity .15s',
+        }}>
+        {subiendoAqui ? (
+          <BarraSubida progreso={progreso} />
+        ) : (
+          <>
+            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: aqui ? '#38bdf8' : '#c3d2ee' }}>
+              {bloqueada ? 'Primero ponle un título' : (aqui ? 'Suelta la imagen aquí' : texto)}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>
+              Arrástrala hasta aquí o haz clic para elegirla. JPG, PNG, WEBP o HEIC.
+            </p>
+          </>
+        )}
+      </div>
+    )
+  }
+
   // Abrir el explorador de archivos apuntando a una categoría.
   const elegirArchivo = (cual) => {
     if (subiendo) return
@@ -1628,10 +1710,13 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
       </div>
 
       {/* Las imágenes guardadas de este país: la de todo el año, la de fiestas
-          patrias, la del Cyber. Cada una es un acordeón: se abre la que toca,
-          se le cambia la foto ahí dentro y se enciende su interruptor. La
-          zona de arrastre estaba suelta debajo y no se sabía a qué categoría
-          iba a parar lo que se soltaba; ahora está dentro de cada una. */}
+          patrias, la del Cyber. Cada una es un acordeón: se pulsa la fila, se
+          abre, y dentro está todo —el título, la foto y el borrado—. El
+          interruptor queda fuera para encender una sin tener que abrirla.
+
+          Una categoría nueva también se abre como acordeón y pide primero el
+          título: antes se iba directa al explorador de archivos y quedaba
+          llamada «Nueva categoría» hasta que alguien se acordara de cambiarlo. */}
       <div style={{ marginBottom: 16, maxWidth: 420 }}>
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.05em' }}>
           Imágenes de {origen?.name || ''}
@@ -1645,26 +1730,27 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
               background: f.activa ? 'rgba(56,189,248,.07)' : 'rgba(4,10,30,.5)',
               border: `1px solid ${f.activa ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.08)'}`,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px' }}>
+              <div
+                role="button"
+                onClick={() => setAbierta(a => (a === f.id ? null : f.id))}
+                style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', cursor: 'pointer' }}>
                 <MiniaturaFondo pais={origen?.name} sentido={sentido} fondoId={f.id} revision={revision} />
 
-                {/* El nombre se edita en el sitio; no hace falta abrir nada. */}
-                <input
-                  value={titulos[f.id] ?? f.titulo}
-                  onChange={e => setTitulos(t => ({ ...t, [f.id]: e.target.value }))}
-                  onBlur={() => renombrar(f)}
-                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                  placeholder="Sin nombre"
-                  style={{
-                    flex: 1, minWidth: 0, background: 'transparent', border: 'none',
-                    outline: 'none', fontSize: 12.5, fontWeight: 700, color: '#eaf2ff', padding: 0,
-                  }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#eaf2ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f.titulo || 'Sin nombre'}
+                  </p>
+                  {f.activa && (
+                    <p style={{ margin: '1px 0 0', fontSize: 10.5, fontWeight: 700, color: '#38bdf8' }}>En uso</p>
+                  )}
+                </div>
 
                 {/* Interruptor: enciende esta y apaga las demás. Apagar la
                     encendida no tiene sentido —el cartel se quedaría sin
-                    fondo— así que solo se puede encender otra. */}
+                    fondo— así que solo se puede encender otra. No abre el
+                    acordeón: es la acción de un toque. */}
                 <button
-                  onClick={() => { if (!f.activa) usar.mutate(f.id) }}
+                  onClick={e => { e.stopPropagation(); if (!f.activa) usar.mutate(f.id) }}
                   title={f.activa ? 'En uso' : 'Usar esta imagen'}
                   disabled={f.activa || usar.isPending}
                   style={{
@@ -1681,45 +1767,33 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
                   }} />
                 </button>
 
-                <button onClick={() => setAbierta(a => (a === f.id ? null : f.id))}
-                  title={desplegada ? 'Cerrar' : 'Abrir'}
-                  style={{
-                    padding: '3px 7px', borderRadius: 8, fontSize: 13, flexShrink: 0,
-                    cursor: 'pointer', background: 'transparent',
-                    border: '1px solid rgba(255,255,255,.12)', color: '#8aa0cc',
-                  }}>
+                <span style={{ fontSize: 14, color: '#8aa0cc', flexShrink: 0, width: 12, textAlign: 'center' }}>
                   {desplegada ? '⌄' : '›'}
-                </button>
+                </span>
               </div>
 
               {desplegada && (
-                <div style={{ padding: '0 11px 11px' }}>
-                  <div style={{ display: 'flex', gap: 11, alignItems: 'stretch', flexWrap: 'wrap' }}>
-                  <MiniaturaFondo pais={origen?.name} sentido={sentido} fondoId={f.id}
-                    revision={revision} ancho={120} redondeo={10} />
-                  <div
-                    onClick={() => elegirArchivo(f.id)}
-                    onDragOver={alArrastrarEncima(f.id)}
-                    onDragEnter={alArrastrarEncima(f.id)}
-                    onDragLeave={alSalir}
-                    onDrop={alSoltarArchivo(f.id)}
+                <div style={{ padding: '2px 11px 11px' }}>
+                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
+                    Título
+                  </label>
+                  <input
+                    value={titulos[f.id] ?? f.titulo}
+                    onChange={e => setTitulos(t => ({ ...t, [f.id]: e.target.value }))}
+                    onBlur={() => renombrar(f)}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                    placeholder="Normal, Fiestas Patrias, Cyber…"
                     style={{
-                      flex: '1 1 180px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                      padding: '18px 16px', borderRadius: 12, textAlign: 'center',
-                      cursor: subiendo ? 'wait' : 'pointer',
-                      border: `1.5px dashed ${encima === f.id ? 'rgba(56,189,248,.85)' : 'rgba(255,255,255,.16)'}`,
-                      background: encima === f.id ? 'rgba(56,189,248,.10)' : 'rgba(6,13,40,.45)',
-                      transition: 'background .15s, border-color .15s',
-                    }}>
-                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: encima === f.id ? '#38bdf8' : '#c3d2ee' }}>
-                      {subiendo && destino === f.id
-                        ? 'Subiendo…'
-                        : (encima === f.id ? 'Suelta la imagen aquí' : 'Cambiar imagen de fondo')}
-                    </p>
-                    <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>
-                      Arrástrala hasta aquí o haz clic para elegirla. JPG, PNG, WEBP o HEIC.
-                    </p>
-                  </div>
+                      width: '100%', boxSizing: 'border-box', marginBottom: 10,
+                      padding: '8px 10px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+                      background: 'rgba(6,13,40,.85)', color: '#eaf2ff',
+                      border: '1px solid rgba(255,255,255,.12)', outline: 'none',
+                    }} />
+
+                  <div style={{ display: 'flex', gap: 11, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                    <MiniaturaFondo pais={origen?.name} sentido={sentido} fondoId={f.id}
+                      revision={revision} ancho={120} redondeo={10} />
+                    {zonaSubida(f.id, 'Cambiar imagen de fondo')}
                   </div>
 
                   <button onClick={() => quitarFondo(f.id)}
@@ -1736,17 +1810,53 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
           )
         })}
 
-        <button
-          onClick={() => elegirArchivo('nueva')}
-          disabled={subiendo}
-          style={{
-            width: '100%', borderRadius: 12, padding: '12px 11px',
-            cursor: subiendo ? 'wait' : 'pointer',
-            background: 'rgba(56,189,248,.06)', border: '1px dashed rgba(56,189,248,.35)',
-            color: '#38bdf8', fontSize: 12, fontWeight: 700,
+        {abierta === 'nueva' ? (
+          <div style={{
+            borderRadius: 12, marginBottom: 8, padding: 11,
+            background: 'rgba(56,189,248,.05)', border: '1px dashed rgba(56,189,248,.35)',
           }}>
-          {subiendo && destino === 'nueva' ? 'Subiendo…' : '+ Agregar categoría'}
-        </button>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <p style={{ margin: 0, flex: 1, fontSize: 12.5, fontWeight: 700, color: '#38bdf8' }}>Nueva categoría</p>
+              <button onClick={() => { setAbierta(null); setTituloNuevo('') }} disabled={subiendo}
+                style={{ padding: '2px 8px', borderRadius: 8, fontSize: 12, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.12)', color: '#8aa0cc' }}>
+                Cancelar
+              </button>
+            </div>
+
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
+              1. Título
+            </label>
+            <input
+              autoFocus
+              value={tituloNuevo}
+              onChange={e => setTituloNuevo(e.target.value)}
+              placeholder="Normal, Fiestas Patrias, Cyber…"
+              maxLength={60}
+              style={{
+                width: '100%', boxSizing: 'border-box', marginBottom: 10,
+                padding: '8px 10px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+                background: 'rgba(6,13,40,.85)', color: '#eaf2ff',
+                border: '1px solid rgba(255,255,255,.12)', outline: 'none',
+              }} />
+
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#8aa0cc', marginBottom: 4 }}>
+              2. Imagen
+            </label>
+            {zonaSubida('nueva', 'Subir imagen', !tituloNuevo.trim())}
+          </div>
+        ) : (
+          <button
+            onClick={() => { setTituloNuevo(''); setAbierta('nueva') }}
+            disabled={subiendo}
+            style={{
+              width: '100%', borderRadius: 12, padding: '12px 11px',
+              cursor: subiendo ? 'wait' : 'pointer',
+              background: 'rgba(56,189,248,.06)', border: '1px dashed rgba(56,189,248,.35)',
+              color: '#38bdf8', fontSize: 12, fontWeight: 700,
+            }}>
+            + Agregar categoría
+          </button>
+        )}
       </div>
 
       {editor?.tiene_fondo && (
