@@ -114,7 +114,7 @@ export default function Resenas() {
   return (
     <section className="section-pad car seccion-clara" ref={zona}>
       <style>{`
-        .car{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#e8edf7,#dce4f0);}
+        .car{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#e4edfc,#d6e4fa);}
         .car::before{content:'';position:absolute;left:50%;top:38%;width:1000px;height:560px;transform:translate(-50%,-50%);pointer-events:none;
           background:radial-gradient(closest-side,rgba(251,191,36,.09),transparent 70%);}
         .car-cab{position:relative;text-align:center;max-width:720px;margin:0 auto 34px;}
@@ -129,7 +129,7 @@ export default function Resenas() {
         .car-escena:active{cursor:grabbing;}
         .car-card{position:absolute;left:50%;top:50%;width:min(560px,86vw);box-sizing:border-box;margin:0;
           padding:34px 34px 28px;border-radius:26px;
-          background:#f8fafd;
+          background:#f5f9ff;
           border:1px solid rgba(11,28,63,.14);box-shadow:0 22px 50px rgba(11,28,63,.12);
           transition:transform .8s cubic-bezier(.16,1,.3,1),opacity .6s ease,filter .6s ease;
           will-change:transform;}
@@ -165,7 +165,7 @@ export default function Resenas() {
         /* Controles */
         .car-controles{position:relative;display:flex;align-items:center;justify-content:center;gap:18px;margin-top:26px;}
         .car-flecha{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#0b1c3f;
-          background:#f8fafd;border:1px solid rgba(11,28,63,.12);box-shadow:0 6px 18px rgba(11,28,63,.1);
+          background:#f5f9ff;border:1px solid rgba(11,28,63,.12);box-shadow:0 6px 18px rgba(11,28,63,.1);
           backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:background .25s,border-color .25s,transform .25s;}
         .car-flecha:hover{background:#fff7e6;border-color:rgba(245,158,11,.5);transform:scale(1.06);}
         .car-puntos{display:flex;align-items:center;gap:7px;}

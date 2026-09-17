@@ -72,7 +72,7 @@ export default function Integraciones() {
   return (
     <section id="integraciones" ref={ref} className={`section-pad integraciones seccion-clara${visto ? ' visto' : ''}`}>
       <style>{`
-        .integraciones{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#e8edf7,#dce4f0);}
+        .integraciones{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#e4edfc,#d6e4fa);}
         .integraciones::before{content:'';position:absolute;inset:0;pointer-events:none;
           background:
             radial-gradient(520px 320px at 50% 55%,rgba(56,189,248,.16),transparent 70%),
@@ -141,7 +141,7 @@ export default function Integraciones() {
           -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;}
         .int-tarjeta:hover::before{opacity:1;}
         .int-cara{position:relative;overflow:hidden;height:100%;box-sizing:border-box;border-radius:19px;padding:22px 22px 18px;
-          display:flex;flex-direction:column;gap:12px;background:#f8fafd;box-shadow:0 8px 22px rgba(11,28,63,.07);}
+          display:flex;flex-direction:column;gap:12px;background:#f5f9ff;box-shadow:0 8px 22px rgba(11,28,63,.07);}
         .int-cara::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s;
           background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--c) 18%,transparent),transparent 70%);}
         .int-tarjeta:hover .int-cara::before{opacity:1;}
