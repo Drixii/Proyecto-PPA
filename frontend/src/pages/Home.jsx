@@ -278,15 +278,17 @@ export default function Home() {
           #sticky{position:sticky!important;top:70px!important;height:calc(100svh - 70px)!important;overflow:visible!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
-          /* El título arriba y lo demás —cinta, calculadora y la pista— abajo, pegado
-             al borde de la pantalla. El contenedor ocupa todo el alto y la
-             calculadora empuja con margin-top:auto; si no sobra alto, ese
-             margen es cero y queda igual que antes. */
-          #hero-content>div{flex-direction:column;flex-wrap:nowrap!important;align-items:center;height:100%;box-sizing:border-box;padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px));gap:8px!important;}
+          /* Todo el bloque —título, botones, cinta, calculadora y la pista—
+             abajo, pegado al borde de la pantalla, y el globo libre arriba.
+             El contenedor ocupa todo el alto y el título empuja con
+             margin-top:auto; si no sobra alto, ese margen es cero y queda
+             igual que antes. */
+          #hero-content>div{flex-direction:column;flex-wrap:nowrap!important;align-items:center;height:100%;box-sizing:border-box;padding:10px 16px calc(22px + env(safe-area-inset-bottom, 0px));gap:8px!important;}
+          .hero-text{margin-top:auto!important;}
           .hero-text>div:first-child{display:none!important;}
           .hero-text h1{font-size:32px!important;margin-bottom:8px!important;}
           .hero-buttons{margin-bottom:0!important;}
-          .hero-calc{margin-top:auto!important;}
+          .hero-calc{margin-top:8px!important;}
           .cinta-tasas{padding:6px 0!important;margin-bottom:8px!important;}
           #scroll-hint{display:none!important;}
           #grid-title{padding:3vh 16px 0!important;}
@@ -309,7 +311,7 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
-          #hero-content>div{padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px))!important;gap:8px!important;}
+          #hero-content>div{padding:10px 12px calc(22px + env(safe-area-inset-bottom, 0px))!important;gap:8px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}
