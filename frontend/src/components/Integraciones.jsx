@@ -20,7 +20,9 @@ export const INTEGRACIONES = [
   { id: 'koywe', logo: koywe, alto: 50, color: '#C8FF1E', titulo: 'Koywe', desc: 'Transferencias y pagos locales en Latinoamérica.' },
   { id: 'stripe', logo: stripe, nombre: 'Stripe', alto: 34, color: '#635BFF', titulo: 'Stripe', desc: 'Cobros con tarjetas de crédito y débito.' },
   { id: 'binance', logo: binance, nombre: 'BINANCE', alto: 34, color: '#F0B90B', titulo: 'Binance', desc: 'Tasas de mercado P2P en tiempo real.' },
-  { id: 'haulmer', logo: haulmer, alto: 26, color: '#38BDF8', titulo: 'Haulmer', desc: 'Soluciones de pago para Chile.' },
+  // El logotipo de Haulmer es blanco; sobre la tarjeta clara se pinta del
+  // azul de la marca con un filtro, en vez de mantener dos archivos.
+  { id: 'haulmer', logo: haulmer, alto: 26, color: '#38BDF8', titulo: 'Haulmer', desc: 'Soluciones de pago para Chile.', oscurecer: true },
 ]
 
 // Curvas de cada tarjeta al centro, en un lienzo de 1000×460 que se estira al
@@ -43,7 +45,7 @@ function Tarjeta({ m, lado, i }) {
     <div className={`int-tarjeta int-${lado}`} style={{ '--c': m.color, '--i': i }} onMouseMove={sigueRaton}>
       <div className="int-cara">
         <div className="int-logo">
-          <img src={m.logo} alt={m.titulo} style={{ height: m.alto }} />
+          <img src={m.logo} alt={m.titulo} className={m.oscurecer ? 'oscurecer' : undefined} style={{ height: m.alto }} />
           {m.nombre && <span className={`int-nombre int-nombre-${m.id}`}>{m.nombre}</span>}
         </div>
         <p className="int-desc">{m.desc}</p>
@@ -70,14 +72,14 @@ export default function Integraciones() {
   const [a, b, c, d] = INTEGRACIONES
 
   return (
-    <section id="integraciones" ref={ref} className={`section-pad integraciones${visto ? ' visto' : ''}`}>
+    <section id="integraciones" ref={ref} className={`section-pad integraciones seccion-clara${visto ? ' visto' : ''}`}>
       <style>{`
-        .integraciones{position:relative;z-index:2;overflow:hidden;background:rgba(4,10,30,.7);}
+        .integraciones{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#eef3fb,#f6f9fe);}
         .integraciones::before{content:'';position:absolute;inset:0;pointer-events:none;
           background:
-            radial-gradient(520px 320px at 50% 55%,rgba(56,189,248,.14),transparent 70%),
-            linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px) 0 0/46px 46px,
-            linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px) 0 0/46px 46px;
+            radial-gradient(520px 320px at 50% 55%,rgba(56,189,248,.16),transparent 70%),
+            linear-gradient(rgba(11,28,63,.05) 1px,transparent 1px) 0 0/46px 46px,
+            linear-gradient(90deg,rgba(11,28,63,.05) 1px,transparent 1px) 0 0/46px 46px;
           -webkit-mask-image:radial-gradient(ellipse 65% 75% at 50% 55%,#000 25%,transparent 78%);
                   mask-image:radial-gradient(ellipse 65% 75% at 50% 55%,#000 25%,transparent 78%);}
 
@@ -87,16 +89,16 @@ export default function Integraciones() {
         .integraciones.visto .int-cab>*{opacity:1;transform:none;filter:none;}
         .integraciones.visto .int-cab>*:nth-child(2){transition-delay:.08s;}
         .integraciones.visto .int-cab>*:nth-child(3){transition-delay:.16s;}
-        .int-eyebrow{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#38bdf8;}
-        .int-titulo{margin:0;font-size:clamp(30px,3.8vw,48px);font-weight:700;letter-spacing:-.025em;color:#fff;line-height:1.1;}
-        .int-titulo span{background:linear-gradient(120deg,#38bdf8,#818cf8 60%,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent;}
-        .int-sub{margin:16px auto 0;max-width:540px;font-size:16px;line-height:1.6;color:#9fb0d4;}
+        .int-eyebrow{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;}
+        .int-titulo{margin:0;font-size:clamp(30px,3.8vw,48px);font-weight:700;letter-spacing:-.025em;color:#0b1c3f;line-height:1.1;}
+        .int-titulo span{background:linear-gradient(120deg,#0ea5e9,#4f46e5 60%,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;}
+        .int-sub{margin:16px auto 0;max-width:540px;font-size:16px;line-height:1.6;color:#5b6f96;}
 
         /* Escena */
         .int-escena{position:relative;max-width:1000px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 260px minmax(0,1fr);
           grid-template-rows:repeat(2,minmax(0,1fr));column-gap:48px;row-gap:28px;min-height:460px;}
         .int-lineas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
-        .int-base{fill:none;stroke:rgba(125,211,252,.16);stroke-width:1.5;stroke-dasharray:4 6;}
+        .int-base{fill:none;stroke:rgba(11,28,63,.14);stroke-width:1.5;stroke-dasharray:4 6;}
         .int-trazo{fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:420;stroke-dashoffset:420;opacity:.65;}
         .integraciones.visto .int-trazo{animation:intDibuja 1.1s cubic-bezier(.65,0,.35,1) forwards;animation-delay:calc(.55s + var(--i) * .12s);}
         .int-pulso{fill:none;stroke-width:3;stroke-linecap:round;stroke-dasharray:26 400;stroke-dashoffset:426;opacity:0;filter:drop-shadow(0 0 6px currentColor);}
@@ -123,12 +125,12 @@ export default function Integraciones() {
           box-shadow:0 0 60px rgba(56,189,248,.35),inset 0 1px 0 rgba(255,255,255,.2),inset 0 -10px 30px rgba(0,0,0,.4);}
         .int-nucleo img{width:74px;height:74px;object-fit:contain;filter:drop-shadow(0 0 14px rgba(56,189,248,.6));animation:intFlota 6s ease-in-out infinite;}
         .int-marca{position:absolute;left:50%;top:calc(100% + 14px);transform:translateX(-50%);white-space:nowrap;text-align:center;}
-        .int-marca b{display:block;font-size:14px;color:#fff;}
-        .int-marca small{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7dd3fc;}
+        .int-marca b{display:block;font-size:14px;color:#0b1c3f;}
+        .int-marca small{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;}
 
         /* Tarjetas */
         .int-tarjeta{--c:#38bdf8;position:relative;z-index:1;border-radius:20px;padding:1px;isolation:isolate;
-          background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 45%,rgba(255,255,255,.08));
+          background:linear-gradient(160deg,rgba(11,28,63,.14),rgba(11,28,63,.04) 45%,rgba(11,28,63,.1));
           opacity:0;filter:blur(8px);
           transition:opacity .8s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1),filter .8s,box-shadow .5s;
           transition-delay:calc(.3s + var(--i) * .1s);}
@@ -141,22 +143,23 @@ export default function Integraciones() {
           -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;}
         .int-tarjeta:hover::before{opacity:1;}
         .int-cara{position:relative;overflow:hidden;height:100%;box-sizing:border-box;border-radius:19px;padding:22px 22px 18px;
-          display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,rgba(12,22,52,.97),rgba(6,12,32,.99));}
+          display:flex;flex-direction:column;gap:12px;background:#fff;box-shadow:0 8px 26px rgba(11,28,63,.08);}
         .int-cara::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s;
           background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--c) 18%,transparent),transparent 70%);}
         .int-tarjeta:hover .int-cara::before{opacity:1;}
         /* Destello al llegar */
         .int-cara::after{content:'';position:absolute;top:0;bottom:0;left:-60%;width:45%;pointer-events:none;transform:skewX(-18deg);opacity:0;
-          background:linear-gradient(100deg,transparent,rgba(255,255,255,.1),transparent);}
+          background:linear-gradient(100deg,transparent,rgba(37,99,235,.12),transparent);}
         .integraciones.visto .int-cara::after{animation:intDestello 1.2s cubic-bezier(.4,0,.2,1) both;animation-delay:calc(.8s + var(--i) * .12s);}
 
         .int-logo{height:52px;display:flex;align-items:center;gap:10px;}
         .int-logo img{display:block;width:auto;max-width:100%;transition:transform .6s cubic-bezier(.16,1,.3,1);}
+        .int-logo img.oscurecer{filter:brightness(0) saturate(100%) invert(11%) sepia(46%) saturate(1800%) hue-rotate(196deg) brightness(95%) contrast(95%);}
         .int-tarjeta:hover .int-logo img{transform:scale(1.06);}
-        .int-nombre{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#fff;line-height:1;}
-        .int-nombre-binance{letter-spacing:.04em;color:#F0B90B;}
-        .int-desc{margin:0;font-size:13.5px;line-height:1.55;color:#9fb0d4;}
-        .int-estado{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:#86efac;}
+        .int-nombre{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#0b1c3f;line-height:1;}
+        .int-nombre-binance{letter-spacing:.04em;color:#c98f00;}
+        .int-desc{margin:0;font-size:13.5px;line-height:1.55;color:#5b6f96;}
+        .int-estado{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:#15803d;}
         .int-punto{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:intPing 2s infinite;}
 
         @keyframes intDibuja{to{stroke-dashoffset:0}}

@@ -248,6 +248,11 @@ export default function Home() {
         .stats-row{display:flex;flex-wrap:wrap;gap:28px;}
         .hero-hide-mobile{}
         .section-pad{padding:96px 24px;}
+        /* Secciones claras. El texto va en el azul oscuro de la marca, no en
+           negro: el negro sobre blanco al lado de una web azul se ve prestado
+           de otro sitio. */
+        .seccion-clara{background:linear-gradient(180deg,#f4f7fd,#e9eff9);color:#334970;}
+        .seccion-clara h2,.seccion-clara h3,.seccion-clara b,.seccion-clara strong{color:#0b1c3f;}
         @media(max-width:1024px){
           .nav-text-link{display:none;}
           .section-pad{padding:72px 20px;}
@@ -416,11 +421,13 @@ export default function Home() {
       <Suspense fallback={null}><HuinchaTasas /></Suspense>
 
       {/* ── CÓMO FUNCIONA ── */}
-      <section id="como" className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)', scrollMarginTop: 80 }}>
+      {/* Fondo claro: de aquí abajo las secciones alternan claro y oscuro
+          para que la página no se lea como un solo bloque azul. */}
+      <section id="como" className="section-pad seccion-clara" style={{ position: 'relative', zIndex: 2, scrollMarginTop: 80 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div data-reveal="" style={{ textAlign: 'center', marginBottom: 56, ...R0 }}>
-            <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Simple y transparente</p>
-            <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>En 4 pasos, tu dinero llega</h2>
+            <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#2563eb' }}>Simple y transparente</p>
+            <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#0b1c3f' }}>En 4 pasos, tu dinero llega</h2>
           </div>
           {/* A la izquierda, un teléfono que hace un envío de principio a fin;
               a la derecha, los pasos apareciendo a su ritmo. Tocar uno lleva
