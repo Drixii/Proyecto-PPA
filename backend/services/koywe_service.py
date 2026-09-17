@@ -227,12 +227,34 @@ def is_configured(modo: str | None = None) -> bool:
 
 
 def firma_disponible(modo: str | None = None) -> bool:
-    """Si además se puede comprobar la firma del webhook.
+    """Si hay secreto guardado con el que comprobar la firma del webhook.
 
-    Hoy es False: Koywe no entrega el secreto. Se consulta para poder decirlo
-    en el panel en vez de que parezca que falta algo por rellenar.
+    El secreto lo elegimos nosotros al crear o actualizar el endpoint en Koywe
+    (su API lo exige como campo); su panel no lo muestra después.
     """
     return bool(_config(CLAVE_WEBHOOK, modo))
+
+
+AJUSTE_FIRMA_ESTRICTA = "koywe_firma_estricta"
+
+
+def firma_estricta() -> bool:
+    """Si un aviso con firma que no cuadra se rechaza.
+
+    Empieza apagado a propósito: primero se mira en el registro que las firmas
+    de los avisos reales cuadran, y solo entonces se enciende. Rechazar antes
+    de comprobarlo dejaría envíos pagados sin avanzar.
+    """
+    from models.setting import Setting
+    db = SessionLocal()
+    try:
+        fila = db.query(Setting).filter(Setting.key == AJUSTE_FIRMA_ESTRICTA).first()
+        return (fila.value if fila else "").strip().lower() in ("1", "true", "si", "sí")
+    except Exception as e:
+        log.warning("[koywe] no se pudo leer %s: %s", AJUSTE_FIRMA_ESTRICTA, e)
+        return False
+    finally:
+        db.close()
 
 
 # ── Cliente de la API ────────────────────────────────────────────────────────

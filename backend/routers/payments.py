@@ -953,13 +953,20 @@ def _koywe_pagada(evento: dict):
 async def koywe_webhook(request: Request):
     """Recibe los eventos de Koywe.
 
-    No exige firma. Koywe documenta la cabecera `Koywe-Signature` pero no
-    entrega el secreto con el que se calcula, ni en su panel ni por API, así
-    que no hay nada con qué comprobarla. En su lugar, cada aviso se contrasta
-    con su API antes de tocar una orden (ver `_koywe_pagada`).
+    La defensa de verdad es que cada aviso se contrasta contra la API de Koywe
+    antes de tocar una orden (ver `_koywe_pagada`): del cuerpo del aviso no se
+    cree nada.
 
-    Si el secreto llega a estar guardado, la firma se comprueba ADEMÁS de la
-    consulta, y un aviso mal firmado se rechaza sin llegar a la base.
+    Encima de eso va la firma. Koywe calcula HMAC-SHA256 del cuerpo exacto con
+    el secreto del endpoint y lo manda en `Koywe-Signature`. Si el secreto está
+    guardado, se comprueba; y si no cuadra se anota, pero el aviso SIGUE su
+    curso hasta que `koywe_firma_estricta` esté encendido. Es a propósito: si
+    el formato de la cabecera resultara ser distinto del que esperamos
+    (base64, con prefijo, sobre otro cuerpo), rechazar de entrada dejaría
+    envíos pagados sin avanzar y sin rastro de por qué. Con el modo estricto
+    apagado, el registro dice si las firmas cuadran; cuando se confirme que sí,
+    se enciende y a partir de ahí un aviso mal firmado se rechaza sin llegar a
+    la base.
 
     async def porque hace falta el cuerpo crudo para poder validar la firma; el
     trabajo con la base y con su API, que sí bloquea, va al threadpool.
@@ -967,8 +974,15 @@ async def koywe_webhook(request: Request):
     payload = await request.body()
 
     if koywe_service.firma_disponible():
-        if not koywe_service.verificar_firma(payload, request.headers.get("Koywe-Signature")):
+        if koywe_service.verificar_firma(payload, request.headers.get("Koywe-Signature")):
+            log.info("[koywe] aviso con firma válida")
+        elif koywe_service.firma_estricta():
             raise HTTPException(status_code=400, detail="Firma inválida")
+        else:
+            log.error("[koywe] FIRMA QUE NO CUADRA (cabecera=%r). El aviso sigue "
+                      "porque se confirma contra su API; revisar antes de "
+                      "encender koywe_firma_estricta",
+                      (request.headers.get("Koywe-Signature") or "")[:80])
 
     try:
         evento = json.loads(payload)
