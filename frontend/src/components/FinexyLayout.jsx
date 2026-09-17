@@ -10,6 +10,7 @@ import Portal from './Portal'
 import { queryClient } from '../queryClient'
 import { ESTADO_DOT, ESTADO_LABEL } from '../utils/orderStatus'
 import AvisoPagosPendientes from './AvisoPagosPendientes'
+import AvisoNotificaciones from './AvisoNotificaciones'
 import VerificarCorreo from './VerificarCorreo'
 
 const ADMIN_TABS = [
@@ -688,6 +689,7 @@ export default function FinexyLayout({ children, fullHeight = false }) {
         que avisarla entre en la aplicación por donde entre. El propio aviso
         decide si toca mostrarlo (solo clientes, una vez por sesión). */}
     <AvisoPagosPendientes />
+    <AvisoNotificaciones />
     <div className="flex" style={{ background: '#060d22', fontFamily: "'Space Grotesk', system-ui, sans-serif", height: '100vh', maxHeight: '100dvh' }}>
       <style>{`
         @keyframes notif-pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}70%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}
