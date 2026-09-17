@@ -342,7 +342,8 @@ export default function Home() {
             </div>
           </div>
           <div className="nav-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <InterruptorTema />
+            {/* Modo claro apagado por ahora (ver index.html). */}
+            {false && <InterruptorTema />}
             {/* Con scrollIntoView y no con el ancla sola: el ancla salta de
                 golpe y deja el título debajo del header flotante. */}
             <a href="#como" className="nav-text-link" onClick={e => { e.preventDefault(); document.getElementById('como')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>Pasos</a>
