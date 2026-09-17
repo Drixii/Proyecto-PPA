@@ -260,6 +260,10 @@ export default function Home() {
         @media(max-width:768px){
           #main-nav{padding:8px 10px 0;}
           .nav-inner{height:62px;padding:0 8px 0 12px;border-radius:16px;}
+          /* Con el interruptor de tema, el nombre se partía en dos líneas. */
+          .nav-inner p{white-space:nowrap;}
+          .nav-auth .interruptor-tema{width:32px;height:32px;}
+          .nav-auth .interruptor-tema svg{width:15px;height:15px;}
           .hero-text{flex:none;width:100%;}
           .hero-calc{flex:none;width:100%;max-width:460px;margin-top:0!important;margin-right:auto!important;margin-left:auto!important;margin-bottom:0!important;animation:none;}
           /* En un iPhone la pista quedaba 170px por debajo del borde de la

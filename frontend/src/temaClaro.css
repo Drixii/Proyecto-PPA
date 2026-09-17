@@ -249,3 +249,6 @@ html[data-tema="claro"] .pie-logo:hover { filter: none !important; }
 html[data-tema="claro"] .pie-logo-haulmer img,
 html[data-tema="claro"] .pie-logo-koywe img { filter: brightness(.2) !important; }
 html[data-tema="claro"] .pie-logo:hover img { filter: none !important; }
+
+/* Rótulo de «Cómo funciona»: su color va en el estilo en línea del componente. */
+html[data-tema="claro"] #como > div > div:first-child p { color: #1d4ed8 !important; }
