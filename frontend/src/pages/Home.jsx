@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
 import DemoEnvio from '../components/DemoEnvio'
 import HuinchaTasas from '../components/HuinchaTasas'
-import MetodosPago from '../components/MetodosPago'
+import Integraciones from '../components/Integraciones'
+import PiePagina from '../components/PiePagina'
 import { guardarEnvioPendiente, estadoNuevaTransferencia } from '../utils/envioPendiente'
 import CintaDeTasas from '../components/CintaDeTasas'
 import { useStore } from '../store/useStore'
@@ -446,8 +447,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── MÉTODOS DE PAGO ── */}
-      <MetodosPago reveal={R0} revealDe={RD} />
+      {/* ── INTEGRACIONES ── */}
+      <Integraciones />
 
       {/* ── BANDA DE CONFIANZA ── */}
       <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.5)', borderTop: '1px solid rgba(255,255,255,.06)', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
@@ -489,22 +490,7 @@ export default function Home() {
       )}
 
       {/* ── FOOTER ── */}
-      <footer style={{ position: 'relative', zIndex: 2, borderTop: '1px solid rgba(255,255,255,.08)', background: 'rgba(5,11,30,.7)', padding: '40px 24px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src={logoSrc} alt="Ksa Global" style={{ width: 36, height: 36, objectFit: 'contain' }} />
-            <div>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#fff' }}>Ksa Global</p>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', background: 'linear-gradient(90deg,#38bdf8,#818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>EVOLUTION</p>
-            </div>
-          </div>
-          <p style={{ margin: 0, fontSize: 12.5, color: '#8aa0cc' }}>© {new Date().getFullYear()} Ksa Global · Todos los derechos reservados</p>
-          <div style={{ display: 'flex', gap: 18 }}>
-            <button onClick={() => navigate('/login')} style={{ background: 'none', border: 'none', fontSize: 13, color: '#8aa0cc', cursor: 'pointer' }}>Iniciar sesión</button>
-            <button onClick={() => navigate('/login', { state: { mode: 'register' } })} style={{ background: 'none', border: 'none', fontSize: 13, color: '#8aa0cc', cursor: 'pointer' }}>Registrarse</button>
-          </div>
-        </div>
-      </footer>
+      <PiePagina />
 
       {/* Mobile floating PWA install button.
           Redondo y sin texto: con «Instalar app» escrito ocupaba la mitad del
