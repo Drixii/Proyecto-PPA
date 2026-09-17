@@ -235,6 +235,26 @@ export default function AdminOrders() {
           </div>
         </div>
 
+        {/* Lo que pasa con las órdenes que nadie paga. Se dice aquí, al pedir
+            justo esas, y no en un rincón de los ajustes: es donde se está
+            mirando la lista que se va a vaciar sola. */}
+        {statusFilter === 'pendiente_pago' && (
+          <div className="rounded-2xl px-4 py-3 mb-3 flex items-start gap-3"
+            style={{ background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.22)' }}>
+            <span className="inline-block w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background:'#dc2626' }} />
+            <div>
+              <p className="text-sm font-semibold" style={{ color:'#eaf2ff' }}>
+                En 3 días sin actividad se elimina
+              </p>
+              <p className="text-xs mt-0.5" style={{ color:'#fca5a5' }}>
+                Estas órdenes se crearon y nunca se pagaron. Si en 3 días nadie
+                paga, sube un comprobante ni escribe un mensaje, pasan solas a
+                la papelera, donde siguen 30 días y se pueden restaurar.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Monto recibido. Antes se listaba una cifra por moneda sin más, y
             con dos monedas en pantalla no había forma de saber cuánto se
             movió en total sin convertirlo a mano. Ahora manda el equivalente
@@ -329,7 +349,14 @@ export default function AdminOrders() {
                   <p className="text-sm font-semibold truncate" style={{ color: '#eaf2ff' }}>{order.receiver_name}</p>
                   <p className="text-xs font-mono truncate" style={{ color: '#8aa0cc' }}>{order.order_number}</p>
                 </div>
-                <div className="shrink-0"><EstadoOrden status={order.status} /></div>
+                <div className="shrink-0 text-right">
+                  <EstadoOrden status={order.status} />
+                  {order.dias_para_borrar != null && (
+                    <p className="text-[10px] mt-1 font-semibold" style={{ color:'#f87171' }}>
+                      {order.dias_para_borrar === 0 ? 'se elimina hoy' : `se elimina en ${order.dias_para_borrar} d`}
+                    </p>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-center mt-3 pt-2.5" style={{ color: '#38bdf8', borderTop: '1px solid rgba(255,255,255,.06)' }}>
                 Toca para ver más sobre este pedido
@@ -435,6 +462,13 @@ export default function AdminOrders() {
                     </td>
                     <td className="px-4 py-4">
                       <EstadoOrden status={order.status} />
+                      {order.dias_para_borrar != null && (
+                        <p className="text-[10px] mt-1 font-semibold" style={{ color:'#f87171' }}>
+                          {order.dias_para_borrar === 0
+                            ? 'se elimina hoy'
+                            : `se elimina en ${order.dias_para_borrar} d`}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-xs" style={{ color:'#8aa0cc' }}>

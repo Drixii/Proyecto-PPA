@@ -20,6 +20,7 @@ from models.country import Country
 from schemas.order import OrderOut, OrderStatusUpdate
 from datetime import datetime, timedelta, timezone
 from services.order_service import advance_order_status, find_sub_admin_for_country
+from services import caducidad
 from auth.dependencies import require_admin, require_super_admin
 from passlib.context import CryptContext
 from utils.timezones import country_to_tz
@@ -225,10 +226,17 @@ def list_all_orders(
         ).all()
         for t in txns:
             points_map[t.order_id] = t.points
+    # Cuánto le queda a cada orden sin pagar antes de caerse sola. Se calcula
+    # aquí y no en el navegador porque el plazo lo decide el servidor: si
+    # mañana pasa de tres días a cinco, el panel no tiene que enterarse.
+    sin_pagar = [o.id for o in orders if o.status == "pendiente_pago" and not o.paid_at]
+    mensajes = caducidad.ultimos_mensajes(db, sin_pagar)
+
     items = []
     for o in orders:
         d = _order_with_bank(o, db)
         d["points_earned"] = points_map.get(o.id, 0)
+        d["dias_para_borrar"] = caducidad.dias_restantes(o, mensajes.get(o.id))
         items.append(d)
     return {
         "success": True,

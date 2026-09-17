@@ -141,6 +141,13 @@ export default function Pipeline() {
                       </div>
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background:'rgba(255,255,255,.08)', color:'#8aa0cc' }}>{orders.length}</span>
                     </div>
+                    {/* La única columna que se vacía sola, así que lo dice. */}
+                    {key === 'pendiente_pago' && orders.length > 0 && (
+                      <p className="text-[11px] mb-3 px-3 py-2 rounded-lg leading-relaxed"
+                        style={{ color:'#fca5a5', background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.2)' }}>
+                        En 3 días sin actividad se elimina
+                      </p>
+                    )}
                     <div className="flex-1 space-y-3">
                       {orders.map(order => (
                         <OrderCard
