@@ -5,6 +5,7 @@ import DemoEnvio from '../components/DemoEnvio'
 import HuinchaTasas from '../components/HuinchaTasas'
 import Integraciones from '../components/Integraciones'
 import QuienesSomos from '../components/QuienesSomos'
+import EnNumeros from '../components/EnNumeros'
 import PiePagina from '../components/PiePagina'
 import { guardarEnvioPendiente, estadoNuevaTransferencia } from '../utils/envioPendiente'
 import CintaDeTasas from '../components/CintaDeTasas'
@@ -441,33 +442,8 @@ export default function Home() {
       {/* ── INTEGRACIONES ── */}
       <Integraciones />
 
-      {/* ── BANDA DE CONFIANZA ── */}
-      <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.5)', borderTop: '1px solid rgba(255,255,255,.06)', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div data-reveal="" style={{ textAlign: 'center', marginBottom: 40, ...R0 }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, letterSpacing: '.13em', textTransform: 'uppercase', color: '#38bdf8' }}>En números</p>
-            <h2 style={{ margin: 0, fontSize: 'clamp(22px,2.8vw,36px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>Resultados que hablan por sí solos</h2>
-          </div>
-          <div className="stats-band" data-reveal="" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, ...R0 }}>
-            {[
-              { val: '+12',   label: 'Países conectados',        color: '#38bdf8',
-                icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-              { val: '2 min', label: 'Tiempo promedio de envío', color: '#4ade80',
-                icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> },
-              { val: '24/7',  label: 'Disponibilidad',           color: '#a5b4fc',
-                icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-              { val: '0%',    label: 'Comisiones ocultas',       color: '#fcd34d',
-                icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-            ].map(({ val, label, color, icon }) => (
-              <div key={label} style={{ background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.10)', borderTop: `2px solid ${color}`, borderRadius: 20, padding: '28px 22px', textAlign: 'center', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: `${color}18`, border: `1px solid ${color}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color }}>{icon}</div>
-                <p style={{ margin: '0 0 6px', fontFamily: "'JetBrains Mono',monospace", fontSize: 'clamp(30px,3.2vw,44px)', fontWeight: 700, color, lineHeight: 1 }}>{val}</p>
-                <p style={{ margin: 0, fontSize: 13.5, color: '#9fb0d4', lineHeight: 1.4 }}>{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── EN NÚMEROS ── */}
+      <EnNumeros />
 
       {/* ── CTA ── */}
       {!user && (
