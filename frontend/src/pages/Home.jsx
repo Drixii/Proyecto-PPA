@@ -434,16 +434,8 @@ export default function Home() {
       {/* ── EN NÚMEROS ── */}
       <EnNumeros />
 
-      {/* ── RESEÑAS ── (sin ninguna publicada, la llamada a crear cuenta) */}
-      <Resenas sinResenas={!user && (
-        <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)', textAlign: 'center' }}>
-          <div data-reveal="" style={{ maxWidth: 1000, margin: '0 auto', ...R0, borderRadius: 32, overflow: 'hidden', padding: 'clamp(32px,6vw,64px) clamp(20px,5vw,40px)', background: 'linear-gradient(135deg,rgba(37,99,235,.35),rgba(56,189,248,.22))', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', border: '1px solid rgba(125,211,252,.28)', boxShadow: '0 36px 80px rgba(2,8,30,.5)' }}>
-            <h2 style={{ margin: '0 0 13px', fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, color: '#fff' }}>¿Listo para enviar?</h2>
-            <p style={{ margin: '0 0 30px', fontSize: 17.5, color: 'rgba(255,255,255,.82)' }}>Crea tu cuenta gratis y realiza tu primera transferencia hoy mismo.</p>
-            <button onClick={() => navigate('/login', { state: { mode: 'register' } })} style={{ padding: '16px 36px', fontSize: 17, fontWeight: 700, color: '#061027', background: '#fff', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 14px 36px rgba(0,0,0,.28)' }}>Comenzar gratis →</button>
-          </div>
-        </section>
-      )} />
+      {/* ── RESEÑAS ── solo si hay alguna publicada */}
+      <Resenas />
 
       {/* ── FOOTER ── */}
       <PiePagina />
