@@ -74,10 +74,13 @@ export default function HuinchaTasas() {
         .huincha{position:relative;left:-5%;width:110%;overflow:hidden;white-space:nowrap;}
         .huincha.delante{z-index:2;transform:rotate(-3deg);padding:16px 0;
           background:linear-gradient(90deg,#0ea5e9,#3b82f6 45%,#6366f1);
-          box-shadow:0 18px 50px rgba(37,99,235,.35),inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.2);}
+          /* Sombra oscura y corta. Con un resplandor azul grande, el contenedor
+             (overflow:hidden, que hace falta para que las huinchas inclinadas
+             no ensanchen la página) lo cortaba a ras y quedaba una franja
+             luminosa con borde recto debajo. */
+          box-shadow:0 10px 24px rgba(2,6,23,.45),inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.2);}
         .huincha.detras{z-index:1;transform:rotate(3deg);margin-top:-64px;padding:12px 0;
-          background:#0a1432;border-top:1px solid rgba(125,211,252,.18);border-bottom:1px solid rgba(125,211,252,.18);
-          box-shadow:0 10px 30px rgba(0,0,0,.4);}
+          background:#0a1432;box-shadow:0 8px 20px rgba(2,6,23,.4);}
 
         .huincha-pista{display:inline-flex;animation:huinchaIzq var(--dur) linear infinite;will-change:transform;}
         .huincha.detras .huincha-pista{animation-name:huinchaDer;}
