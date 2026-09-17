@@ -1305,6 +1305,10 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
   const [pos, setPos] = useState(null)
   const [anchoVista, setAnchoVista] = useState(340)
   const [encima, setEncima] = useState(false)
+  // Títulos mientras se escriben; al salir de la casilla se guardan.
+  const [titulos, setTitulos] = useState({})
+  // Si la subida en curso crea una categoría nueva o reemplaza la que se usa.
+  const [nuevaCategoria, setNuevaCategoria] = useState(false)
   const lienzoRef = useRef(null)
   const arrastreRef = useRef(null)
   const ficheroRef = useRef(null)
@@ -1379,11 +1383,19 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
     const cuerpo = new FormData()
     cuerpo.append('file', archivo)
     try {
+      const enUso = (editor?.fondos || []).find(f => f.activa)
       await api.post('/admin/commissions/imagen/fondo', cuerpo, {
-        params: { from_country: origen.name, sentido },
+        params: {
+          from_country: origen.name, sentido,
+          titulo: nuevaCategoria ? 'Nueva' : (enUso?.titulo || 'Principal'),
+          // Sin categoría nueva se reemplaza la que está en uso, que es lo que
+          // uno espera al pulsar «Cambiar imagen de fondo».
+          ...(!nuevaCategoria && enUso ? { fondo_id: enUso.id } : {}),
+        },
       })
+      setNuevaCategoria(false)
       await refetch()
-      aviso('Imagen de fondo guardada')
+      aviso('Imagen guardada')
     } catch (e) {
       setError(await detalleDeError(e, 'No se pudo subir la imagen'))
     } finally {
@@ -1392,16 +1404,36 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
     }
   }
 
-  const quitarFondo = async () => {
+  const quitarFondo = async (fondoId) => {
     setError('')
     try {
       await api.delete('/admin/commissions/imagen/fondo', {
-        params: { from_country: origen.name, sentido },
+        params: { from_country: origen.name, sentido, ...(fondoId ? { fondo_id: fondoId } : {}) },
       })
       await refetch()
       aviso('Imagen quitada. Este país vuelve a la versión automática.')
     } catch (e) {
       setError(await detalleDeError(e, 'No se pudo quitar la imagen'))
+    }
+  }
+
+  const usar = useMutation({
+    mutationFn: (id) => api.patch(`/admin/commissions/imagen/fondo/${id}`, {},
+      { params: { from_country: origen.name, sentido } }),
+    onSuccess: (r) => { refetch(); aviso(r.data.message) },
+    onError: async (e) => setError(await detalleDeError(e, 'No se pudo cambiar')),
+  })
+
+  const renombrar = async (f) => {
+    const escrito = titulos[f.id]
+    if (escrito === undefined || escrito === f.titulo) return
+    setTitulos(t => { const n = { ...t }; delete n[f.id]; return n })
+    try {
+      await api.patch(`/admin/commissions/imagen/fondo/${f.id}`, { titulo: escrito },
+        { params: { from_country: origen.name, sentido } })
+      refetch()
+    } catch (e) {
+      setError(await detalleDeError(e, 'No se pudo renombrar'))
     }
   }
 
@@ -1530,23 +1562,68 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
           style={{ display: 'none' }} />
         {editor?.tiene_fondo && (
           <>
-            <button onClick={quitarFondo} style={botonBase}>Quitar imagen</button>
+            <button onClick={() => quitarFondo()} style={botonBase}>Quitar imagen</button>
             <button onClick={restablecer} style={botonBase}>Centrar bloque</button>
           </>
         )}
+      </div>
 
-        <button onClick={generar} disabled={cargando || !origen}
-          style={{
-            ...botonBase, border: 'none', color: '#fff',
-            background: 'linear-gradient(135deg,#22c55e,#15803d)',
-            cursor: cargando ? 'wait' : 'pointer',
-          }}>
-          {cargando ? 'Generando…' : 'Generar imagen'}
-        </button>
+      {/* Las imágenes guardadas de este país: la de todo el año, la de fiestas
+          patrias, la del Cyber. Se sube cada una con su nombre y se pulsa la
+          que toque el día que toque, sin volver a subir nada. */}
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+          Imágenes de {origen?.name || ''}
+        </p>
+
+        <div style={{ display: 'grid', gap: 9, gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', maxWidth: 620 }}>
+          {(editor?.fondos || []).map(f => (
+            <div key={f.id} style={{
+              borderRadius: 12, padding: '10px 11px',
+              background: f.activa ? 'rgba(56,189,248,.09)' : 'rgba(4,10,30,.5)',
+              border: `1px solid ${f.activa ? 'rgba(56,189,248,.42)' : 'rgba(255,255,255,.08)'}`,
+            }}>
+              <input
+                value={titulos[f.id] ?? f.titulo}
+                onChange={e => setTitulos(t => ({ ...t, [f.id]: e.target.value }))}
+                onBlur={() => renombrar(f)}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                style={{
+                  width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                  fontSize: 12.5, fontWeight: 700, color: '#eaf2ff', padding: 0, marginBottom: 7,
+                }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {f.activa ? (
+                  <span style={{ flex: 1, fontSize: 10.5, fontWeight: 700, color: '#38bdf8' }}>● En uso</span>
+                ) : (
+                  <button onClick={() => usar.mutate(f.id)}
+                    style={{ flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', color: '#aebfe2' }}>
+                    Usar esta
+                  </button>
+                )}
+                <button onClick={() => quitarFondo(f.id)} title="Eliminar"
+                  style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(248,113,113,.3)', color: '#f87171' }}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={() => { setNuevaCategoria(true); ficheroRef.current?.click() }}
+            disabled={subiendo}
+            style={{
+              borderRadius: 12, padding: '14px 11px', cursor: subiendo ? 'wait' : 'pointer',
+              background: 'rgba(56,189,248,.06)', border: '1px dashed rgba(56,189,248,.35)',
+              color: '#38bdf8', fontSize: 12, fontWeight: 700,
+            }}>
+            {subiendo ? 'Subiendo…' : '+ Agregar categoría'}
+          </button>
+        </div>
       </div>
 
       <div
-        onClick={() => !subiendo && ficheroRef.current?.click()}
+        onClick={() => { if (subiendo) return; setNuevaCategoria(false); ficheroRef.current?.click() }}
         onDragOver={alArrastrarEncima}
         onDragEnter={alArrastrarEncima}
         onDragLeave={alSalir}
@@ -1694,7 +1771,33 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
           <p style={{ margin: '6px 0 0', fontSize: 11, color: '#64748b' }}>
             Arrastra el bloque para moverlo. Se guarda solo al soltar. — x {posicion.x}, y {posicion.y}
           </p>
+
+          {/* Al final del todo: se genera cuando ya está puesto como se quiere,
+              y antes había que subir a buscarlo entre los otros botones. */}
+          <button onClick={generar} disabled={cargando || !origen}
+            style={{
+              marginTop: 14, padding: '11px 22px', borderRadius: 11, border: 'none',
+              fontSize: 13, fontWeight: 700, color: '#fff',
+              cursor: cargando ? 'wait' : 'pointer',
+              background: 'linear-gradient(135deg,#22c55e,#15803d)',
+            }}>
+            {cargando ? 'Generando…' : 'Generar imagen'}
+          </button>
         </>
+      )}
+
+      {/* Sin fondo subido no hay controles, pero se puede generar igual: sale
+          la versión automática, con la foto del país. */}
+      {!editor?.tiene_fondo && (
+        <button onClick={generar} disabled={cargando || !origen}
+          style={{
+            padding: '11px 22px', borderRadius: 11, border: 'none',
+            fontSize: 13, fontWeight: 700, color: '#fff',
+            cursor: cargando ? 'wait' : 'pointer',
+            background: 'linear-gradient(135deg,#22c55e,#15803d)',
+          }}>
+          {cargando ? 'Generando…' : 'Generar imagen'}
+        </button>
       )}
 
       {mensaje && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#4ade80' }}>{mensaje}</p>}
