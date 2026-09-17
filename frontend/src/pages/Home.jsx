@@ -121,7 +121,10 @@ export default function Home() {
   // Carga globe.js desde /public — IIFE que busca los IDs en el DOM
   useEffect(() => {
     const script = document.createElement('script')
-    script.src = '/globe.js'
+    // Con versión en la URL: el servidor lo manda sin Cache-Control y el
+    // teléfono seguía usando el globo viejo después de cada cambio. Súbela
+    // cuando se toque globe.js.
+    script.src = '/globe.js?v=20260917'
     script.async = true
     document.body.appendChild(script)
     return () => {
@@ -264,7 +267,7 @@ export default function Home() {
           /* En un iPhone la pista quedaba 170px por debajo del borde de la
              pantalla y nadie sabía que había algo más abajo. Todo lo de este
              bloque está medido para que quepa en 664px de alto visible. */
-          .mob-scroll-hint{display:flex!important;flex-direction:row;align-items:center;gap:5px;cursor:pointer;margin-top:10px!important;margin-bottom:300px!important;opacity:.85;transition:opacity .2s;}
+          .mob-scroll-hint{display:flex!important;flex-direction:row;align-items:center;gap:5px;cursor:pointer;margin-top:10px!important;margin-bottom:0!important;opacity:.85;transition:opacity .2s;}
           .mob-scroll-hint:active{opacity:1;}
           .hero-hide-mobile{display:none;}
           .section-pad{padding:56px 16px;}
@@ -275,14 +278,20 @@ export default function Home() {
           #sticky{position:sticky!important;top:70px!important;height:calc(100svh - 70px)!important;overflow:visible!important;}
           #globe-cv{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;}
           #hero-content{position:absolute!important;inset:0!important;overflow:visible!important;align-items:flex-start!important;padding-top:0!important;}
-          #hero-content>div{flex-direction:column;align-items:center;padding:10px 16px 180px;gap:8px!important;}
+          /* El título arriba y lo demás —cinta, calculadora y la pista— abajo, pegado
+             al borde de la pantalla. El contenedor ocupa todo el alto y la
+             calculadora empuja con margin-top:auto; si no sobra alto, ese
+             margen es cero y queda igual que antes. */
+          #hero-content>div{flex-direction:column;flex-wrap:nowrap!important;align-items:center;height:100%;box-sizing:border-box;padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px));gap:8px!important;}
           .hero-text>div:first-child{display:none!important;}
           .hero-text h1{font-size:32px!important;margin-bottom:8px!important;}
           .hero-buttons{margin-bottom:0!important;}
-          .hero-calc{margin-top:4px!important;}
+          .hero-calc{margin-top:auto!important;}
           .cinta-tasas{padding:6px 0!important;margin-bottom:8px!important;}
           #scroll-hint{display:none!important;}
-          #grid-title{padding-top:5vh!important;}
+          #grid-title{padding:3vh 16px 0!important;}
+          #grid-title p{margin-bottom:6px!important;font-size:11px!important;}
+          #grid-title h2{font-size:21px!important;}
           .features-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important;}
           .stats-band{grid-template-columns:repeat(2,1fr)!important;gap:12px!important;}
           .stats-band>div{padding:20px 16px!important;border-radius:16px!important;}
@@ -300,7 +309,7 @@ export default function Home() {
           .section-pad{padding:44px 12px;}
           .nav-inner{padding:0 10px;}
           .hero-buttons button,.hero-buttons a{font-size:12px!important;padding:11px 12px!important;}
-          #hero-content>div{padding:10px 12px 180px!important;gap:8px!important;}
+          #hero-content>div{padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px))!important;gap:8px!important;}
           .nav-auth{flex-wrap:nowrap!important;gap:6px!important;}
           .nav-auth button{padding:7px 8px!important;font-size:12px!important;white-space:nowrap!important;flex-shrink:0!important;}
           .mob-fab{display:flex!important;}
@@ -535,7 +544,7 @@ export default function Home() {
           ancho justo a la altura de «Toca aquí para más información», y tapaba
           el final de la frase. El texto de cómo instalar sigue saliendo al
           tocarlo. */}
-      <div className="mob-fab" style={{ position:'fixed', bottom:'calc(16px + env(safe-area-inset-bottom, 0px))', right:14, zIndex:200, flexDirection:'column', alignItems:'flex-end', gap:8 }}>
+      <div className="mob-fab" style={{ position:'fixed', bottom:'calc(8px + env(safe-area-inset-bottom, 0px))', right:14, zIndex:200, flexDirection:'column', alignItems:'flex-end', gap:8 }}>
         {showHint && (
           <div style={{ background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.3)', borderRadius:14, padding:'12px 14px', maxWidth:220, fontSize:13, color:'#aebfe2', lineHeight:1.5, boxShadow:'0 8px 24px rgba(0,0,0,.5)' }}>
             {isIOS

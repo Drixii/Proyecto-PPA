@@ -165,14 +165,31 @@
 
   function grid(){
     var n=countries.length;
-    var cols=W<720?2:5;
-    var fr=W<720?26:33;
-    var cellW=fr*2+(W<720?36:78);
-    var cellH=fr*2+50;
-    var rows=Math.ceil(n/cols);
-    var startX=W*0.5-(cols*cellW)/2+cellW/2;
-    var startY=H*0.57-(rows*cellH)/2+cellH/2;
-    return {fr:fr,cols:cols,cellW:cellW,cellH:cellH,startX:startX,startY:startY};
+    if(W>=720){
+      var cols=5,fr=33,cellW=fr*2+78,cellH=fr*2+50,rows=Math.ceil(n/cols);
+      return {fr:fr,cols:cols,rows:rows,n:n,cellW:cellW,cellH:cellH,
+        startX:W*0.5-(cols*cellW)/2+cellW/2,
+        startY:H*0.57-(rows*cellH)/2+cellH/2,fs:14,fsBadge:12};
+    }
+
+    // Móvil: tres columnas y hacia abajo. Con dos, las diez banderas eran
+    // cinco filas que no cabían bajo el título, y la primera fila —Canadá y
+    // EE.UU.— se pintaba encima del texto. Ahora la cuadrícula empieza donde
+    // acaba el título, medido del DOM y no supuesto, y reparte el alto que
+    // queda entre las filas.
+    var cols=3,rows=Math.ceil(n/cols);
+    var arriba=gridTitle?(gridTitle.offsetTop+gridTitle.offsetHeight+14):H*0.3;
+    var abajo=H-12;
+    var cellW=Math.min(128,(W-16)/cols);
+    var cellH=clamp((abajo-arriba)/rows,76,120);
+    // Lo que ocupa una celda por encima y por debajo del centro de la
+    // bandera: el nombre arriba y el badge abajo. La bandera se ajusta para
+    // que las dos mitades quepan en media celda.
+    var fs=13,fsBadge=11;
+    var fr=clamp(Math.floor((cellH/2-fsBadge*1.8-8)/0.736),14,22);
+    return {fr:fr,cols:cols,rows:rows,n:n,cellW:cellW,cellH:cellH,
+      startX:W*0.5-(cols*cellW)/2+cellW/2,
+      startY:arriba+cellH/2,fs:fs,fsBadge:fsBadge};
   }
 
   function cityFlag(c,sx,sy,fr,alpha,haloAlpha){
@@ -314,7 +331,8 @@
       var a2=clamp((czr+0.08)/1.08,0,1);
       var frG=Math.max(11,Math.round(R*0.048*(0.55+a2*0.45)));
       var col=ci%gr.cols,row=Math.floor(ci/gr.cols);
-      var tx=gr.startX+col*gr.cellW;
+      var enFila=row===gr.rows-1?(gr.n-row*gr.cols):gr.cols;
+      var tx=gr.startX+col*gr.cellW+(gr.cols-enFila)*gr.cellW/2;
       var ty=gr.startY+row*gr.cellH;
       var ppx=gx+(tx-gx)*morph;
       var ppy=gy+(ty-gy)*morph;
@@ -327,7 +345,7 @@
         ctx.save();
         ctx.globalAlpha=clamp((morph-0.45)/0.52,0,1);
         ctx.fillStyle='#dbe6ff';
-        var fs=W<768?15:14;
+        var fs=gr.fs;
         ctx.font='600 '+fs+'px \'Space Grotesk\',system-ui,sans-serif';
         ctx.textAlign='center';
         var flagHalf=fr*2.3*0.32;
@@ -338,7 +356,7 @@
       // Debajo de la bandera, tanto en la esfera como en la cuadrícula. En la
       // esfera se desvanece con la cara del globo, igual que la bandera.
       var mediaBandera=(morph>0.45?fr*2.3*0.32:fr);
-      badgePrecio(c,ppx,ppy+mediaBandera+6,alpha,morph>0.45?12:Math.max(9,fr*0.62));
+      badgePrecio(c,ppx,ppy+mediaBandera+6,alpha,morph>0.45?gr.fsBadge:Math.max(9,fr*0.62));
     }
 
     anim=requestAnimationFrame(frame);
