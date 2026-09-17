@@ -4,6 +4,7 @@ import CalculatorDark from '../components/CalculatorDark'
 import DemoEnvio from '../components/DemoEnvio'
 import HuinchaTasas from '../components/HuinchaTasas'
 import Integraciones from '../components/Integraciones'
+import QuienesSomos from '../components/QuienesSomos'
 import PiePagina from '../components/PiePagina'
 import { guardarEnvioPendiente, estadoNuevaTransferencia } from '../utils/envioPendiente'
 import CintaDeTasas from '../components/CintaDeTasas'
@@ -11,12 +12,6 @@ import { useStore } from '../store/useStore'
 import logoSrc from '../assets/logo.png'
 
 // ── Secciones estáticas ───────────────────────────────────────────────────────
-const FEATURES = [
-  { accent: '#7dd3fc', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#7dd3fc" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>, title: 'Transferencias en minutos', desc: 'Procesamos tu envío al instante. Sin esperas, sin burocracia.' },
-  { accent: '#86efac', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#86efac" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, title: 'Seguridad de nivel bancario', desc: 'Datos y dinero protegidos con cifrado y certificación.' },
-  { accent: '#a5b4fc', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#a5b4fc" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>, title: 'Cero comisiones ocultas', desc: 'Ves exactamente cuánto recibe tu beneficiario antes de confirmar.' },
-  { accent: '#fcd34d', icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#fcd34d" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>, title: 'Tasas en tiempo real', desc: 'Tipos de cambio actualizados en vivo para la mejor tasa.' },
-]
 const STEPS = [
   { n: '1', title: 'Calcula tu envío', desc: 'Ingresa el monto y elige el país. Tasa en tiempo real.' },
   { n: '2', title: 'Ingresa los datos', desc: 'Datos de tu beneficiario y banco destino.' },
@@ -192,11 +187,6 @@ export default function Home() {
     navigate('/new-transfer', { state: estadoNuevaTransferencia(envio) })
   }
 
-  const glassCard = {
-    background: 'rgba(8,16,44,.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid rgba(56,189,248,.18)', boxShadow: '0 8px 32px rgba(0,6,28,.6),inset 0 1px 0 rgba(56,189,248,.08)',
-  }
-
   return (
     <div style={{ background: '#060d22', minHeight: '100vh', fontFamily: "'Space Grotesk',system-ui,sans-serif", color: '#eaf2ff' }}>
       <style>{`
@@ -326,7 +316,10 @@ export default function Home() {
             </div>
           </div>
           <div className="nav-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <a href="#como" className="nav-text-link">¿Cómo funciona?</a>
+            {/* Con scrollIntoView y no con el ancla sola: el ancla salta de
+                golpe y deja el título debajo del header flotante. */}
+            <a href="#como" className="nav-text-link" onClick={e => { e.preventDefault(); document.getElementById('como')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>Pasos</a>
+            <a href="#nosotros" className="nav-text-link" onClick={e => { e.preventDefault(); document.getElementById('nosotros')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>Quiénes somos</a>
             {user ? (
               <button
                 onClick={() => navigate(user.role === 'admin' ? '/admin' : user.role === 'sub_admin' ? '/sub-admin' : '/dashboard')}
@@ -427,7 +420,7 @@ export default function Home() {
       <HuinchaTasas />
 
       {/* ── CÓMO FUNCIONA ── */}
-      <section id="como" className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)' }}>
+      <section id="como" className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)', scrollMarginTop: 80 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div data-reveal="" style={{ textAlign: 'center', marginBottom: 56, ...R0 }}>
             <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Simple y transparente</p>
@@ -442,24 +435,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── POR QUÉ KSA GLOBAL ── */}
-      <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.82)' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div data-reveal="" style={{ textAlign: 'center', marginBottom: 52, ...R0 }}>
-            <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Por qué Ksa Global</p>
-            <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>Diseñado para mover dinero<br />sin fronteras</h2>
-          </div>
-          <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 18 }}>
-            {FEATURES.map((f, i) => (
-              <div key={f.title} className="feature-card" data-reveal="" style={{ ...glassCard, borderRadius: 22, padding: 26, borderTop: `2px solid ${f.accent}`, ...RD(i * 0.1) }}>
-                <div className="feature-icon" style={{ width: 50, height: 50, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, background: 'rgba(4,12,38,.9)', border: `1px solid ${f.accent}33` }}>{f.icon}</div>
-                <h3 style={{ margin: '0 0 7px', fontSize: 17, fontWeight: 600, color: '#fff' }}>{f.title}</h3>
-                <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: '#9fb0d4' }}>{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── QUIÉNES SOMOS ── */}
+      <QuienesSomos />
 
       {/* ── INTEGRACIONES ── */}
       <Integraciones />
