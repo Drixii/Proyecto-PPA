@@ -711,11 +711,13 @@ export default function FinexyLayout({ children, fullHeight = false }) {
       <aside className="hidden md:flex w-[68px] flex-col items-center py-5 shrink-0 z-10"
         style={{ background: 'rgba(8,16,44,.92)', borderRight: '1px solid rgba(255,255,255,.06)', position: 'relative' }}>
 
-        {/* Logo */}
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-800 flex items-center justify-center text-white text-[10px] font-black tracking-tight mb-6 shadow-lg"
+        {/* Logo: lleva al home, como en cualquier web. La sesión sigue
+            abierta y desde ahí «Mi panel →» devuelve adentro. */}
+        <Link to="/" title="Ir al inicio" aria-label="Ir al inicio"
+          className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-800 flex items-center justify-center text-white text-[10px] font-black tracking-tight mb-6 shadow-lg transition-transform hover:scale-105"
           style={{ boxShadow: '0 8px 20px rgba(56,189,248,.3)' }}>
           KG
-        </div>
+        </Link>
 
         {/* Nav icons */}
         <div className="flex-1 flex flex-col items-center gap-1.5">
@@ -756,9 +758,10 @@ export default function FinexyLayout({ children, fullHeight = false }) {
 
           {/* Mobile logo */}
           <div className="flex md:hidden items-center gap-2 mr-1">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-400 to-blue-800 flex items-center justify-center text-white text-[9px] font-black shrink-0">
+            <Link to="/" title="Ir al inicio" aria-label="Ir al inicio"
+              className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-400 to-blue-800 flex items-center justify-center text-white text-[9px] font-black shrink-0">
               KG
-            </div>
+            </Link>
           </div>
 
           {/* Tabs pill (desktop) */}
