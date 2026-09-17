@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
 import DemoEnvio from '../components/DemoEnvio'
 import HuinchaTasas from '../components/HuinchaTasas'
+import MetodosPago from '../components/MetodosPago'
 import CintaDeTasas from '../components/CintaDeTasas'
 import { useStore } from '../store/useStore'
 import logoSrc from '../assets/logo.png'
@@ -397,6 +398,22 @@ export default function Home() {
       {/* ── Huinchas de tasas ── */}
       <HuinchaTasas />
 
+      {/* ── CÓMO FUNCIONA ── */}
+      <section id="como" className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div data-reveal="" style={{ textAlign: 'center', marginBottom: 56, ...R0 }}>
+            <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Simple y transparente</p>
+            <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>En 4 pasos, tu dinero llega</h2>
+          </div>
+          {/* A la izquierda, un teléfono que hace un envío de principio a fin;
+              a la derecha, los pasos apareciendo a su ritmo. Tocar uno lleva
+              el teléfono ahí. */}
+          <div data-reveal="" style={R0}>
+            <DemoEnvio pasos={STEPS} />
+          </div>
+        </div>
+      </section>
+
       {/* ── POR QUÉ KSA GLOBAL ── */}
       <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.82)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -416,21 +433,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── CÓMO FUNCIONA ── */}
-      <section id="como" className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div data-reveal="" style={{ textAlign: 'center', marginBottom: 56, ...R0 }}>
-            <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Simple y transparente</p>
-            <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>En 4 pasos, tu dinero llega</h2>
-          </div>
-          {/* A la izquierda, un teléfono que hace un envío de principio a fin;
-              a la derecha, los pasos apareciendo a su ritmo. Tocar uno lleva
-              el teléfono ahí. */}
-          <div data-reveal="" style={R0}>
-            <DemoEnvio pasos={STEPS} />
-          </div>
-        </div>
-      </section>
+      {/* ── MÉTODOS DE PAGO ── */}
+      <MetodosPago reveal={R0} revealDe={RD} />
 
       {/* ── BANDA DE CONFIANZA ── */}
       <section className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.5)', borderTop: '1px solid rgba(255,255,255,.06)', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
