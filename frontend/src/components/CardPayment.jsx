@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { loadStripe } from '@stripe/stripe-js'
+// La versión «pure» no inyecta el script de Stripe al importarse: solo al
+// llamar a loadStripe. La normal lo cargaba en todas las páginas, el home
+// incluido (255 KB y cookies de terceros), aunque nadie fuera a pagar.
+import { loadStripe } from '@stripe/stripe-js/pure'
 import {
   Elements, CardNumberElement, CardExpiryElement, CardCvcElement,
   useStripe, useElements,

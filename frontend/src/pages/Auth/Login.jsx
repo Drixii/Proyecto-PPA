@@ -317,7 +317,6 @@ export default function Login() {
         </div>
       )}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
         *{box-sizing:border-box;}
         @keyframes pulseDot{0%{box-shadow:0 0 0 0 rgba(56,225,255,.55)}70%{box-shadow:0 0 0 9px rgba(56,225,255,0)}100%{box-shadow:0 0 0 0 rgba(56,225,255,0)}}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}

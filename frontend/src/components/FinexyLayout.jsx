@@ -690,7 +690,6 @@ export default function FinexyLayout({ children, fullHeight = false }) {
     <AvisoPagosPendientes />
     <div className="flex" style={{ background: '#060d22', fontFamily: "'Space Grotesk', system-ui, sans-serif", height: '100vh', maxHeight: '100dvh' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
         @keyframes notif-pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}70%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}
         @keyframes welcomeFade{0%{opacity:0;transform:translateY(10px)}18%{opacity:1;transform:none}82%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-8px)}}
         @keyframes pageEnter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}

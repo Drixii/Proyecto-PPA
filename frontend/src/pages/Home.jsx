@@ -1,13 +1,18 @@
-import { useEffect, useState, useRef } from 'react'
+import { lazy, Suspense, useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
-import DemoEnvio from '../components/DemoEnvio'
-import HuinchaTasas from '../components/HuinchaTasas'
-import Integraciones from '../components/Integraciones'
-import QuienesSomos from '../components/QuienesSomos'
-import EnNumeros from '../components/EnNumeros'
-import Resenas from '../components/Resenas'
-import PiePagina from '../components/PiePagina'
+
+// Lo que queda debajo del inicio se descarga aparte, justo después de pintar
+// la primera pantalla. Así el globo, el título y la calculadora no esperan a
+// que el navegador lea el código del teléfono de ejemplo, las integraciones
+// o el pie, que nadie ve hasta bajar.
+const DemoEnvio = lazy(() => import('../components/DemoEnvio'))
+const HuinchaTasas = lazy(() => import('../components/HuinchaTasas'))
+const Integraciones = lazy(() => import('../components/Integraciones'))
+const QuienesSomos = lazy(() => import('../components/QuienesSomos'))
+const EnNumeros = lazy(() => import('../components/EnNumeros'))
+const Resenas = lazy(() => import('../components/Resenas'))
+const PiePagina = lazy(() => import('../components/PiePagina'))
 import { guardarEnvioPendiente, estadoNuevaTransferencia } from '../utils/envioPendiente'
 import CintaDeTasas from '../components/CintaDeTasas'
 import { useStore } from '../store/useStore'
@@ -192,7 +197,6 @@ export default function Home() {
   return (
     <div style={{ background: '#060d22', minHeight: '100vh', fontFamily: "'Space Grotesk',system-ui,sans-serif", color: '#eaf2ff' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         @keyframes floaty   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-9px)} }
         @keyframes pulseDot { 0%{box-shadow:0 0 0 0 rgba(56,225,255,.55)} 70%{box-shadow:0 0 0 9px rgba(56,225,255,0)} 100%{box-shadow:0 0 0 0 rgba(56,225,255,0)} }
         @keyframes marquee  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
@@ -407,7 +411,7 @@ export default function Home() {
       </div>
 
       {/* ── Huinchas de tasas ── */}
-      <HuinchaTasas />
+      <Suspense fallback={null}><HuinchaTasas /></Suspense>
 
       {/* ── CÓMO FUNCIONA ── */}
       <section id="como" className="section-pad" style={{ position: 'relative', zIndex: 2, background: 'rgba(4,10,30,.55)', scrollMarginTop: 80 }}>
@@ -420,25 +424,25 @@ export default function Home() {
               a la derecha, los pasos apareciendo a su ritmo. Tocar uno lleva
               el teléfono ahí. */}
           <div data-reveal="" style={R0}>
-            <DemoEnvio pasos={STEPS} />
+            <Suspense fallback={null}><DemoEnvio pasos={STEPS} /></Suspense>
           </div>
         </div>
       </section>
 
       {/* ── QUIÉNES SOMOS ── */}
-      <QuienesSomos />
+      <Suspense fallback={null}><QuienesSomos /></Suspense>
 
       {/* ── INTEGRACIONES ── */}
-      <Integraciones />
+      <Suspense fallback={null}><Integraciones /></Suspense>
 
       {/* ── EN NÚMEROS ── */}
-      <EnNumeros />
+      <Suspense fallback={null}><EnNumeros /></Suspense>
 
       {/* ── RESEÑAS ── solo si hay alguna publicada */}
-      <Resenas />
+      <Suspense fallback={null}><Resenas /></Suspense>
 
       {/* ── FOOTER ── */}
-      <PiePagina />
+      <Suspense fallback={null}><PiePagina /></Suspense>
 
       {/* Mobile floating PWA install button.
           Redondo y sin texto: con «Instalar app» escrito ocupaba la mitad del

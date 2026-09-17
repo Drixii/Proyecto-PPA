@@ -1,30 +1,35 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AvisoActualizacion from './components/AvisoActualizacion'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useStore } from './store/useStore'
 import api from './services/api'
 import Home from './pages/Home'
-import Login from './pages/Auth/Login'
-import Dashboard from './pages/Client/Dashboard'
-import NewTransfer from './pages/Client/NewTransfer'
-import OrderDetail from './pages/Client/OrderDetail'
-import AdminDashboard from './pages/Admin/AdminDashboard'
-import Pipeline from './pages/Admin/Pipeline'
-import Cartera from './pages/Admin/Cartera'
-import OrderAdmin from './pages/Admin/OrderAdmin'
-import AdminSettings from './pages/Admin/AdminSettings'
-import AdminOrders from './pages/Admin/AdminOrders'
-import Retenciones from './pages/Admin/Retenciones'
-import AdminUsers from './pages/Admin/AdminUsers'
-import ClientHistory from './pages/Client/ClientHistory'
-import ClientProfile from './pages/Client/ClientProfile'
-import SubAdminDashboard from './pages/SubAdmin/SubAdminDashboard'
-import SubAdminPipeline from './pages/SubAdmin/SubAdminPipeline'
-import SubAdminOrders from './pages/SubAdmin/SubAdminOrders'
-import AdminProfile from './pages/Admin/AdminProfile'
-import AdminPoints from './pages/Admin/AdminPoints'
-import ClientPoints from './pages/Client/ClientPoints'
-import VuelosPrueba from './pages/VuelosPrueba'
+// Cada página se descarga cuando se visita, no todas al abrir la web. Antes
+// el home bajaba en un solo archivo el panel de admin, el del operador y la
+// pantalla de pago, que un visitante no abre nunca: más de 300 KB de
+// JavaScript antes de ver nada. El home va aparte y sin espera: es la
+// primera impresión y lo que miden los buscadores.
+const Login = lazy(() => import('./pages/Auth/Login'))
+const Dashboard = lazy(() => import('./pages/Client/Dashboard'))
+const NewTransfer = lazy(() => import('./pages/Client/NewTransfer'))
+const OrderDetail = lazy(() => import('./pages/Client/OrderDetail'))
+const AdminDashboard = lazy(() => import('./pages/Admin/AdminDashboard'))
+const Pipeline = lazy(() => import('./pages/Admin/Pipeline'))
+const Cartera = lazy(() => import('./pages/Admin/Cartera'))
+const OrderAdmin = lazy(() => import('./pages/Admin/OrderAdmin'))
+const AdminSettings = lazy(() => import('./pages/Admin/AdminSettings'))
+const AdminOrders = lazy(() => import('./pages/Admin/AdminOrders'))
+const Retenciones = lazy(() => import('./pages/Admin/Retenciones'))
+const AdminUsers = lazy(() => import('./pages/Admin/AdminUsers'))
+const ClientHistory = lazy(() => import('./pages/Client/ClientHistory'))
+const ClientProfile = lazy(() => import('./pages/Client/ClientProfile'))
+const SubAdminDashboard = lazy(() => import('./pages/SubAdmin/SubAdminDashboard'))
+const SubAdminPipeline = lazy(() => import('./pages/SubAdmin/SubAdminPipeline'))
+const SubAdminOrders = lazy(() => import('./pages/SubAdmin/SubAdminOrders'))
+const AdminProfile = lazy(() => import('./pages/Admin/AdminProfile'))
+const AdminPoints = lazy(() => import('./pages/Admin/AdminPoints'))
+const ClientPoints = lazy(() => import('./pages/Client/ClientPoints'))
+const VuelosPrueba = lazy(() => import('./pages/VuelosPrueba'))
 
 function roleHome(role) {
   if (role === 'admin') return '/admin'
@@ -143,6 +148,7 @@ export default function App() {
       <AvisoActualizacion />
       <UserRefresh />
       <ForceChangePassword />
+      <Suspense fallback={<div style={{ minHeight: '100vh', background: '#060d22' }} />}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
@@ -179,6 +185,7 @@ export default function App() {
         <Route path="/Vuelos-prueba" element={<VuelosPrueba />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }
