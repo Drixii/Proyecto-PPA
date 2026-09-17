@@ -245,7 +245,7 @@ export default function CalculatorDark({ onSend }) {
         </div>
 
         {/* CTA */}
-        <button className="calc-cta" onClick={() => onSend?.({ amount: rawAmount, fromCurrency, toCountry, toCurrency, result })}
+        <button className="calc-cta" onClick={() => onSend?.({ amount: rawAmount, fromCurrency, fromCountry, toCountry, toCurrency, result })}
           style={{ marginTop: 16, width: '100%', padding: 15, fontSize: 16, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 14px 38px rgba(56,189,248,.4)' }}>
           ¡Comienza tu envío ahora! →
         </button>

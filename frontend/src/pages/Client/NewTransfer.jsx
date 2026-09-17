@@ -104,8 +104,12 @@ export default function NewTransfer() {
 
   // Internal steps: 0=Destino, 1=Calcular, 2=Receptor, 3=Pago, 4=Confirmar
   // "Enviar nuevamente" (prefillReceiver) jumps directly to Calcular (step 1)
-  const [step, setStep] = useState(prefillReceiver ? 1 : 0)
-  const [destinatarioType, setDestinatarioType] = useState(prefillReceiver ? 'anterior' : null)
+  // Desde la calculadora de la portada (nuevoDestinatario) también: ya eligió
+  // monto y países, y lo que falta es a quién. Se abre como destinatario nuevo
+  // con lo que escribió, en vez de hacerle elegir en Destino y reescribirlo.
+  const vieneDeCalculadora = !prefillReceiver && !!prefill.nuevoDestinatario
+  const [step, setStep] = useState(prefillReceiver || vieneDeCalculadora ? 1 : 0)
+  const [destinatarioType, setDestinatarioType] = useState(prefillReceiver ? 'anterior' : vieneDeCalculadora ? 'nuevo' : null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fromOpen, setFromOpen] = useState(false)

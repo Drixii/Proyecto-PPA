@@ -138,6 +138,7 @@ const REGISTER_COUNTRIES = ['Chile', 'Colombia', 'Venezuela', 'Perú', 'Argentin
 import { formateaDocumento, revisaDocumento, ejemploDocumento, formateaTelefono, validaEmail, validaTelefono } from '../../utils/documento'
 import { Bandera } from '../../utils/flags'
 import { COUNTRY_CODE } from '../../utils/flags'
+import { tomarEnvioPendiente, estadoNuevaTransferencia } from '../../utils/envioPendiente'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -202,7 +203,10 @@ export default function Login() {
       localStorage.setItem(seenKey, '1')
       localStorage.setItem('ksa_welcome_pending', JSON.stringify({ name: firstName, returning }))
       revalidarNotificaciones()
-      navigate(dest)
+      // Venía de la calculadora de la portada: se retoma ese envío.
+      const pendiente = role === 'client' ? tomarEnvioPendiente() : null
+      if (pendiente) navigate('/new-transfer', { state: estadoNuevaTransferencia(pendiente) })
+      else navigate(dest)
     } catch (err) { setLoginError(err.response?.data?.detail || 'Error al iniciar sesión') }
     finally { setLoginLoading(false) }
   }
@@ -252,7 +256,11 @@ export default function Login() {
       // Pedirlo al entrar a la portada, sin contexto, se deniega casi siempre
       // y el navegador no vuelve a preguntar nunca más.
       activarNotificaciones()
-      navigate('/dashboard')
+      // Si se registró desde la calculadora de la portada, no a su panel sino
+      // a terminar el envío que ya había empezado a calcular.
+      const pendiente = tomarEnvioPendiente()
+      if (pendiente) navigate('/new-transfer', { state: estadoNuevaTransferencia(pendiente) })
+      else navigate('/dashboard')
     } catch (err) {
       setCodeError(err.response?.data?.detail || 'Código inválido')
     } finally { setCodeLoading(false) }

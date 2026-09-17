@@ -4,6 +4,7 @@ import CalculatorDark from '../components/CalculatorDark'
 import DemoEnvio from '../components/DemoEnvio'
 import HuinchaTasas from '../components/HuinchaTasas'
 import MetodosPago from '../components/MetodosPago'
+import { guardarEnvioPendiente, estadoNuevaTransferencia } from '../utils/envioPendiente'
 import CintaDeTasas from '../components/CintaDeTasas'
 import { useStore } from '../store/useStore'
 import logoSrc from '../assets/logo.png'
@@ -170,9 +171,21 @@ export default function Home() {
     requestAnimationFrame(step)
   }
 
-  const handleSend = ({ amount, fromCurrency, toCountry, toCurrency, result }) => {
-    if (!user) { navigate('/login'); return }
-    navigate('/new-transfer', { state: { amount, fromCurrency, toCountry, toCurrency, result } })
+  // «Comienza tu envío» lleva lo escrito en la calculadora hasta la pantalla
+  // de transferir, como destinatario nuevo. Sin sesión, primero al registro:
+  // el envío queda guardado y se retoma en cuanto la cuenta existe.
+  const handleSend = (envio) => {
+    if (!user) {
+      guardarEnvioPendiente(envio)
+      navigate('/login', { state: { mode: 'register' } })
+      return
+    }
+    // Admins y operadores no transfieren: a su panel, como el botón de arriba.
+    if (user.role !== 'client') {
+      navigate(user.role === 'admin' ? '/admin' : user.role === 'sub_admin' ? '/sub-admin' : '/dashboard')
+      return
+    }
+    navigate('/new-transfer', { state: estadoNuevaTransferencia(envio) })
   }
 
   const glassCard = {
