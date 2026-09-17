@@ -564,9 +564,158 @@ function desplazamiento(escena, t, d) {
   return 0
 }
 
+// ── Línea de pasos ──────────────────────────────────────────────────────────
+//
+// Las cuatro tarjetas del home, al lado del teléfono y al ritmo de él. Solo se
+// ve el paso en el que va el teléfono y los anteriores: el siguiente entra
+// cuando le toca, así la columna cuenta la misma historia que la pantalla en
+// vez de enseñarlo todo de golpe. Al volver a empezar la vuelta se recogen y
+// vuelven a salir.
+//
+// Todo lo que se mueve es CSS sobre clases (visto, activo, hecho): el reloj
+// solo decide qué clase lleva cada tarjeta, y las transiciones hacen el resto.
+
+// Tramo del reloj que cubre cada tarjeta.
+const TRAMOS_PASO = [[0, 7200], [7200, 15600], [15600, 26800], [26800, DURACION]]
+
+const ICONOS_PASO = [
+  <svg key="0" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="5" y="3" width="14" height="18" rx="2.5" /><path strokeLinecap="round" d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 15.5h.01M12 15.5h.01M15.5 15.5h.01" /></svg>,
+  <svg key="1" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="3.6" /><path strokeLinecap="round" d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5" /></svg>,
+  <svg key="2" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" /></svg>,
+  <svg key="3" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 4.6-3 8.3-7 10-4-1.7-7-5.4-7-10V6l7-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M8.8 12.2l2.2 2.2 4.3-4.6" /></svg>,
+]
+
+function LineaDePasos({ pasos, t, onElegir }) {
+  const activo = Math.max(0, TRAMOS_PASO.findIndex(([a, b]) => t >= a && t < b))
+  const dentro = avance(t, TRAMOS_PASO[activo][0], TRAMOS_PASO[activo][1])
+  const n = pasos.length
+  // La línea llega hasta la insignia del paso activo y avanza con él hacia el
+  // siguiente.
+  const relleno = Math.min(1, (activo + Math.min(dentro, 0.92)) / Math.max(1, n - 1))
+
+  return (
+    <ol className="pasos-demo">
+      <li aria-hidden="true" className="pasos-riel"><span className="pasos-relleno" style={{ transform: `scaleY(${relleno})` }} /></li>
+      {pasos.map((s, i) => {
+        const visto = i <= activo
+        const hecho = i < activo
+        const esActivo = i === activo
+        const final = i === n - 1
+        const clases = ['paso-demo', visto && 'visto', esActivo && 'activo', hecho && 'hecho', final && 'final'].filter(Boolean).join(' ')
+        return (
+          <li key={s.n}
+            className={clases}
+            role="button"
+            tabIndex={visto ? 0 : -1}
+            aria-hidden={!visto}
+            aria-current={esActivo ? 'step' : undefined}
+            onClick={() => { if (visto) onElegir(i) }}
+            onKeyDown={e => { if (visto && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onElegir(i) } }}>
+            <span className="paso-insignia">
+              {hecho || final
+                ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path className="paso-trazo" d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                : s.n}
+            </span>
+            <div className="paso-cuerpo">
+              <span className="paso-etiqueta">{final ? 'Final' : `Paso ${i + 1}`}</span>
+              <h3>{s.title}</h3>
+              <p>{s.desc}</p>
+              <span className="paso-barra"><span style={{ transform: `scaleX(${esActivo ? dentro : hecho ? 1 : 0})` }} /></span>
+            </div>
+            <span className="paso-icono">{ICONOS_PASO[i]}</span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+const CSS_PASOS = `
+  .como-wrap{--ancho:300px;--escala:${300 / ANCHO};display:grid;grid-template-columns:auto minmax(0,1fr);gap:64px;align-items:stretch;max-width:1000px;margin:0 auto;}
+  @media(min-width:900px){.como-wrap{--ancho:330px;--escala:${330 / ANCHO};}}
+  @media(max-width:360px){.como-wrap{--ancho:270px;--escala:${270 / ANCHO};}}
+  .como-tel{display:flex;justify-content:center;align-items:center;}
+
+  .pasos-demo{position:relative;list-style:none;margin:0;padding:6px 0;display:flex;flex-direction:column;justify-content:space-between;gap:16px;}
+  .pasos-riel{position:absolute;left:47px;top:52px;bottom:52px;width:2px;border-radius:2px;background:rgba(255,255,255,.07);pointer-events:none;}
+  .pasos-relleno{position:absolute;inset:0;border-radius:2px;transform-origin:top;background:linear-gradient(180deg,#38bdf8,#818cf8 60%,#4ade80);box-shadow:0 0 14px rgba(56,189,248,.55);transition:transform .25s linear;}
+
+  .paso-demo{position:relative;z-index:1;overflow:hidden;display:flex;align-items:center;gap:18px;padding:20px 22px;border-radius:20px;cursor:default;
+    background:rgb(9,17,44);border:1px solid rgba(255,255,255,.07);
+    box-shadow:0 4px 24px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08);
+    opacity:0;transform:translateX(56px) scale(.94);filter:blur(10px);
+    transition:opacity .4s ease,transform .45s ease,filter .4s ease,border-color .45s,box-shadow .45s,background .45s;}
+  .paso-demo.visto{cursor:pointer;opacity:1;transform:none;filter:none;
+    transition:opacity .75s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1),filter .7s ease,border-color .45s,box-shadow .45s,background .45s;}
+  /* Los hechos se atenúan por dentro y no con opacity en la tarjeta: con
+     la tarjeta translúcida la línea vertical se veía pasar por encima. */
+  .paso-demo.hecho .paso-cuerpo,.paso-demo.hecho .paso-icono{opacity:.72;transition:opacity .45s;}
+  .paso-demo.hecho:hover .paso-cuerpo,.paso-demo.hecho:hover .paso-icono{opacity:1;}
+  .paso-demo.visto.activo{transform:translateX(-8px);border-color:rgba(56,189,248,.55);
+    background:linear-gradient(135deg,rgba(16,44,96,.95),rgba(8,22,60,.95));
+    box-shadow:0 22px 50px rgba(56,189,248,.18),0 0 0 1px rgba(56,189,248,.18),inset 0 1px 0 rgba(125,211,252,.25);}
+  .paso-demo.visto.final.activo{border-color:rgba(74,222,128,.55);box-shadow:0 22px 50px rgba(74,222,128,.18),0 0 0 1px rgba(74,222,128,.18),inset 0 1px 0 rgba(134,239,172,.25);}
+
+  /* Destello que cruza la tarjeta al aparecer */
+  .paso-demo::after{content:'';position:absolute;top:0;bottom:0;left:-60%;width:45%;pointer-events:none;
+    background:linear-gradient(100deg,transparent,rgba(125,211,252,.16),transparent);transform:skewX(-18deg);opacity:0;}
+  .paso-demo.visto::after{animation:pasoDestello 1.3s .25s cubic-bezier(.4,0,.2,1) both;}
+
+  .paso-insignia{position:relative;width:52px;height:52px;flex-shrink:0;border-radius:15px;display:grid;place-items:center;
+    font:700 19px 'JetBrains Mono',monospace;color:#061027;background:linear-gradient(135deg,#7dd3fc,#38bdf8);
+    box-shadow:0 8px 22px rgba(56,189,248,.35),0 0 0 3px rgba(8,16,44,1);transition:background .45s,box-shadow .45s,color .45s;}
+  .paso-demo.visto .paso-insignia{animation:pasoInsignia .75s cubic-bezier(.34,1.56,.64,1) .12s both;}
+  .paso-demo.activo .paso-insignia::before{content:'';position:absolute;inset:-7px;border-radius:20px;border:2px solid rgba(56,189,248,.6);animation:pasoPulso 1.9s ease-out infinite;}
+  .paso-demo.final.activo .paso-insignia::before{border-color:rgba(74,222,128,.6);}
+  .paso-demo.hecho .paso-insignia,.paso-demo.final .paso-insignia{color:#fff;background:linear-gradient(135deg,#4ade80,#16a34a);box-shadow:0 8px 22px rgba(74,222,128,.35),0 0 0 3px rgba(8,16,44,1);}
+  .paso-trazo{stroke-dasharray:24;stroke-dashoffset:24;}
+  .paso-demo.visto .paso-trazo{animation:pasoTrazo .5s .35s cubic-bezier(.65,0,.35,1) forwards;}
+
+  .paso-cuerpo{flex:1;min-width:0;}
+  .paso-etiqueta{display:block;margin-bottom:3px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#38bdf8;}
+  .paso-demo.final .paso-etiqueta{color:#4ade80;}
+  .paso-cuerpo h3{margin:0 0 4px;font-size:16px;font-weight:600;color:#fff;}
+  .paso-cuerpo p{margin:0;font-size:13.5px;line-height:1.55;color:#9fb0d4;}
+  .paso-barra{display:block;height:3px;margin-top:12px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.07);opacity:0;transition:opacity .4s;}
+  .paso-demo.activo .paso-barra{opacity:1;}
+  .paso-barra>span{display:block;height:100%;transform-origin:left;background:linear-gradient(90deg,#38bdf8,#818cf8);transition:transform .2s linear;}
+  .paso-demo.final .paso-barra>span{background:linear-gradient(90deg,#4ade80,#22c55e);}
+
+  .paso-icono{width:42px;height:42px;flex-shrink:0;border-radius:12px;display:grid;place-items:center;color:#475569;
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);transition:color .45s,background .45s,border-color .45s,transform .6s cubic-bezier(.34,1.56,.64,1);}
+  .paso-demo.activo .paso-icono{color:#7dd3fc;background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.3);transform:rotate(-8deg) scale(1.08);}
+  .paso-demo.final.activo .paso-icono{color:#86efac;background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.3);}
+
+  @keyframes pasoInsignia{0%{transform:scale(.3) rotate(-25deg);opacity:0}100%{transform:none;opacity:1}}
+  @keyframes pasoPulso{0%{transform:scale(.92);opacity:.9}100%{transform:scale(1.28);opacity:0}}
+  @keyframes pasoTrazo{to{stroke-dashoffset:0}}
+  @keyframes pasoDestello{0%{left:-60%;opacity:0}20%{opacity:1}100%{left:130%;opacity:0}}
+
+  @media(max-width:768px){
+    .como-wrap{grid-template-columns:1fr;gap:36px;}
+    /* En móvil los pasos van debajo del teléfono y no hay alto que igualar:
+       los que no han salido se pliegan en vez de guardar su hueco, y cada
+       uno nuevo abre su sitio al entrar. */
+    .pasos-demo{gap:0;justify-content:flex-start;}
+    .paso-demo{padding:0 16px;gap:14px;max-height:0;margin-bottom:0;border-width:0;
+      transition:opacity .35s ease,transform .4s ease,filter .35s ease,max-height .45s ease,padding .45s ease,margin .45s ease,border-width .45s;}
+    .paso-demo.visto{padding:16px;max-height:220px;margin-bottom:12px;border-width:1px;
+      transition:opacity .75s cubic-bezier(.16,1,.3,1) .15s,transform .9s cubic-bezier(.16,1,.3,1) .15s,filter .7s ease .15s,max-height .6s cubic-bezier(.16,1,.3,1),padding .6s cubic-bezier(.16,1,.3,1),margin .6s cubic-bezier(.16,1,.3,1),border-color .45s,box-shadow .45s,background .45s;}
+    .paso-demo.visto.activo{transform:none;}
+    .pasos-riel{left:41px;}
+    .paso-insignia{width:48px;height:48px;font-size:17px;}
+    .paso-icono{display:none;}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .paso-demo{opacity:1;transform:none;filter:none;transition:none;}
+    .paso-demo *,.paso-demo::after,.paso-insignia::before{animation:none!important;}
+    .paso-trazo{stroke-dashoffset:0;}
+  }
+`
+
 // ── Componente ──────────────────────────────────────────────────────────────
 
-export default function DemoEnvio({ onPaso, salto }) {
+export default function DemoEnvio({ pasos = [] }) {
   const [reloj, setReloj] = useState(0)          // ms totales desde el inicio
   const caja = useRef(null)
   const visible = useRef(false)
@@ -603,23 +752,13 @@ export default function DemoEnvio({ onPaso, salto }) {
 
   // Saltar a un paso desde las tarjetas: se lleva el reloj al inicio de esa
   // escena dentro de la vuelta actual.
-  useEffect(() => {
-    if (!salto) return
-    setReloj(r => Math.floor(r / DURACION) * DURACION + INICIO_DE_PASO[salto.paso])
-  }, [salto])
+  const saltarA = (paso) =>
+    setReloj(r => Math.floor(r / DURACION) * DURACION + INICIO_DE_PASO[paso])
 
   const vuelta = Math.floor(reloj / DURACION)
   const t = reloj % DURACION
   const d = datosDeEjemplo(vuelta)
   const escena = [...ESCENAS].reverse().find(e => t >= e.desde)
-
-  const pasoRef = useRef(-1)
-  useEffect(() => {
-    if (escena.paso !== pasoRef.current) {
-      pasoRef.current = escena.paso
-      onPaso?.(escena.paso)
-    }
-  }, [escena.paso, onPaso])
 
   const pasoApp = { destino: 0, calcular: 1, receptor: 2, pago: 3, confirmar: 4, listo: 5 }[escena.id]
 
@@ -631,12 +770,10 @@ export default function DemoEnvio({ onPaso, salto }) {
   else if (escena.id === 'confirmar') pantalla = <PantallaConfirmar t={t} d={d} tasa={tasa} />
   else pantalla = <PantallaListo t={t} d={d} />
 
-  return (
+  const telefono = (
     <div ref={caja} className="demo-tel" aria-label="Vista previa de un envío en el celular">
       <style>{`
-        .demo-tel{--ancho:300px;--escala:${300 / ANCHO};flex-shrink:0;}
-        @media(min-width:900px){.demo-tel{--ancho:330px;--escala:${330 / ANCHO};}}
-        @media(max-width:360px){.demo-tel{--ancho:270px;--escala:${270 / ANCHO};}}
+        .demo-tel{flex-shrink:0;}
         @keyframes demoToque{from{transform:scale(.3);opacity:1}to{transform:scale(1.6);opacity:0}}
         @keyframes demoCursor{50%{opacity:0}}
         @keyframes demoEntra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -705,6 +842,14 @@ export default function DemoEnvio({ onPaso, salto }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+
+  return (
+    <div className="como-wrap">
+      <style>{CSS_PASOS}</style>
+      <div className="como-tel">{telefono}</div>
+      <LineaDePasos pasos={pasos} t={t} onElegir={saltarA} />
     </div>
   )
 }

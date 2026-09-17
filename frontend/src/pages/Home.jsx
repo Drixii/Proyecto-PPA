@@ -99,11 +99,6 @@ export default function Home() {
   // header y de la calculadora: el cristal esmerilado se ve plano.
   const [navListo, setNavListo] = useState(!presentacion)
   const [heroListo, setHeroListo] = useState(false)
-  // Paso que muestra el teléfono de «Cómo funciona», y el último salto pedido
-  // desde una tarjeta (con marca de tiempo para que tocar dos veces la misma
-  // también vuelva a empezar ese paso).
-  const [pasoDemo, setPasoDemo] = useState(0)
-  const [saltoDemo, setSaltoDemo] = useState(null)
   useEffect(() => {
     const relojes = [
       setTimeout(() => setNavListo(true), presentacion ? 2000 : 0),
@@ -258,7 +253,6 @@ export default function Home() {
         .hero-fin .hero-in{animation:none!important;opacity:1;transform:none;}
         @media (prefers-reduced-motion: reduce){.hero-in{opacity:1;animation:none;}}
         .hero-calc{flex:0 1 420px;min-width:0;animation:floaty 7s ease-in-out infinite;}
-        .como-wrap{display:grid;grid-template-columns:auto 1fr;gap:64px;align-items:center;max-width:980px;margin:0 auto;}
         .hero-buttons{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:36px;}
         .stats-row{display:flex;flex-wrap:wrap;gap:28px;}
         .hero-hide-mobile{}
@@ -305,8 +299,6 @@ export default function Home() {
           .stats-band{grid-template-columns:repeat(2,1fr)!important;gap:12px!important;}
           .stats-band>div{padding:20px 16px!important;border-radius:16px!important;}
           .stats-band>div>div{width:34px!important;height:34px!important;margin-bottom:12px!important;}
-          .steps-wrap{grid-template-columns:1fr!important;}
-          .como-wrap{grid-template-columns:1fr!important;gap:36px!important;}
           .feature-card{padding:16px!important;border-radius:18px!important;}
           .feature-card h3{font-size:14px!important;}
           .feature-card p{font-size:13px!important;}
@@ -475,38 +467,10 @@ export default function Home() {
             <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>En 4 pasos, tu dinero llega</h2>
           </div>
           {/* A la izquierda, un teléfono que hace un envío de principio a fin;
-              a la derecha, los cuatro pasos. El paso que el teléfono está
-              mostrando se ilumina, y tocar uno lleva el teléfono ahí. */}
-          <div className="como-wrap">
-            <div data-reveal="" style={{ display: 'flex', justifyContent: 'center', ...R0 }}>
-              <DemoEnvio onPaso={setPasoDemo} salto={saltoDemo} />
-            </div>
-
-            <div className="steps-wrap" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, position: 'relative' }}>
-              <div className="steps-line-v" style={{ position: 'absolute', left: 47, top: 47, bottom: 47, width: 2, background: 'linear-gradient(180deg,rgba(252,211,77,.3),#fcd34d 20%,#f59e0b 80%,rgba(245,158,11,.3))', borderRadius: 2, zIndex: 0, pointerEvents: 'none' }} />
-              {STEPS.map((s, i) => {
-                const activo = pasoDemo === i
-                return (
-                  <div key={s.n} data-reveal="" role="button" tabIndex={0}
-                    onClick={() => setSaltoDemo({ paso: i, n: Date.now() })}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSaltoDemo({ paso: i, n: Date.now() }) } }}
-                    style={{
-                      ...glassCard, borderRadius: 20, padding: '18px 22px', position: 'relative', zIndex: 1, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 16, ...RD(i * 0.12),
-                      ...(s.green ? { background: 'linear-gradient(135deg,rgba(8,30,70,.95),rgba(8,22,60,.95))' } : {}),
-                      border: activo ? '1px solid rgba(56,189,248,.6)' : (s.green ? '1px solid rgba(56,189,248,.32)' : glassCard.border),
-                      boxShadow: activo ? '0 10px 36px rgba(56,189,248,.25), inset 0 1px 0 rgba(56,189,248,.2)' : glassCard.boxShadow,
-                      transition: 'border-color .35s, box-shadow .35s, opacity .6s, transform .6s',
-                    }}>
-                    <div style={{ width: 50, height: 50, flexShrink: 0, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono',monospace", fontSize: 19, fontWeight: 700, color: s.green ? '#fff' : '#061027', background: s.green ? 'linear-gradient(135deg,#4ade80,#22c55e)' : 'linear-gradient(135deg,#7dd3fc,#38bdf8)', boxShadow: `0 8px 22px ${s.green ? 'rgba(74,222,128,.38)' : 'rgba(56,189,248,.38)'}, 0 0 0 ${activo ? 5 : 3}px ${activo ? 'rgba(56,189,248,.35)' : 'rgba(252,211,77,.22)'}`, transition: 'box-shadow .35s' }}>{s.n}</div>
-                    <div style={{ minWidth: 0 }}>
-                      <h3 style={{ margin: '0 0 4px', fontSize: 15.5, fontWeight: 600, color: '#fff' }}>{s.title}</h3>
-                      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: s.green ? '#cfe0ff' : '#9fb0d4' }}>{s.desc}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+              a la derecha, los pasos apareciendo a su ritmo. Tocar uno lleva
+              el teléfono ahí. */}
+          <div data-reveal="" style={R0}>
+            <DemoEnvio pasos={STEPS} />
           </div>
         </div>
       </section>
