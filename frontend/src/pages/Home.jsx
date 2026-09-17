@@ -97,7 +97,7 @@ export default function Home() {
     // Con versión en la URL: el servidor lo manda sin Cache-Control y el
     // teléfono seguía usando el globo viejo después de cada cambio. Súbela
     // cuando se toque globe.js.
-    script.src = '/globe.js?v=20260917'
+    script.src = '/globe.js?v=20260917b'
     script.async = true
     document.body.appendChild(script)
     return () => {
