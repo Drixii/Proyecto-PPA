@@ -2,43 +2,96 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <!-- El mismo planeta que va en la cabecera. El .ico primero porque lleva
-         cada tamaño ya dibujado y a 16 px se ve nítido; el PNG de 64 lo usan
-         los navegadores que lo prefieren. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Ksa Global Evolution · Envía dinero a Latinoamérica en minutos</title>
+    <meta name="description" content="Envía dinero a Venezuela, Colombia, Perú, Argentina y 16 países con la tasa del momento. Ves cuánto recibe tu beneficiario antes de pagar y sigues tu envío paso a paso. 24/7." />
+    <link rel="canonical" href="https://ksaglobal-evolution.com/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#060d22" />
+    <meta name="application-name" content="Ksa Global" />
+    <meta name="apple-mobile-web-app-title" content="Ksa Global" />
+
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#38bdf8" />
-    <meta name="description" content="Transferencias internacionales en minutos" />
-    <title>KSAGLOBAL EVOLUTION</title>
 
-    <!-- Vista previa al compartir el enlace (WhatsApp, Telegram, Facebook).
-         Sin estas etiquetas, WhatsApp cae al <title> y a la descripcion, que es
-         por lo que el recuadro decia "Ksa Global".
-
-         Las URLs van absolutas y con el dominio escrito: Open Graph lo exige
-         —quien lee estas etiquetas es el servidor de WhatsApp, no el navegador,
-         y una ruta relativa no le dice desde donde colgarla—. Es el unico sitio
-         de la aplicacion donde el dominio se escribe a mano; si vuelve a
-         cambiar, hay que tocarlo aqui. -->
-    <meta property="og:site_name" content="KSAGLOBAL EVOLUTION" />
-    <meta property="og:title" content="KSAGLOBAL EVOLUTION" />
-    <meta property="og:description" content="Transferencias internacionales en minutos" />
+    <meta property="og:site_name" content="Ksa Global Evolution" />
+    <meta property="og:title" content="Envía dinero a Latinoamérica en minutos · Ksa Global" />
+    <meta property="og:description" content="Tasa en tiempo real, ves cuánto llega antes de pagar y sigues tu envío paso a paso. 16 países, 24/7." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ksaglobal-evolution.com/" />
-    <meta property="og:image" content="https://ksaglobal-evolution.com/icons/icon-512.png" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
-    <meta property="og:locale" content="es_ES" />
+    <meta property="og:image" content="https://ksaglobal-evolution.com/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Ksa Global Evolution: envía dinero a Latinoamérica en minutos" />
+    <meta property="og:locale" content="es_CL" />
 
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="KSAGLOBAL EVOLUTION" />
-    <meta name="twitter:description" content="Transferencias internacionales en minutos" />
-    <meta name="twitter:image" content="https://ksaglobal-evolution.com/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Envía dinero a Latinoamérica en minutos · Ksa Global" />
+    <meta name="twitter:description" content="Tasa en tiempo real, ves cuánto llega antes de pagar y sigues tu envío paso a paso. 16 países, 24/7." />
+    <meta name="twitter:image" content="https://ksaglobal-evolution.com/og-image.jpg" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://ksaglobal-evolution.com/#organizacion",
+          "name": "Ksa Global Evolution",
+          "alternateName": "Ksa Global",
+          "url": "https://ksaglobal-evolution.com/",
+          "logo": "https://ksaglobal-evolution.com/icons/app-512.png"
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://ksaglobal-evolution.com/#sitio",
+          "url": "https://ksaglobal-evolution.com/",
+          "name": "Ksa Global Evolution",
+          "inLanguage": "es",
+          "publisher": { "@id": "https://ksaglobal-evolution.com/#organizacion" }
+        },
+        {
+          "@type": "FinancialService",
+          "@id": "https://ksaglobal-evolution.com/#servicio",
+          "name": "Ksa Global Evolution",
+          "description": "Envíos de dinero internacionales desde el celular con tipo de cambio en tiempo real, monto recibido visible antes de pagar y seguimiento del envío por estados.",
+          "url": "https://ksaglobal-evolution.com/",
+          "image": "https://ksaglobal-evolution.com/og-image.jpg",
+          "provider": { "@id": "https://ksaglobal-evolution.com/#organizacion" },
+          "serviceType": "Transferencias internacionales de dinero",
+          "availableChannel": { "@type": "ServiceChannel", "serviceUrl": "https://ksaglobal-evolution.com/" },
+          "hoursAvailable": "Mo-Su 00:00-23:59",
+          "areaServed": ["Argentina", "Bolivia", "Brasil", "Canadá", "Chile", "Colombia", "Costa Rica", "Ecuador", "Estados Unidos", "México", "Panamá", "Paraguay", "Perú", "República Dominicana", "Uruguay", "Venezuela", "Europa"]
+        }
+      ]
+    }
+    </script>
+
+    <script>document.documentElement.className='js'</script>
+    <style>html,body{background:#060d22;margin:0}.js #seo{display:none}#seo{max-width:760px;margin:0 auto;padding:96px 24px;color:#9fb0d4;font:16px/1.6 system-ui,sans-serif}#seo h1,#seo h2{color:#eaf2ff;line-height:1.2}</style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main id="seo">
+        <h1>Ksa Global Evolution: envía dinero a Latinoamérica en minutos</h1>
+        <p>Plataforma para enviar dinero desde tu celular con la tasa del momento. Ves cuánto recibe tu beneficiario antes de pagar y sigues tu envío paso a paso hasta que llega. Disponible 24/7.</p>
+        <h2>En 4 pasos, tu dinero llega</h2>
+        <ol>
+          <li>Calcula tu envío: ingresa el monto y elige el país.</li>
+          <li>Ingresa los datos de tu beneficiario y su banco.</li>
+          <li>Confirma el pago: transfiere y adjunta tu comprobante.</li>
+          <li>Listo: procesamos tu envío y te notificamos cada paso.</li>
+        </ol>
+        <h2>Quiénes somos</h2>
+        <p>Movemos tu dinero entre países, sin fricción: transferencias en minutos, tasas en tiempo real actualizadas cada 5 minutos y cero comisiones ocultas. Tiempo promedio de envío: 3 minutos desde que confirmamos tu pago.</p>
+        <h2>Países a los que enviamos</h2>
+        <p>Argentina, Bolivia, Brasil, Canadá, Chile, Colombia, Costa Rica, Ecuador, Estados Unidos, México, Panamá, Paraguay, Perú, República Dominicana, Uruguay, Venezuela y Europa.</p>
+        <h2>Integraciones</h2>
+        <p>Koywe para transferencias y pagos locales, Stripe para tarjetas de crédito y débito, Binance para tasas de mercado P2P y Haulmer para pagos en Chile.</p>
+        <p><a href="/login" style="color:#7dd3fc">Crear cuenta o iniciar sesión</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

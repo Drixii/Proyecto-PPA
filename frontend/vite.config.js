@@ -3,8 +3,28 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Quita los comentarios del CSS escrito dentro de los componentes
+// (<style>{`...`}</style>). El minificador borra los comentarios de JavaScript,
+// pero estos van dentro de una cadena de texto y llegaban tal cual al bundle y
+// al inspector del navegador: notas internas a la vista de cualquiera.
+function sinComentariosCss() {
+  return {
+    name: 'sin-comentarios-css',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!/\.(jsx|tsx)$/.test(id) || !code.includes('<style>{`')) return null
+      return code.replace(/<style>\{`([\s\S]*?)`\}<\/style>/g,
+        (_, css) => '<style>{`' + css.replace(/\/\*[\s\S]*?\*\//g, '') + '`}</style>')
+    },
+  }
+}
+
+// index.html: las etiquetas Open Graph llevan el dominio escrito a mano
+// (WhatsApp y Facebook exigen URLs absolutas). Si el dominio cambia, hay que
+// cambiarlo ahí, en sitemap.xml, robots.txt y llms.txt.
 export default defineConfig({
   plugins: [
+    sinComentariosCss(),
     react(),
     tailwindcss(),
     VitePWA({

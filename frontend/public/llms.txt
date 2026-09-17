@@ -1,0 +1,39 @@
+# Ksa Global Evolution
+
+> Plataforma para enviar dinero desde el celular a Latinoamérica, Norteamérica y Europa. El cliente calcula el envío con la tasa del momento, ve cuánto recibe la otra persona antes de pagar y sigue la transferencia paso a paso con notificaciones.
+
+## Qué hace
+
+- Transferencias internacionales de dinero entre personas.
+- Muestra el monto exacto que recibe el beneficiario antes de confirmar el envío.
+- Tipos de cambio actualizados en vivo; las tasas se renuevan cada 5 minutos.
+- Seguimiento del envío por estados (creado, en proceso, completado) con notificaciones.
+- Tiempo promedio de envío: alrededor de 3 minutos desde que se confirma el pago.
+- Disponible 24/7 desde la web y como app instalable en el celular.
+
+## Cómo se envía dinero
+
+1. Calcula tu envío: ingresa el monto y elige el país de destino.
+2. Ingresa los datos del beneficiario y su banco.
+3. Paga por transferencia o con tarjeta y adjunta el comprobante.
+4. Listo: el envío se procesa y se notifica cada paso.
+
+## Países de destino
+
+Argentina, Bolivia, Brasil, Canadá, Chile, Colombia, Costa Rica, Ecuador, Estados Unidos, México, Panamá, Paraguay, Perú, República Dominicana, Uruguay, Venezuela y Europa (euro).
+
+## Países desde los que se puede enviar
+
+Argentina, Bolivia, Brasil, Canadá, Chile, Colombia, Ecuador, Estados Unidos, México, Panamá, Perú y Europa (euro).
+
+## Integraciones
+
+- Koywe: transferencias y pagos locales en Latinoamérica.
+- Stripe: cobros con tarjetas de crédito y débito.
+- Binance: tasas de mercado P2P en tiempo real.
+- Haulmer: soluciones de pago para Chile.
+
+## Enlaces
+
+- Sitio: https://ksaglobal-evolution.com/
+- Crear cuenta o iniciar sesión: https://ksaglobal-evolution.com/login

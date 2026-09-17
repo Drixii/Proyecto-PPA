@@ -13,6 +13,7 @@ from schemas.order import MessageOut
 from services.order_service import create_order
 from auth.dependencies import get_current_user
 import os
+import uuid
 from datetime import datetime
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -173,7 +174,11 @@ def upload_proof(
         content = validate_and_convert(content)
         ext = ".webp"
 
-    filename = f"{order_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
+    # Nombre aleatorio, no «orden_fechahora»: los comprobantes se sirven por
+    # /uploads sin sesión, y con el número de orden (correlativo) y la hora se
+    # podían adivinar y ver datos bancarios ajenos. 128 bits al azar no se
+    # adivinan.
+    filename = f"{uuid.uuid4().hex}{ext}"
     dest = os.path.join("uploads", "proofs", filename)
     with open(dest, "wb") as f:
         f.write(content)

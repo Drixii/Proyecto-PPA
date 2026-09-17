@@ -1,0 +1,38 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /admin
+Disallow: /sub-admin
+Disallow: /dashboard
+Disallow: /historial
+Disallow: /new-transfer
+Disallow: /orders/
+Disallow: /perfil
+Disallow: /mis-puntos
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://ksaglobal-evolution.com/sitemap.xml
