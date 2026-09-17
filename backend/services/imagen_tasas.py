@@ -289,13 +289,17 @@ def formatea_tasa(valor: float) -> str:
     imagen no diria nada. Se conservan TRES cifras significativas —0,0123 /
     0,00123 / 0,000123— y se usa coma decimal, que es como se lee en la region.
     Con cuatro, los numeros largos empujaban al nombre del pais y lo encogian.
+
+    De 100 para arriba se redondea a entero: 872,98 se lee 873. Los decimales
+    ahi no dicen nada —nadie decide un envio por 98 centesimos de bolivar— y
+    solo alargan el numero en un cartel que se mira de lejos.
     """
     if valor is None:
         return "—"
-    if valor >= 1000:
+    if valor >= 100:
         texto = f"{valor:,.0f}".replace(",", ".")
     elif valor >= 1:
-        texto = f"{valor:,.3f}".replace(",", "@").replace(".", ",").replace("@", ".")
+        texto = f"{valor:.2f}".rstrip("0").rstrip(".").replace(".", ",")
     else:
         # Tres cifras significativas: 0,00483 en vez de 0,00.
         #
