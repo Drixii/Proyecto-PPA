@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CalculatorDark from '../components/CalculatorDark'
+import DemoEnvio from '../components/DemoEnvio'
 import CintaDeTasas from '../components/CintaDeTasas'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
@@ -98,6 +99,11 @@ export default function Home() {
   // header y de la calculadora: el cristal esmerilado se ve plano.
   const [navListo, setNavListo] = useState(!presentacion)
   const [heroListo, setHeroListo] = useState(false)
+  // Paso que muestra el teléfono de «Cómo funciona», y el último salto pedido
+  // desde una tarjeta (con marca de tiempo para que tocar dos veces la misma
+  // también vuelva a empezar ese paso).
+  const [pasoDemo, setPasoDemo] = useState(0)
+  const [saltoDemo, setSaltoDemo] = useState(null)
   useEffect(() => {
     const relojes = [
       setTimeout(() => setNavListo(true), presentacion ? 2000 : 0),
@@ -252,6 +258,7 @@ export default function Home() {
         .hero-fin .hero-in{animation:none!important;opacity:1;transform:none;}
         @media (prefers-reduced-motion: reduce){.hero-in{opacity:1;animation:none;}}
         .hero-calc{flex:0 1 420px;min-width:0;animation:floaty 7s ease-in-out infinite;}
+        .como-wrap{display:grid;grid-template-columns:auto 1fr;gap:64px;align-items:center;max-width:980px;margin:0 auto;}
         .hero-buttons{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:36px;}
         .stats-row{display:flex;flex-wrap:wrap;gap:28px;}
         .hero-hide-mobile{}
@@ -299,8 +306,7 @@ export default function Home() {
           .stats-band>div{padding:20px 16px!important;border-radius:16px!important;}
           .stats-band>div>div{width:34px!important;height:34px!important;margin-bottom:12px!important;}
           .steps-wrap{grid-template-columns:1fr!important;}
-          .steps-line-h{display:none!important;}
-          .steps-line-v{display:block!important;}
+          .como-wrap{grid-template-columns:1fr!important;gap:36px!important;}
           .feature-card{padding:16px!important;border-radius:18px!important;}
           .feature-card h3{font-size:14px!important;}
           .feature-card p{font-size:13px!important;}
@@ -468,18 +474,39 @@ export default function Home() {
             <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: '#38bdf8' }}>Simple y transparente</p>
             <h2 style={{ margin: 0, fontSize: 'clamp(28px,3.4vw,42px)', fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>En 4 pasos, tu dinero llega</h2>
           </div>
-          <div className="steps-wrap" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 18, position: 'relative' }}>
-            {/* línea conectora — desktop horizontal */}
-            <div className="steps-line-h" style={{ position: 'absolute', top: 47, left: '12.5%', right: '12.5%', height: 2, background: 'linear-gradient(90deg,rgba(252,211,77,.3),#fcd34d 30%,#f59e0b 70%,rgba(245,158,11,.3))', borderRadius: 2, zIndex: 0, pointerEvents: 'none' }} />
-            {/* línea conectora — mobile vertical */}
-            <div className="steps-line-v" style={{ display: 'none', position: 'absolute', left: 47, top: 47, bottom: 47, width: 2, background: 'linear-gradient(180deg,rgba(252,211,77,.3),#fcd34d 20%,#f59e0b 80%,rgba(245,158,11,.3))', borderRadius: 2, zIndex: 0, pointerEvents: 'none' }} />
-            {STEPS.map((s, i) => (
-              <div key={s.n} data-reveal="" style={{ ...glassCard, borderRadius: 20, padding: 24, position: 'relative', zIndex: 1, ...RD(i * 0.12), ...(s.green ? { background: 'linear-gradient(135deg,rgba(8,30,70,.95),rgba(8,22,60,.95))', border: '1px solid rgba(56,189,248,.32)', boxShadow: '0 8px 32px rgba(0,6,28,.6),inset 0 1px 0 rgba(56,189,248,.15)' } : {}) }}>
-                <div style={{ width: 46, height: 46, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono',monospace", fontSize: 19, fontWeight: 700, color: s.green ? '#fff' : '#061027', background: s.green ? 'linear-gradient(135deg,#4ade80,#22c55e)' : 'linear-gradient(135deg,#7dd3fc,#38bdf8)', boxShadow: `0 8px 22px ${s.green ? 'rgba(74,222,128,.38)' : 'rgba(56,189,248,.38)'}, 0 0 0 3px rgba(252,211,77,.22)`, marginBottom: 14 }}>{s.n}</div>
-                <h3 style={{ margin: '0 0 6px', fontSize: 15.5, fontWeight: 600, color: '#fff' }}>{s.title}</h3>
-                <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: s.green ? '#cfe0ff' : '#9fb0d4' }}>{s.desc}</p>
-              </div>
-            ))}
+          {/* A la izquierda, un teléfono que hace un envío de principio a fin;
+              a la derecha, los cuatro pasos. El paso que el teléfono está
+              mostrando se ilumina, y tocar uno lleva el teléfono ahí. */}
+          <div className="como-wrap">
+            <div data-reveal="" style={{ display: 'flex', justifyContent: 'center', ...R0 }}>
+              <DemoEnvio onPaso={setPasoDemo} salto={saltoDemo} />
+            </div>
+
+            <div className="steps-wrap" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, position: 'relative' }}>
+              <div className="steps-line-v" style={{ position: 'absolute', left: 47, top: 47, bottom: 47, width: 2, background: 'linear-gradient(180deg,rgba(252,211,77,.3),#fcd34d 20%,#f59e0b 80%,rgba(245,158,11,.3))', borderRadius: 2, zIndex: 0, pointerEvents: 'none' }} />
+              {STEPS.map((s, i) => {
+                const activo = pasoDemo === i
+                return (
+                  <div key={s.n} data-reveal="" role="button" tabIndex={0}
+                    onClick={() => setSaltoDemo({ paso: i, n: Date.now() })}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSaltoDemo({ paso: i, n: Date.now() }) } }}
+                    style={{
+                      ...glassCard, borderRadius: 20, padding: '18px 22px', position: 'relative', zIndex: 1, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 16, ...RD(i * 0.12),
+                      ...(s.green ? { background: 'linear-gradient(135deg,rgba(8,30,70,.95),rgba(8,22,60,.95))' } : {}),
+                      border: activo ? '1px solid rgba(56,189,248,.6)' : (s.green ? '1px solid rgba(56,189,248,.32)' : glassCard.border),
+                      boxShadow: activo ? '0 10px 36px rgba(56,189,248,.25), inset 0 1px 0 rgba(56,189,248,.2)' : glassCard.boxShadow,
+                      transition: 'border-color .35s, box-shadow .35s, opacity .6s, transform .6s',
+                    }}>
+                    <div style={{ width: 50, height: 50, flexShrink: 0, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono',monospace", fontSize: 19, fontWeight: 700, color: s.green ? '#fff' : '#061027', background: s.green ? 'linear-gradient(135deg,#4ade80,#22c55e)' : 'linear-gradient(135deg,#7dd3fc,#38bdf8)', boxShadow: `0 8px 22px ${s.green ? 'rgba(74,222,128,.38)' : 'rgba(56,189,248,.38)'}, 0 0 0 ${activo ? 5 : 3}px ${activo ? 'rgba(56,189,248,.35)' : 'rgba(252,211,77,.22)'}`, transition: 'box-shadow .35s' }}>{s.n}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <h3 style={{ margin: '0 0 4px', fontSize: 15.5, fontWeight: 600, color: '#fff' }}>{s.title}</h3>
+                      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: s.green ? '#cfe0ff' : '#9fb0d4' }}>{s.desc}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </section>
