@@ -248,10 +248,11 @@ export default function Home() {
         .stats-row{display:flex;flex-wrap:wrap;gap:28px;}
         .hero-hide-mobile{}
         .section-pad{padding:96px 24px;}
-        /* Secciones claras. El texto va en el azul oscuro de la marca, no en
-           negro: el negro sobre blanco al lado de una web azul se ve prestado
-           de otro sitio. */
-        .seccion-clara{background:linear-gradient(180deg,#f4f7fd,#e9eff9);color:#334970;}
+        /* Secciones claras. Gris azulado, no blanco: el blanco puro al lado de
+           las secciones azul noche deslumbra y parece de otra web. Por lo mismo
+           las tarjetas son blanco roto. El texto va en el azul oscuro de la
+           marca y no en negro. */
+        .seccion-clara{background:linear-gradient(180deg,#e8edf7,#dce4f0);color:#33486e;}
         .seccion-clara h2,.seccion-clara h3,.seccion-clara b,.seccion-clara strong{color:#0b1c3f;}
         @media(max-width:1024px){
           .nav-text-link{display:none;}

@@ -72,7 +72,7 @@ export default function Integraciones() {
   return (
     <section id="integraciones" ref={ref} className={`section-pad integraciones seccion-clara${visto ? ' visto' : ''}`}>
       <style>{`
-        .integraciones{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#eef3fb,#f6f9fe);}
+        .integraciones{position:relative;z-index:2;overflow:hidden;background:linear-gradient(180deg,#e8edf7,#dce4f0);}
         .integraciones::before{content:'';position:absolute;inset:0;pointer-events:none;
           background:
             radial-gradient(520px 320px at 50% 55%,rgba(56,189,248,.16),transparent 70%),
@@ -128,7 +128,7 @@ export default function Integraciones() {
 
         /* Tarjetas */
         .int-tarjeta{--c:#38bdf8;position:relative;z-index:1;border-radius:20px;padding:1px;isolation:isolate;
-          background:linear-gradient(160deg,rgba(11,28,63,.14),rgba(11,28,63,.04) 45%,rgba(11,28,63,.1));
+          background:linear-gradient(160deg,rgba(11,28,63,.18),rgba(11,28,63,.06) 45%,rgba(11,28,63,.13));
           opacity:0;filter:blur(8px);
           transition:opacity .8s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1),filter .8s,box-shadow .5s;
           transition-delay:calc(.3s + var(--i) * .1s);}
@@ -141,7 +141,7 @@ export default function Integraciones() {
           -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;}
         .int-tarjeta:hover::before{opacity:1;}
         .int-cara{position:relative;overflow:hidden;height:100%;box-sizing:border-box;border-radius:19px;padding:22px 22px 18px;
-          display:flex;flex-direction:column;gap:12px;background:#fff;box-shadow:0 8px 26px rgba(11,28,63,.08);}
+          display:flex;flex-direction:column;gap:12px;background:#f8fafd;box-shadow:0 8px 22px rgba(11,28,63,.07);}
         .int-cara::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s;
           background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--c) 18%,transparent),transparent 70%);}
         .int-tarjeta:hover .int-cara::before{opacity:1;}

@@ -693,8 +693,8 @@ const CSS_PASOS = `
 
   /* Sobre fondo claro: tarjetas blancas y texto azul oscuro. El teléfono se
      queda oscuro, que es como se ve un teléfono de verdad. */
-  .seccion-clara .paso-demo{background:#fff;border-color:rgba(11,28,63,.1);box-shadow:0 6px 24px rgba(11,28,63,.08);}
-  .seccion-clara .paso-demo.visto.activo{background:linear-gradient(135deg,#fff,#eef4ff);border-color:rgba(37,99,235,.45);
+  .seccion-clara .paso-demo{background:#f8fafd;border-color:rgba(11,28,63,.13);box-shadow:0 6px 20px rgba(11,28,63,.07);}
+  .seccion-clara .paso-demo.visto.activo{background:linear-gradient(135deg,#fdfefe,#e9f0ff);border-color:rgba(37,99,235,.45);
     box-shadow:0 20px 44px rgba(37,99,235,.16),0 0 0 1px rgba(37,99,235,.14);}
   .seccion-clara .paso-cuerpo h3{color:#0b1c3f;}
   .seccion-clara .paso-cuerpo p{color:#5b6f96;}
@@ -703,8 +703,8 @@ const CSS_PASOS = `
   .seccion-clara .pasos-riel{background:rgba(11,28,63,.1);}
   .seccion-clara .paso-barra{background:rgba(11,28,63,.08);}
   .seccion-clara .paso-icono{color:#8fa0c0;background:rgba(11,28,63,.04);border-color:rgba(11,28,63,.08);}
-  .seccion-clara .paso-insignia{box-shadow:0 8px 22px rgba(56,189,248,.35),0 0 0 3px #f2f6fd;}
-  .seccion-clara .paso-demo.hecho .paso-insignia,.seccion-clara .paso-demo.final .paso-insignia{box-shadow:0 8px 22px rgba(74,222,128,.35),0 0 0 3px #f2f6fd;}
+  .seccion-clara .paso-insignia{box-shadow:0 8px 22px rgba(56,189,248,.35),0 0 0 3px #f8fafd;}
+  .seccion-clara .paso-demo.hecho .paso-insignia,.seccion-clara .paso-demo.final .paso-insignia{box-shadow:0 8px 22px rgba(74,222,128,.35),0 0 0 3px #f8fafd;}
   .seccion-clara .paso-demo::after{background:linear-gradient(100deg,transparent,rgba(37,99,235,.10),transparent);}
 
   @media(max-width:768px){
