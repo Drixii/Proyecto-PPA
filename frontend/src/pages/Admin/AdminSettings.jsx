@@ -837,6 +837,246 @@ function StripeKeysForm() {
   )
 }
 
+// Haulmer (TUU Pago Online): la tarjeta que cobra en pesos chilenos.
+//
+// Sus credenciales son dos: el número de cuenta, que viaja en cada cobro y no
+// es secreto, y la clave con la que se firma. Salen del Espacio de Trabajo, en
+// Pagos → Configuración → API.
+function HaulmerKeysForm() {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({})
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+  const [abierto, setAbierto] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+
+  const { data: haulmer } = useQuery({
+    queryKey: ['haulmer-keys'],
+    queryFn: () => api.get('/payments/haulmer/keys').then(r => r.data.data),
+  })
+
+  // Su API no tiene un endpoint de estado, así que probar es abrir un cobro
+  // mínimo que nadie va a pagar. Es la única forma de saber si las
+  // credenciales sirven antes de que lo descubra un cliente.
+  const probar = useMutation({
+    mutationFn: () => api.get('/payments/haulmer/test').then(r => r.data),
+    onSuccess: (r) => {
+      setMsg(r.data?.message || 'Conexión correcta')
+      setError('')
+      setTimeout(() => setMsg(''), 8000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo conectar'); setMsg('') },
+  })
+
+  const guardar = useMutation({
+    mutationFn: (body) => api.put('/payments/haulmer/keys', body),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      setForm({})
+      qc.invalidateQueries({ queryKey: ['haulmer-keys'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo guardar'); setMsg('') },
+  })
+
+  const cambiarModo = useMutation({
+    mutationFn: (modo) => api.put('/payments/haulmer/mode', { modo }),
+    onSuccess: (r) => {
+      setMsg(r.data.message)
+      setError('')
+      qc.invalidateQueries({ queryKey: ['haulmer-keys'] })
+      qc.invalidateQueries({ queryKey: ['payments-config'] })
+      setTimeout(() => setMsg(''), 4000)
+    },
+    onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar el modo'); setMsg('') },
+  })
+
+  const campos = [
+    { k: 'haulmer_account_id', label: 'Número de cuenta', ph: 'el que aparece en Pagos → API', publico: true },
+    { k: 'haulmer_secret', label: 'Clave secreta', ph: 'la clave larga con la que se firma' },
+    { k: 'haulmer_shop_name', label: 'Nombre del comercio', ph: 'lo que ve el cliente al pagar', publico: true },
+  ]
+
+  const hayAlgo = Object.values(form).some(v => (v || '').trim())
+  const listo = !!haulmer?.listo
+
+  return (
+    <div style={{ ...GLASS, padding: '20px 24px' }}>
+      <button
+        onClick={() => setAbierto(a => !a)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>Haulmer</h3>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+              background: listo ? 'rgba(74,222,128,.12)' : 'rgba(251,191,36,.12)',
+              color: listo ? '#4ade80' : '#fcd34d',
+            }}>
+              {listo ? 'Configurado' : 'Sin credenciales'}
+            </span>
+            {haulmer?.modo && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+                background: haulmer.modo === 'test' ? 'rgba(251,191,36,.12)' : 'rgba(74,222,128,.12)',
+                color: haulmer.modo === 'test' ? '#fcd34d' : '#4ade80',
+              }}>
+                {haulmer.modo === 'test' ? 'Modo prueba' : 'Modo real'}
+              </span>
+            )}
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8aa0cc' }}>
+            Tarjeta desde cualquier país — el dinero llega en pesos a Chile
+          </p>
+        </div>
+        <span style={{ fontSize: 18, color: '#475569' }}>{abierto ? '⌄' : '›'}</span>
+      </button>
+
+      {abierto && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 4, padding: 4, marginTop: 18,
+          background: 'rgba(4,10,30,.6)', borderRadius: 12, border: '1px solid rgba(255,255,255,.07)',
+        }}>
+          {[
+            { v: 'test', txt: 'Modo prueba', hint: 'Entorno de integración — tarjetas de prueba' },
+            { v: 'live', txt: 'Modo real', hint: 'Cobra dinero de verdad' },
+          ].map(({ v, txt, hint }) => {
+            const activo = haulmer?.modo === v
+            return (
+              <button
+                key={v}
+                onClick={() => cambiarModo.mutate(v)}
+                disabled={cambiarModo.isPending || activo}
+                title={hint}
+                style={{
+                  flex: 1, padding: '9px 12px', borderRadius: 9, cursor: activo ? 'default' : 'pointer',
+                  border: activo ? '1px solid transparent' : '1px solid rgba(255,255,255,.14)',
+                  fontSize: 12.5, fontWeight: 700,
+                  background: activo ? (v === 'test' ? 'rgba(251,191,36,.16)' : 'rgba(74,222,128,.16)') : 'transparent',
+                  color: activo ? (v === 'test' ? '#fcd34d' : '#4ade80') : '#c3d2ee',
+                }}
+              >
+                {txt}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {abierto && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', marginBottom: 16 }}>
+            <p style={{ margin: 0, fontSize: 12.5, color: '#aebfe2', lineHeight: 1.6 }}>
+              Haulmer cobra <strong>siempre en pesos chilenos</strong>. Si el envío está en otra
+              moneda, al cliente se le cobra el equivalente con la tasa del momento, y esa
+              cifra queda guardada: el aviso de pago se compara contra ella. La tarjeta
+              puede ser de cualquier país.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
+              Las credenciales salen del <strong>Espacio de Trabajo → Pagos → Configuración →
+              API</strong>. Solo las ve el propietario o un administrador general de la cuenta.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
+              Cuando el cobro se completa, la orden avanza sola: el aviso viene firmado y
+              se comprueba antes de dar nada por pagado. <strong>No hay nada que aprobar a
+              mano.</strong>
+            </p>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
+              Dirección a la que Haulmer avisa del pago
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                readOnly
+                value={haulmer?.webhook_url || ''}
+                onFocus={e => e.target.select()}
+                style={{ ...INP, flex: 1, fontFamily: 'monospace', fontSize: 12.5, color: '#8aa0cc' }}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(haulmer?.webhook_url || '')
+                  setCopiado(true)
+                  setTimeout(() => setCopiado(false), 2000)
+                }}
+                style={{ fontSize: 12, fontWeight: 700, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)', color: copiado ? '#4ade80' : '#aebfe2', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                {copiado ? 'Copiada' : 'Copiar'}
+              </button>
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+              No hace falta registrarla en ningún sitio: va dentro de cada cobro. Está aquí
+              para poder revisarla si algún pago no avanza.
+            </p>
+          </div>
+
+          {campos.map(({ k, label, ph, publico }) => (
+            <div key={k} style={{ marginBottom: 14 }}>
+              <label style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
+                {label}
+                {k === 'haulmer_shop_name'
+                  ? (haulmer?.comercio && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{haulmer.comercio}</span>)
+                  : (haulmer?.[k] && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{haulmer[k]}</span>)}
+              </label>
+              <input
+                type={publico ? 'text' : 'password'}
+                autoComplete="off"
+                value={form[k] || ''}
+                placeholder={(k === 'haulmer_shop_name' ? haulmer?.comercio : haulmer?.[k]) ? 'Dejar vacío para no cambiarlo' : ph}
+                onChange={e => { setForm(f => ({ ...f, [k]: e.target.value })); setError('') }}
+                style={{ ...INP, width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          ))}
+
+          <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+            La clave se guarda cifrada y no vuelve a salir de aquí. Para borrarla, escribe{' '}
+            <code style={{ color: '#8aa0cc' }}>BORRAR</code> en su campo. Cada modo guarda su
+            propio juego.
+            {haulmer?.base_url && (
+              <> Ahora mismo apuntaría a <code style={{ color: '#8aa0cc' }}>{haulmer.base_url}</code>.</>
+            )}
+          </p>
+
+          {error && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#f87171', background: 'rgba(239,68,68,.08)', padding: '8px 12px', borderRadius: 8 }}>{error}</p>}
+          {msg && <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#4ade80', background: 'rgba(74,222,128,.08)', padding: '8px 12px', borderRadius: 8 }}>{msg}</p>}
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => guardar.mutate(form)}
+              disabled={!hayAlgo || guardar.isPending}
+              style={{
+                fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10, border: 'none',
+                color: '#fff', cursor: hayAlgo ? 'pointer' : 'not-allowed',
+                background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', opacity: hayAlgo ? 1 : .4,
+              }}
+            >
+              {guardar.isPending ? 'Guardando...' : 'Guardar credenciales'}
+            </button>
+
+            <button
+              onClick={() => probar.mutate()}
+              disabled={!listo || probar.isPending}
+              style={{
+                fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10,
+                border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)',
+                color: '#aebfe2', cursor: listo ? 'pointer' : 'not-allowed', opacity: listo ? 1 : .4,
+              }}
+            >
+              {probar.isPending ? 'Probando...' : 'Probar conexión'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 function KoyweKeysForm() {
   const qc = useQueryClient()
   const [form, setForm] = useState({})
@@ -3248,7 +3488,7 @@ export default function AdminSettings() {
             </>
           )
         )}
-        {section === 'pagos' && <><CuentasPropiasForm /><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><Global66KeysForm /></>}
+        {section === 'pagos' && <><CuentasPropiasForm /><StripeKeysForm /><PaymentIntegrations /><KoyweKeysForm /><HaulmerKeysForm /><Global66KeysForm /></>}
         {section === 'correo' && <SmtpForm />}
         {section === 'resenas' && <ModeracionResenas glass={GLASS} />}
       </div>

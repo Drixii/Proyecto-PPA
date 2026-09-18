@@ -16,3 +16,4 @@ from .bank_deposit import BankDeposit
 from .super_admin_account import SuperAdminAccount
 from .push_subscription import PushSubscription
 from .review import Review
+from .haulmer_charge import HaulmerCharge

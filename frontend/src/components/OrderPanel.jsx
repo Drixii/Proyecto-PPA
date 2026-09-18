@@ -603,6 +603,33 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
       return
     }
 
+    // Haulmer: cada intento abre un cobro nuevo, porque su referencia no se
+    // puede repetir. El monto en pesos se recalcula con la tasa de ahora.
+    if (codigo === 'haulmer') {
+      try {
+        const r = await api.post(`/payments/orders/${order.id}/haulmer/checkout`)
+        const cobro = r.data.data
+        if (cobro.tipo === 'formulario') {
+          const f = document.createElement('form')
+          f.method = 'POST'
+          f.action = cobro.url
+          Object.entries(cobro.campos || {}).forEach(([k, v]) => {
+            const i = document.createElement('input')
+            i.type = 'hidden'; i.name = k; i.value = String(v)
+            f.appendChild(i)
+          })
+          document.body.appendChild(f)
+          f.submit()
+          return
+        }
+        window.location.href = cobro.url
+      } catch (err) {
+        setEnCurso('')
+        alFallar(err.response?.data?.detail || 'No se pudo abrir el pago con tarjeta')
+      }
+      return
+    }
+
     // Métodos de Koywe: se pide en el momento, porque lo de un intento
     // anterior ya caducó. Puede venir un enlace al portal o un QR para
     // escanear, según el método.

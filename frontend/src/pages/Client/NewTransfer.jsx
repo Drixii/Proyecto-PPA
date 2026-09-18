@@ -219,6 +219,22 @@ export default function NewTransfer() {
     Object.values(payCfg?.koywe?.methods || {}).flat().map(m => String(m.codigo).toLowerCase())
   )
   const esKoywe = (metodo) => koyweCodes.has(String(metodo || '').toLowerCase())
+
+  // Haulmer cobra con tarjeta, siempre en pesos chilenos. Se ofrece desde las
+  // monedas que el backend sabe convertir hoy; el cargo sale en CLP aunque el
+  // envío esté en dólares, y aquí se calcula solo para poder enseñar la cifra
+  // antes de que el cliente se comprometa. La de verdad la calcula el backend
+  // al abrir el cobro.
+  const haulmerActivo = !!payCfg?.haulmer?.enabled
+    && (payCfg?.haulmer?.currencies || []).includes(calc.fromCurrency)
+  const esHaulmer = (metodo) => String(metodo || '').toLowerCase() === 'haulmer'
+  const montoHaulmerCLP = (() => {
+    const monto = rawAmount || parseFloat(calc.amount || '0')
+    if (!monto) return null
+    if (calc.fromCurrency === 'CLP') return Math.round(monto)
+    const tasa = payCfg?.haulmer?.tasas?.[calc.fromCurrency]
+    return tasa ? Math.round(monto * tasa) : null
+  })()
   const koyweElegido = koyweMethods.find(m => String(m.codigo).toLowerCase() === String(payment.payment_method).toLowerCase())
 
   // Datos de quien paga. El remitente sale del nombre de la cuenta, que no
@@ -595,6 +611,38 @@ export default function NewTransfer() {
         setCardOrder({ id: orderId, data: orderData })
         setLoading(false)
         return
+      }
+
+      // Haulmer: la orden existe y NO está pagada. El cobro ocurre en su
+      // pantalla; el webhook firmado es lo único que la mueve a \"en proceso\".
+      if (esHaulmer(payment.payment_method)) {
+        setShowConfirm(false)
+        try {
+          const chk = await api.post(`/payments/orders/${orderId}/haulmer/checkout`)
+          const cobro = chk.data.data
+          // Cuando su API no devuelve una dirección, manda el navegador los
+          // campos por POST: son los mismos que le enviamos, ya firmados.
+          if (cobro.tipo === 'formulario') {
+            const f = document.createElement('form')
+            f.method = 'POST'
+            f.action = cobro.url
+            Object.entries(cobro.campos || {}).forEach(([k, v]) => {
+              const i = document.createElement('input')
+              i.type = 'hidden'; i.name = k; i.value = String(v)
+              f.appendChild(i)
+            })
+            document.body.appendChild(f)
+            f.submit()
+            return
+          }
+          window.location.href = cobro.url
+          return
+        } catch (err) {
+          setError(err.response?.data?.detail
+            || 'La orden se creó pero no se pudo abrir el pago. Inténtalo desde tu panel.')
+          setLoading(false)
+          return
+        }
       }
 
       // Koywe: igual que la tarjeta, la orden existe y NO está pagada. El
@@ -1130,6 +1178,15 @@ export default function NewTransfer() {
                   ...(cardEnabled
                     ? [{ value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' }]
                     : []),
+                  // Tarjeta cobrada en Chile. Se distingue de la de arriba en
+                  // la moneda del cargo, no en el medio: por eso el texto dice
+                  // en qué se cobra.
+                  ...(haulmerActivo
+                    ? [{
+                      value: 'haulmer', label: 'Tarjeta internacional', icon: '🌎',
+                      desc: calc.fromCurrency === 'CLP' ? 'Se cobra en pesos' : 'El cargo sale en pesos',
+                    }]
+                    : []),
                   // El icono lo manda el backend con el método: un banco para
                   // Khipu o PSE, una tarjeta para Clink, un QR para Ligo. Antes
                   // era el mismo rayo para todos y los botones se distinguían
@@ -1373,6 +1430,59 @@ export default function NewTransfer() {
                     </p>
                   </div>
                 </div>
+                </div>
+              )}
+
+              {/* Haulmer: también se paga fuera, y además el cargo puede ir en
+                  otra moneda que la del envío. Eso hay que decirlo antes, no
+                  cuando el banco muestre el cargo en pesos. */}
+              {esHaulmer(payment.payment_method) && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl overflow-hidden" style={GLASS}>
+                    <div className="bg-gradient-to-r from-sky-600 to-indigo-800 px-5 py-4 flex items-center gap-2">
+                      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      </svg>
+                      <span className="text-white text-sm font-semibold">Tarjeta internacional</span>
+                    </div>
+
+                    <div className="px-5 pt-5 pb-3">
+                      <p className="text-xs mb-1" style={{color:'#8aa0cc'}}>Total a pagar</p>
+                      <p className="text-3xl font-bold" style={{color:'#eaf2ff'}}>
+                        {(rawAmount || parseFloat(calc.amount || '0')).toLocaleString('es-CL')}
+                        <span className="text-base ml-1.5" style={{color:'#8aa0cc'}}>{calc.fromCurrency}</span>
+                      </p>
+                      {calc.fromCurrency !== 'CLP' && (
+                        <p className="text-xs mt-1" style={{color:'#fcd34d'}}>
+                          Tu tarjeta se cobrará en pesos chilenos
+                          {montoHaulmerCLP ? ` (unos ${montoHaulmerCLP.toLocaleString('es-CL')} CLP)` : ''}.
+                          El monto exacto se calcula al abrir el pago.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="px-5 pb-5 space-y-3">
+                      <p className="text-xs" style={{color:'#8aa0cc'}}>
+                        Sirve cualquier tarjeta, también de fuera de Chile. Te llevaremos a la
+                        pantalla segura de Haulmer y al terminar vuelves aquí: el envío avanza
+                        solo, sin subir comprobante.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult || calc.result }))
+                          setShowConfirm(true)
+                        }}
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all text-base flex items-center justify-center gap-2">
+                        {loading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Abriendo el pago...
+                          </>
+                        ) : 'Pagar con tarjeta'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

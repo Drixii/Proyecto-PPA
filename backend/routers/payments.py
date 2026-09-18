@@ -21,7 +21,7 @@ from models.order import Order
 from models.user import User
 from models.stripe_account import StripeAccount
 from auth.dependencies import get_current_user, get_current_user_optional, require_super_admin
-from services import stripe_service, koywe_service, global66_service
+from services import stripe_service, koywe_service, global66_service, haulmer_service
 from services.order_service import find_sub_admin_for_country
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
@@ -77,6 +77,15 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
     _db = SessionLocal()
     cuentas_admin = {}
     monedas_tarjeta = list(stripe_service.CARD_CURRENCIES)
+    # Haulmer cobra siempre en pesos chilenos, pase lo que pase con la moneda
+    # del envío: si el cliente envía dólares, se le cobra el equivalente en
+    # CLP. Por eso la lista no es la de monedas que admite —admite una— sino
+    # aquellas desde las que sabemos convertir hoy.
+    haulmer_monedas = []
+    # Y la tasa de cada una, solo para poder enseñar la cifra aproximada antes
+    # de que el cliente se comprometa. La que se cobra la calcula el backend al
+    # abrir el cobro, con la tasa de ese momento.
+    haulmer_tasas = {}
     try:
         retencion = {
             "activa": retencion_service.activa(_db),
@@ -117,6 +126,24 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
                 mon: c for mon, c in koywe_cuentas.items()
                 if cuentas_propias.usa_integracion(_db, dueno, mon)
             }
+            # Haulmer va con el mismo interruptor de tarjeta que Stripe: al
+            # cliente le da igual quién cobra, ve «tarjeta», y apagarla en un
+            # país tiene que quitar los dos botones.
+            if haulmer_service.is_configured():
+                from services.exchange_service import get_rate
+                for moneda in cuentas_propias.MONEDAS:
+                    if not cuentas_propias.tarjeta_activa(_db, dueno, moneda):
+                        continue
+                    if moneda == haulmer_service.MONEDA:
+                        haulmer_monedas.append(moneda)
+                        haulmer_tasas[moneda] = 1
+                        continue
+                    # Sin tasa a CLP no se puede cobrar: mejor no ofrecerlo que
+                    # llevar al cliente a un error al final del formulario.
+                    tasa = get_rate(_db, moneda, haulmer_service.MONEDA)
+                    if tasa:
+                        haulmer_monedas.append(moneda)
+                        haulmer_tasas[moneda] = tasa
     except Exception as e:
         log.warning("[config] no se pudieron leer ajustes del cliente: %s", e)
         retencion = {"activa": False, "umbral_clp": None}
@@ -133,6 +160,15 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
             "enabled": stripe_service.is_configured(),
             "publishable_key": stripe_service.publishable_key(),
             "currencies": monedas_tarjeta,
+            "haulmer": {
+                "enabled": bool(haulmer_monedas),
+                # Desde qué monedas se puede pagar con él. El cargo siempre sale
+                # en CLP.
+                "currencies": haulmer_monedas,
+                "tasas": haulmer_tasas,
+                "moneda": haulmer_service.MONEDA,
+                "nombre": "Tarjeta (Haulmer)",
+            },
             "koywe": {
                 "enabled": bool(koywe_metodos),
                 "currencies": sorted(koywe_metodos.keys()),
@@ -354,6 +390,372 @@ def save_stripe_keys(
         return {"success": True, "data": {}, "message": "No había nada que guardar"}
 
     return {"success": True, "data": {}, "message": "Guardado: " + ", ".join(guardadas)}
+
+
+# ── Haulmer / TUU Pago Online (tarjeta, cobrada en pesos chilenos) ────────
+
+
+class HaulmerKeysIn(BaseModel):
+    haulmer_account_id: Optional[str] = None
+    haulmer_secret: Optional[str] = None
+    haulmer_shop_name: Optional[str] = None
+
+
+@router.get("/haulmer/keys", response_model=dict)
+def get_haulmer_keys(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Estado de las credenciales de Haulmer, con el secreto enmascarado.
+
+    El número de cuenta va entero: no es secreto —viaja en cada cobro— y verlo
+    completo es la forma de comprobar que es el que da su panel.
+    """
+    from services import secret_store as ss
+
+    modo = haulmer_service.get_mode()
+    creds = haulmer_service.credenciales(modo)
+    base = frontend_base()
+
+    return {
+        "success": True,
+        "data": {
+            "modo": modo,
+            "base_url": haulmer_service.base_url(modo),
+            "listo": haulmer_service.is_configured(modo),
+            "moneda": haulmer_service.MONEDA,
+            "comercio": haulmer_service.nombre_comercio(),
+            # La dirección a la que Haulmer avisa cuando el cobro se completa.
+            # Va dentro de cada cobro, así que no hay nada que registrar en su
+            # panel; verla sirve para revisar los avisos que llegan.
+            "webhook_url": f"{base}/api/payments/haulmer/webhook",
+            "haulmer_account_id": creds[haulmer_service.CLAVE_ACCOUNT],
+            "haulmer_secret": ss.mask(creds[haulmer_service.CLAVE_SECRET]),
+        },
+        "message": "",
+    }
+
+
+class HaulmerModeIn(BaseModel):
+    modo: str
+
+
+@router.put("/haulmer/mode", response_model=dict)
+def set_haulmer_mode(
+    data: HaulmerModeIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Cambia Haulmer entre integración y real. No toca Stripe ni Koywe."""
+    try:
+        haulmer_service.set_mode(db, data.modo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "success": True,
+        "data": {"modo": data.modo, "listo": haulmer_service.is_configured(data.modo)},
+        "message": f"Haulmer en modo {'real' if data.modo == 'live' else 'prueba'}",
+    }
+
+
+@router.put("/haulmer/keys", response_model=dict)
+def save_haulmer_keys(
+    data: HaulmerKeysIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda las credenciales cifradas, en el modo activo.
+
+    Un campo vacío no borra nada: el formulario nunca recibe el secreto, así
+    que mandarlo vacío es lo normal cuando solo se cambia el otro. Para borrar
+    se manda BORRAR, igual que en Stripe y en Koywe.
+    """
+    from services import secret_store as ss
+    from models.setting import Setting
+
+    modo = haulmer_service.get_mode()
+    guardados = []
+    for campo in haulmer_service.CAMPOS:
+        valor = getattr(data, campo, None)
+        if valor is None:
+            continue
+        valor = valor.strip()
+        if not valor:
+            continue
+        if valor == "BORRAR":
+            ss.set_secret(db, haulmer_service.clave_de(campo, modo), "")
+            guardados.append(f"{campo} borrado")
+            continue
+        ss.set_secret(db, haulmer_service.clave_de(campo, modo), valor)
+        guardados.append(campo)
+
+    # El nombre del comercio no es un secreto: lo ve el cliente en la pantalla
+    # de pago, y va en un ajuste normal para poder leerlo sin descifrar nada.
+    comercio = (data.haulmer_shop_name or "").strip()
+    if comercio:
+        fila = db.query(Setting).filter(Setting.key == haulmer_service.AJUSTE_COMERCIO).first()
+        if fila:
+            fila.value = comercio
+        else:
+            db.add(Setting(key=haulmer_service.AJUSTE_COMERCIO, value=comercio))
+        db.commit()
+        guardados.append("nombre del comercio")
+
+    if not guardados:
+        return {"success": True, "data": {}, "message": "No había nada que guardar"}
+
+    return {
+        "success": True,
+        "data": {"listo": haulmer_service.is_configured(modo)},
+        "message": f"Guardado ({len(guardados)})",
+    }
+
+
+@router.get("/haulmer/test", response_model=dict)
+def probar_haulmer(_admin: User = Depends(require_super_admin)):
+    """Abre un cobro de prueba y dice si Haulmer lo aceptó.
+
+    Es la única forma de comprobar las credenciales: su API no tiene un
+    endpoint de estado. El cobro que se crea aquí no se le enseña a nadie y
+    nadie lo paga; queda abandonado en su panel, como un carrito vacío.
+    """
+    if not haulmer_service.is_configured():
+        raise HTTPException(status_code=400, detail="Faltan credenciales de Haulmer")
+
+    base = frontend_base()
+    try:
+        cobro = haulmer_service.crear_cobro(
+            referencia=haulmer_service.referencia_para("PRUEBA"),
+            monto_clp=haulmer_service.MIN_CLP,
+            email=_admin.email or "prueba@ksaglobal-evolution.com",
+            nombre=_admin.full_name or "Prueba Integracion",
+            telefono=_admin.phone or "",
+            descripcion="Prueba de conexion",
+            url_callback=f"{base}/api/payments/haulmer/webhook",
+            url_completo=f"{base}/dashboard",
+            url_cancelado=f"{base}/dashboard",
+        )
+    except haulmer_service.HaulmerError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "success": True,
+        "data": {"tipo": cobro["tipo"], "modo": haulmer_service.get_mode()},
+        "message": "Haulmer aceptó el cobro de prueba",
+    }
+
+
+@router.post("/orders/{order_id}/haulmer/checkout", response_model=dict)
+def crear_checkout_haulmer(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Abre el cobro con tarjeta y dice a dónde mandar al cliente.
+
+    Convierte a pesos si la orden está en otra moneda y deja constancia del
+    monto convertido: el aviso que llegue después se comprueba contra ese
+    número, no contra la tasa del día. Esto NO marca nada como pagado.
+    """
+    from models.haulmer_charge import HaulmerCharge
+
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if not haulmer_service.es_metodo(order.payment_method):
+        raise HTTPException(status_code=400, detail="Esta orden no se paga por Haulmer")
+    if order.paid_at:
+        raise HTTPException(status_code=400, detail="Esta orden ya está pagada")
+
+    try:
+        monto_clp, tasa = haulmer_service.monto_en_clp(
+            db, float(order.amount_sent or 0), order.currency_from)
+    except haulmer_service.HaulmerError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    base = frontend_base()
+    referencia = haulmer_service.referencia_para(order.order_number)
+    modo = haulmer_service.get_mode()
+
+    # La fila va antes de salir a la red: si su respuesta se pierde por el
+    # camino y el cliente igualmente paga, el aviso encuentra a qué orden
+    # pertenece y por cuánto se abrió.
+    cobro_db = HaulmerCharge(
+        order_id=order.id,
+        reference=referencia,
+        amount_clp=monto_clp,
+        amount_from=float(order.amount_sent or 0),
+        currency_from=(order.currency_from or "").upper(),
+        rate=tasa,
+        status="creado",
+        mode=modo,
+    )
+    db.add(cobro_db)
+    db.commit()
+
+    try:
+        cobro = haulmer_service.crear_cobro(
+            referencia=referencia,
+            monto_clp=monto_clp,
+            email=current_user.email or "",
+            nombre=order.sender_name or current_user.full_name or "",
+            telefono=order.sender_phone or current_user.phone or "",
+            descripcion=f"Envio {order.order_number}",
+            url_callback=f"{base}/api/payments/haulmer/webhook",
+            url_completo=f"{base}/orders/{order.id}",
+            url_cancelado=f"{base}/orders/{order.id}",
+            modo=modo,
+        )
+    except haulmer_service.HaulmerError as e:
+        cobro_db.status = "fallido"
+        cobro_db.last_message = str(e)[:400]
+        db.commit()
+        log.error("[haulmer] cobro rechazado para %s (%s CLP): %s",
+                  order.order_number, monto_clp, e)
+        # 400 y no 5xx: Cloudflare cambia cualquier 5xx del origen por su
+        # propia pantalla y el motivo real no llegaría al cliente.
+        raise HTTPException(status_code=400, detail=str(e))
+
+    order.payment_intent_id = referencia
+    db.commit()
+
+    return {
+        "success": True,
+        "data": {
+            # 'enlace' se abre tal cual; 'formulario' lo manda el navegador por
+            # POST con estos campos.
+            "tipo": cobro["tipo"],
+            "url": cobro["url"],
+            "campos": cobro["campos"] if cobro["tipo"] == "formulario" else None,
+            "monto_clp": monto_clp,
+            "moneda": haulmer_service.MONEDA,
+            "tasa": tasa,
+        },
+        "message": "",
+    }
+
+
+def _haulmer_pagada(datos: dict):
+    """Procesa un aviso ya verificado: marca la orden como pagada.
+
+    Lo que se comprueba antes de tocar nada: que la referencia sea de un cobro
+    nuestro, que el resultado sea 'completed' y que el monto sea exactamente el
+    que se pidió. Cualquier diferencia se anota y la orden se queda como
+    está, para que la revise una persona.
+    """
+    from models.haulmer_charge import HaulmerCharge
+
+    referencia = (datos.get("x_reference") or "").strip()
+    resultado = (datos.get("x_result") or "").strip().lower()
+
+    orden_id = numero = None
+    db = SessionLocal()
+    try:
+        cobro = db.query(HaulmerCharge).filter(
+            HaulmerCharge.reference == referencia).first()
+        if not cobro:
+            log.info("[haulmer] aviso de %r sin cobro nuestro — se ignora", referencia[:60])
+            return
+
+        cobro.last_message = (datos.get("x_message") or resultado)[:400]
+
+        if resultado != "completed":
+            cobro.status = "fallido" if resultado == "failed" else "creado"
+            db.commit()
+            log.info("[haulmer] %s: resultado %s — la orden sigue sin pagar",
+                     referencia, resultado or "(vacio)")
+            return
+
+        try:
+            pagado = float(datos.get("x_amount") or 0)
+        except (TypeError, ValueError):
+            pagado = 0.0
+        if abs(pagado - float(cobro.amount_clp or 0)) > 1:
+            cobro.status = "fallido"
+            db.commit()
+            log.error("[haulmer] %s: pagaron %s y el cobro era de %s CLP — NO se marca pagada",
+                      referencia, pagado, cobro.amount_clp)
+            return
+
+        moneda = (datos.get("x_currency") or haulmer_service.MONEDA).upper()
+        if moneda != haulmer_service.MONEDA:
+            cobro.status = "fallido"
+            db.commit()
+            log.error("[haulmer] %s: el aviso viene en %s — NO se marca pagada",
+                      referencia, moneda)
+            return
+
+        orden = db.query(Order).filter(Order.id == cobro.order_id).first()
+        if not orden:
+            log.error("[haulmer] %s: el cobro apunta a una orden que ya no existe", referencia)
+            return
+
+        cobro.status = "pagado"
+        cobro.paid_at = datetime.now(timezone.utc)
+        db.commit()
+
+        if orden.paid_at:
+            log.info("[haulmer] %s ya estaba pagada — aviso repetido", orden.order_number)
+            return
+
+        orden_id, numero = orden.id, orden.order_number
+    finally:
+        db.close()
+
+    if orden_id:
+        _mark_paid(referencia, order_id=orden_id, order_number=numero, proveedor="haulmer")
+
+
+@router.post("/haulmer/webhook")
+async def haulmer_webhook(request: Request):
+    """Recibe el aviso de Haulmer.
+
+    Aquí la firma sí decide: Haulmer entrega el secreto del comercio, así que
+    un aviso que no cuadre se rechaza sin llegar a la base. No hay modo
+    permisivo como en Koywe porque no hace falta —el secreto lo tenemos desde
+    el primer día— y aceptar sin firma sería dejar que cualquiera marcara
+    órdenes como pagadas con un POST.
+
+    El cuerpo viene como formulario (`application/x-www-form-urlencoded`), no
+    como JSON.
+    """
+    try:
+        formulario = await request.form()
+        datos = {k: v for k, v in formulario.items() if isinstance(v, str)}
+    except Exception:
+        datos = {}
+
+    if not datos:
+        # Por si algún día lo mandan en JSON: se acepta el cuerpo igualmente y
+        # la firma se comprueba igual.
+        try:
+            cuerpo = json.loads(await request.body() or b"{}")
+            if isinstance(cuerpo, dict):
+                datos = {k: v for k, v in cuerpo.items() if isinstance(v, str)}
+        except ValueError:
+            datos = {}
+
+    if not datos:
+        log.error("[haulmer] aviso vacío o ilegible")
+        raise HTTPException(status_code=400, detail="Aviso ilegible")
+
+    if not haulmer_service.verificar_firma(datos):
+        log.error("[haulmer] FIRMA INVÁLIDA en el aviso de %r — se rechaza",
+                  (datos.get("x_reference") or "")[:60])
+        raise HTTPException(status_code=400, detail="Firma inválida")
+
+    cuenta = (datos.get("x_account_id") or "").strip()
+    nuestra = haulmer_service.credenciales().get(haulmer_service.CLAVE_ACCOUNT, "")
+    if nuestra and cuenta and cuenta != nuestra:
+        log.error("[haulmer] aviso de la cuenta %s, que no es la nuestra — se ignora", cuenta)
+        return {"received": True}
+
+    await run_in_threadpool(_haulmer_pagada, datos)
+    return {"received": True}
 
 
 # ── Koywe (cobros en Chile) ───────────────────────────────────────────────────
@@ -748,6 +1150,24 @@ def metodos_de_orden(
     # Koywe también sirve tarjeta en algunas monedas (CARD_PAYMENT en CLP). El
     # interruptor del super-admin tiene que quitar ESE botón igual que el de
     # Stripe: al cliente le da lo mismo quién lo cobra, ve "Tarjeta".
+    # Haulmer: tarjeta cobrada en pesos chilenos, venga el envío en la moneda
+    # que venga. Se ofrece solo si sabemos convertir, para que el botón no
+    # lleve a un error al final.
+    if haulmer_service.is_configured() and tarjeta_ok:
+        try:
+            monto_clp, _tasa = haulmer_service.monto_en_clp(
+                db, float(order.amount_sent or 0), moneda)
+        except haulmer_service.HaulmerError:
+            monto_clp = None
+        if monto_clp:
+            metodos.append({
+                "codigo": haulmer_service.METODO,
+                "nombre": "Tarjeta (Haulmer)",
+                "desc": f"Se cobra {monto_clp:,} CLP".replace(",", "."),
+                "icono": "💳",
+                "monto_clp": monto_clp,
+            })
+
     metodos += [
         {"codigo": m["codigo"].lower(), "nombre": m["nombre"],
          "desc": m["desc"], "icono": m.get("icono") or "💸",
