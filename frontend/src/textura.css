@@ -23,8 +23,8 @@ html .car {
   background-color: #050f25;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='.4' intercept='.3'/%3E%3CfeFuncG type='linear' slope='.4' intercept='.3'/%3E%3CfeFuncB type='linear' slope='.4' intercept='.3'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E"),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, .02) 0 1px, transparent 1px 26px),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, .016) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .032) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 46px),
     linear-gradient(180deg,
       rgba(12, 27, 58, 0) 0,
       #0c1b3a 170px,
@@ -43,8 +43,8 @@ html .car {
   html .integraciones,
   html .car {
     background-image:
-      repeating-linear-gradient(0deg, rgba(255, 255, 255, .02) 0 1px, transparent 1px 26px),
-      repeating-linear-gradient(90deg, rgba(255, 255, 255, .016) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, .032) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(90deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 46px),
       linear-gradient(180deg,
         rgba(12, 27, 58, 0) 0,
         #0c1b3a 90px,

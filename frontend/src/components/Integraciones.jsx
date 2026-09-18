@@ -74,10 +74,10 @@ export default function Integraciones() {
       <style>{`
         .integraciones{position:relative;z-index:2;overflow:hidden;background:#0c1b3a;}
         .integraciones::before{content:'';position:absolute;inset:0;pointer-events:none;
+          /* Sólo el resplandor: la rejilla la pone textura.css para toda la
+             web, y con la de aquí encima se veían dos mallas superpuestas. */
           background:
-            radial-gradient(520px 320px at 50% 55%,rgba(56,189,248,.14),transparent 70%),
-            linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px) 0 0/46px 46px,
-            linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px) 0 0/46px 46px;
+            radial-gradient(520px 320px at 50% 55%,rgba(56,189,248,.14),transparent 70%);
           -webkit-mask-image:radial-gradient(ellipse 65% 75% at 50% 55%,#000 25%,transparent 78%);
                   mask-image:radial-gradient(ellipse 65% 75% at 50% 55%,#000 25%,transparent 78%);}
 
