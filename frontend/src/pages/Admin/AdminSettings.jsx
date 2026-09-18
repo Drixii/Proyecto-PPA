@@ -897,6 +897,8 @@ function HaulmerKeysForm() {
   const campos = [
     { k: 'haulmer_rut', label: 'RUT del comercio', ph: '12345678-5 (sin puntos, con guion)', publico: true },
     { k: 'haulmer_api_key', label: 'Clave secreta de Pago Online', ph: 'la que te mandaron por correo' },
+    { k: 'haulmer_account_id', label: 'ID de cuenta (si te lo dieron)', ph: '62224230', publico: true },
+    { k: 'haulmer_secret_key', label: 'Llave secreta (si te la dieron)', ph: 'la clave con la que se firma' },
     { k: 'haulmer_shop_name', label: 'Nombre del comercio', ph: 'lo que ve el cliente al pagar', publico: true, ajuste: 'comercio' },
     { k: 'haulmer_platform_secret', label: 'Identificador de plataforma (opcional)', ph: 'solo si Haulmer te pide uno', publico: true, ajuste: 'plataforma' },
   ]
@@ -994,6 +996,13 @@ function HaulmerKeysForm() {
               es la de TUU Pagos, la de la máquina POS, y la pasarela online la rechaza. La de
               Pago Online <strong>te la mandan por correo</strong> cuando habilitan ese producto
               para tu RUT; si no la tienes, pídesela a Haulmer.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
+              Sirven dos caminos, según lo que te entreguen. Si te mandan el{' '}
+              <strong>ID de cuenta y la llave secreta</strong> —que es como lo documenta su
+              API— se pegan en los dos últimos campos y listo. Si te mandan el{' '}
+              <strong>RUT y una clave secreta</strong>, van en los dos primeros y con ellas les
+              pedimos las otras dos en cada cobro. Con cualquiera de los dos juegos funciona.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
               Mientras tanto puedes dejarlo en <strong>Modo prueba</strong> sin escribir nada: usa

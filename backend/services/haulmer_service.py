@@ -55,8 +55,12 @@ log = logging.getLogger("ppa")
 
 CLAVE_RUT = "haulmer_rut"
 CLAVE_API_KEY = "haulmer_api_key"
+# Los dos que su documentación llama «proporcionados por TUU». Si los entregan
+# directamente se pegan aquí y no hace falta pedirlos con el RUT.
+CLAVE_ACCOUNT = "haulmer_account_id"
+CLAVE_SECRET = "haulmer_secret_key"
 
-CAMPOS = (CLAVE_RUT, CLAVE_API_KEY)
+CAMPOS = (CLAVE_RUT, CLAVE_API_KEY, CLAVE_ACCOUNT, CLAVE_SECRET)
 
 # El método tal como se guarda en `orders.payment_method` y viaja al navegador.
 METODO = "haulmer"
@@ -183,7 +187,7 @@ def _ajuste(clave: str, por_defecto: str = "") -> str:
 
 def credenciales(modo: str | None = None) -> dict:
     valores = {c: _config(c, modo) for c in CAMPOS}
-    if (modo or get_mode()) == "test":
+    if (modo or get_mode()) == "test" and not (valores[CLAVE_ACCOUNT] and valores[CLAVE_SECRET]):
         # Sin nada pegado, las de su entorno de integración: en prueba lo útil
         # es poder cobrar con una tarjeta de mentira desde el primer minuto.
         valores[CLAVE_RUT] = valores[CLAVE_RUT] or RUT_PRUEBA
@@ -192,8 +196,16 @@ def credenciales(modo: str | None = None) -> dict:
 
 
 def is_configured(modo: str | None = None) -> bool:
+    """Hay con qué cobrar por uno de los dos caminos.
+
+    O las claves de cobro pegadas a mano, o el RUT y la clave secreta con los
+    que pedírselas a Haulmer. Exigir las cuatro dejaría la integración apagada
+    a quien tenga solo un juego.
+    """
     creds = credenciales(modo)
-    return all(creds[c] for c in CAMPOS)
+    directas = creds[CLAVE_ACCOUNT] and creds[CLAVE_SECRET]
+    por_rut = creds[CLAVE_RUT] and creds[CLAVE_API_KEY]
+    return bool(directas or por_rut)
 
 
 def es_metodo(metodo: str | None) -> bool:
@@ -239,6 +251,12 @@ def claves_de_firma(modo: str | None = None, refrescar: bool = False) -> dict:
     """
     modo = modo or get_mode()
     ahora = time.time()
+
+    # Camino corto: si TUU entregó el id de cuenta y la llave secreta —que es
+    # como lo documenta su API— no hay nada que pedir.
+    directas = credenciales(modo)
+    if directas[CLAVE_ACCOUNT] and directas[CLAVE_SECRET]:
+        return {"account_id": directas[CLAVE_ACCOUNT], "secret_key": directas[CLAVE_SECRET]}
 
     if not refrescar:
         with _candado:

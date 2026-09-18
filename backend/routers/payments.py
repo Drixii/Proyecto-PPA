@@ -398,6 +398,8 @@ def save_stripe_keys(
 class HaulmerKeysIn(BaseModel):
     haulmer_rut: Optional[str] = None
     haulmer_api_key: Optional[str] = None
+    haulmer_account_id: Optional[str] = None
+    haulmer_secret_key: Optional[str] = None
     haulmer_shop_name: Optional[str] = None
     haulmer_platform_secret: Optional[str] = None
 
@@ -434,6 +436,8 @@ def get_haulmer_keys(
             "webhook_url": f"{base}/api/payments/haulmer/webhook",
             "haulmer_rut": creds[haulmer_service.CLAVE_RUT],
             "haulmer_api_key": ss.mask(creds[haulmer_service.CLAVE_API_KEY]),
+            "haulmer_account_id": creds[haulmer_service.CLAVE_ACCOUNT],
+            "haulmer_secret_key": ss.mask(creds[haulmer_service.CLAVE_SECRET]),
         },
         "message": "",
     }
@@ -535,7 +539,10 @@ def probar_haulmer(_admin: User = Depends(require_super_admin)):
     carrito vacío: nadie lo paga.
     """
     if not haulmer_service.is_configured():
-        raise HTTPException(status_code=400, detail="Faltan el RUT o la API key de Haulmer")
+        raise HTTPException(
+            status_code=400,
+            detail="Faltan credenciales: o el id de cuenta y la llave secreta, o el RUT "
+                   "y la clave secreta de Pago Online")
 
     try:
         claves = haulmer_service.claves_de_firma(refrescar=True)
