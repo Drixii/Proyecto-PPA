@@ -31,9 +31,10 @@ export default function PiePagina() {
     <footer className="pie">
       <style>{`
         .pie{position:relative;z-index:2;overflow:hidden;
-          /* Arranca del color de fondo de la página y se va oscureciendo: la
-             raya de 1px que había arriba cortaba en seco la sección anterior. */
-          background:linear-gradient(180deg,#050f25,#030817 55%);}
+          /* La raya de 1px que había arriba cortaba en seco la sección anterior.
+             Arranca en el tono con que termina la sección de reseñas —su
+             resplandor de fondo llega hasta el borde— y baja de ahí. */
+          background:linear-gradient(180deg,#07142f,#050f25 150px,#030817 60%);}
         .pie::before{content:'';position:absolute;left:50%;top:-1px;width:min(900px,80%);height:1px;transform:translateX(-50%);
           background:linear-gradient(90deg,transparent,rgba(56,189,248,.7),rgba(129,140,248,.7),transparent);}
         .pie::after{content:'';position:absolute;left:50%;top:-220px;width:900px;height:360px;transform:translateX(-50%);pointer-events:none;
