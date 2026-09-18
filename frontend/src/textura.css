@@ -1,0 +1,36 @@
+/* Textura de las secciones azules
+   ------------------------------------------------------------------
+   Las tres secciones que van un punto más claras que el fondo (#0c1b3a)
+   se veían como una plancha de color plana. Se les pone encima grano
+   fino, una malla de puntos y unas diagonales muy tenues: de lejos se
+   sigue leyendo como el mismo azul, de cerca tiene materia.
+
+   Va todo en `background`, no en un ::before, porque esos pseudo-
+   elementos ya están ocupados por los resplandores de cada sección. El
+   selector empieza por `html` sólo para ganarle al <style> que cada
+   componente inserta en el cuerpo de la página. */
+
+html .seccion-alt,
+html .integraciones,
+html .car {
+  background-color: #0c1b3a;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='.2'/%3E%3C/svg%3E"),
+    radial-gradient(circle at 1px 1px, rgba(190, 215, 255, .05) 1px, transparent 1.6px),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, .014) 0 1px, transparent 1px 7px);
+  background-size: 180px 180px, 24px 24px, auto;
+  background-repeat: repeat;
+}
+
+/* En pantallas chicas el grano pesa más de lo que aporta: se deja la
+   malla de puntos, algo más junta, y se quita el ruido. */
+@media (max-width: 768px) {
+  html .seccion-alt,
+  html .integraciones,
+  html .car {
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(190, 215, 255, .045) 1px, transparent 1.6px),
+      repeating-linear-gradient(135deg, rgba(255, 255, 255, .012) 0 1px, transparent 1px 7px);
+    background-size: 20px 20px, auto;
+  }
+}

@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './queryClient'
 import './index.css'
 import './temaClaro.css'
+import './textura.css'
 import App from './App.jsx'
 
 // Recargar cuando el service worker nuevo toma el control.
