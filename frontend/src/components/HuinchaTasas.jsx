@@ -70,12 +70,12 @@ export default function HuinchaTasas() {
   return (
     <div className="huinchas" aria-label="Tasas del día contra el dólar">
       <style>{`
-        /* El fondo baja del transparente de arriba al color exacto de la sección
-           que viene justo debajo («Cómo funciona», rgba(4,10,30,.55)). Transparente del todo,
-           donde acababa este bloque y empezaba el oscuro de esa sección se
-           veía una línea recta clara. */
+        /* El fondo baja del transparente de arriba al fondo de la página.
+           «Cómo funciona», que viene justo debajo, arranca de ese mismo color
+           y sube hasta su azul en los primeros 170px (ver textura.css), así
+           que entre los dos bloques no hay ninguna línea recta. */
         .huinchas{position:relative;z-index:2;overflow:hidden;padding:70px 0;margin:-10px 0 0;
-          background:linear-gradient(180deg,rgba(4,10,30,0) 0%,rgba(8,20,48,.6) 45%,#0c1b3a 100%);}
+          background:linear-gradient(180deg,rgba(4,10,30,0) 0%,rgba(8,20,48,.6) 45%,#050f25 100%);}
         .huincha{position:relative;left:-5%;width:110%;overflow:hidden;white-space:nowrap;}
         .huincha.delante{z-index:2;transform:rotate(-3deg);padding:16px 0;
           background:linear-gradient(90deg,#0ea5e9,#3b82f6 45%,#6366f1);
