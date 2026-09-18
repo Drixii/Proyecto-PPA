@@ -603,6 +603,17 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
       return
     }
 
+    // Link de pago: se abre su página en otra pestaña y el envío queda
+    // esperando el comprobante, porque el link no avisa de nada.
+    if (codigo === 'link_pago') {
+      const metodo = (data?.metodos || []).find(m => m.codigo === 'link_pago')
+      if (metodo?.url) window.open(metodo.url, '_blank', 'noopener')
+      refrescar()
+      setEnCurso('')
+      setTransferencia(true)
+      return
+    }
+
     // Haulmer: cada intento abre un cobro nuevo, porque su referencia no se
     // puede repetir. El monto en pesos se recalcula con la tasa de ahora.
     if (codigo === 'haulmer') {
@@ -667,6 +678,11 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
   }
 
   const cuenta = data?.cuenta_transferencia
+  // Cuando lo que se está pagando es el link, la caja de arriba enseña el
+  // monto y el botón en vez de un número de cuenta.
+  const metodoLink = (order.payment_method === 'link_pago')
+    ? (data?.metodos || []).find(m => m.codigo === 'link_pago')
+    : null
 
   return (
     <Portal>
@@ -848,6 +864,22 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
                   ))}
                   <p className="text-[11px] pt-1" style={{color:'#fcd34d'}}>
                     Transfiere exactamente {Number(order.amount_sent).toLocaleString('es-CL')} {order.currency_from}.
+                  </p>
+                </div>
+              ) : metodoLink ? (
+                <div className="rounded-xl p-4 space-y-2" style={{background:'rgba(56,189,248,.06)', border:'1px solid rgba(56,189,248,.2)'}}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{color:'#475569'}}>Monto a pagar</p>
+                  <p className="text-2xl font-bold" style={{color:'#eaf2ff'}}>
+                    {Number(metodoLink.monto_clp || 0).toLocaleString('es-CL')}
+                    <span className="text-sm ml-1.5" style={{color:'#8aa0cc'}}>CLP</span>
+                  </p>
+                  <a href={metodoLink.url} target="_blank" rel="noopener noreferrer"
+                    className="block w-full text-center text-sm font-bold py-2.5 rounded-xl"
+                    style={{background:'linear-gradient(135deg,#22d3ee,#1d4ed8)', color:'#fff'}}>
+                    Abrir la página de pago →
+                  </a>
+                  <p className="text-[11px]" style={{color:'#8aa0cc'}}>
+                    Paga con tu tarjeta y vuelve con la captura: el envío avanza cuando se revise.
                   </p>
                 </div>
               ) : (

@@ -901,6 +901,7 @@ function HaulmerKeysForm() {
     { k: 'haulmer_secret_key', label: 'Llave secreta (si te la dieron)', ph: 'la clave con la que se firma' },
     { k: 'haulmer_shop_name', label: 'Nombre del comercio', ph: 'lo que ve el cliente al pagar', publico: true, ajuste: 'comercio' },
     { k: 'haulmer_platform_secret', label: 'Identificador de plataforma (opcional)', ph: 'solo si Haulmer te pide uno', publico: true, ajuste: 'plataforma' },
+    { k: 'haulmer_link_url', label: 'Link de pago', ph: 'https://... el que creaste en su panel', publico: true, ajuste: 'link' },
   ]
 
   const hayAlgo = Object.values(form).some(v => (v || '').trim())
@@ -910,6 +911,7 @@ function HaulmerKeysForm() {
   const valorActual = (k) => (
     k === 'haulmer_shop_name' ? haulmer?.comercio
       : k === 'haulmer_platform_secret' ? haulmer?.plataforma
+      : k === 'haulmer_link_url' ? haulmer?.link_url
       : haulmer?.[k]
   )
 
@@ -1003,6 +1005,13 @@ function HaulmerKeysForm() {
               API— se pegan en los dos últimos campos y listo. Si te mandan el{' '}
               <strong>RUT y una clave secreta</strong>, van en los dos primeros y con ellas les
               pedimos las otras dos en cada cobro. Con cualquiera de los dos juegos funciona.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#7dd3fc', lineHeight: 1.6 }}>
+              <strong>Sin esperar a nadie:</strong> crea un <strong>Link de pago</strong> en su
+              Espacio de Trabajo con <strong>precio variable</strong> y pega su dirección abajo.
+              Al cliente le sale un botón con el monto exacto en pesos, paga con tarjeta en la
+              página de Haulmer y sube el comprobante. Lo único que no hace el link es avisarnos
+              solo, así que ese envío lo apruebas tú, como una transferencia.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
               Mientras tanto puedes dejarlo en <strong>Modo prueba</strong> sin escribir nada: usa

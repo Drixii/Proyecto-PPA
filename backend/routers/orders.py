@@ -155,8 +155,11 @@ def upload_proof(
     order = db.query(Order).filter(Order.id == order_id, Order.client_id == current_user.id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    if order.payment_method != "transferencia":
-        raise HTTPException(status_code=400, detail="Solo órdenes de transferencia requieren comprobante")
+    # El link de pago de Haulmer no avisa a nadie cuando el cliente paga, así
+    # que se comprueba como una transferencia: con el comprobante a la vista.
+    from services import haulmer_service
+    if order.payment_method not in ("transferencia", haulmer_service.METODO_LINK):
+        raise HTTPException(status_code=400, detail="Esta orden no se comprueba con un comprobante")
 
     # .heic/.heif son las fotos de iPhone sin convertir. El mensaje nombra
     # todos los formatos: el anterior decia "usa JPG, PNG o PDF" y dejaba fuera

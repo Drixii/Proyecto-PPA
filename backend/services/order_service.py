@@ -234,10 +234,16 @@ def create_order(db: Session, data, client: User) -> Order:
     # paga en un checkout externo y solo el webhook firmado los da por buenos.
     # Lo que NO entra aquí es "transferencia", que sube comprobante y sí espera
     # a que un admin lo mire.
+    #
+    # Haulmer es de los primeros: su pantalla de pago es externa y solo su
+    # aviso firmado da el cobro por bueno. Su link de pago NO, porque ahí no
+    # hay aviso de ningún tipo: el cliente sube el comprobante y lo mira un
+    # admin, igual que una transferencia.
     from services.koywe_service import es_metodo as es_metodo_koywe
+    from services.haulmer_service import es_metodo as es_metodo_haulmer
 
     metodo = (getattr(data, "payment_method", None) or "").lower()
-    paga_fuera = metodo == "tarjeta" or es_metodo_koywe(metodo)
+    paga_fuera = metodo == "tarjeta" or es_metodo_koywe(metodo) or es_metodo_haulmer(metodo)
     initial_status = "pendiente_pago" if paga_fuera else "en_aprobacion"
     sub_admin_id = None
 

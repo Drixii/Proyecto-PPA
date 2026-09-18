@@ -115,6 +115,7 @@ export default function NewTransfer() {
   const [fromOpen, setFromOpen] = useState(false)
   const [toOpen, setToOpen] = useState(false)
   const [proofFile, setProofFile] = useState(null)
+  const [montoCopiado, setMontoCopiado] = useState(false)
   const [proofError, setProofError] = useState('')
   // Orden ya creada en este envio. En una ref y no en estado: no repinta,
   // y sobrevive a los reintentos dentro del mismo submit.
@@ -228,6 +229,12 @@ export default function NewTransfer() {
   const haulmerActivo = !!payCfg?.haulmer?.enabled
     && (payCfg?.haulmer?.currencies || []).includes(calc.fromCurrency)
   const esHaulmer = (metodo) => String(metodo || '').toLowerCase() === 'haulmer'
+  // El link de pago es otra cosa: no hay aviso de vuelta, así que se
+  // comprueba con el comprobante igual que una transferencia.
+  const linkPago = payCfg?.link_pago?.enabled
+    && (payCfg?.link_pago?.currencies || []).includes(calc.fromCurrency)
+    ? payCfg.link_pago.url : ''
+  const esLinkPago = (metodo) => String(metodo || '').toLowerCase() === 'link_pago'
   const montoHaulmerCLP = (() => {
     const monto = rawAmount || parseFloat(calc.amount || '0')
     if (!monto) return null
@@ -1187,6 +1194,12 @@ export default function NewTransfer() {
                       desc: calc.fromCurrency === 'CLP' ? 'Se cobra en pesos' : 'El cargo sale en pesos',
                     }]
                     : []),
+                  ...(linkPago
+                    ? [{
+                      value: 'link_pago', label: 'Link de pago', icon: '🔗',
+                      desc: 'Tarjeta, con comprobante',
+                    }]
+                    : []),
                   // El icono lo manda el backend con el método: un banco para
                   // Khipu o PSE, una tarjeta para Clink, un QR para Ligo. Antes
                   // era el mismo rayo para todos y los botones se distinguían
@@ -1430,6 +1443,93 @@ export default function NewTransfer() {
                     </p>
                   </div>
                 </div>
+                </div>
+              )}
+
+              {/* Link de pago: se paga en la página de Haulmer, pero nadie nos
+                  avisa. El cliente vuelve con la captura del pago y el envío
+                  espera a que un admin la mire, como una transferencia. */}
+              {esLinkPago(payment.payment_method) && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl p-4 space-y-3" style={{...GLASS, border:'1px solid rgba(56,189,248,.2)'}}>
+                    <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#38bdf8'}}>
+                      Paga con tarjeta este monto
+                    </p>
+                    <div className="flex items-end gap-2 flex-wrap">
+                      <p className="text-3xl font-bold" style={{color:'#eaf2ff'}}>
+                        {montoHaulmerCLP ? montoHaulmerCLP.toLocaleString('es-CL') : '—'}
+                        <span className="text-base ml-1.5" style={{color:'#8aa0cc'}}>CLP</span>
+                      </p>
+                      <button type="button"
+                        onClick={() => { if (montoHaulmerCLP) navigator.clipboard?.writeText(String(montoHaulmerCLP)); setMontoCopiado(true); setTimeout(() => setMontoCopiado(false), 2000) }}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg mb-1"
+                        style={{background:'rgba(56,189,248,.12)', border:'1px solid rgba(56,189,248,.3)', color: montoCopiado ? '#4ade80' : '#7dd3fc'}}>
+                        {montoCopiado ? 'Copiado' : 'Copiar monto'}
+                      </button>
+                    </div>
+                    {calc.fromCurrency !== 'CLP' && (
+                      <p className="text-xs" style={{color:'#fcd34d'}}>
+                        Tu envío es en {calc.fromCurrency} y la tarjeta se cobra en pesos chilenos.
+                        Escribe exactamente este monto en la página de pago.
+                      </p>
+                    )}
+                    <a href={linkPago} target="_blank" rel="noopener noreferrer"
+                      className="block w-full text-center bg-gradient-to-r from-cyan-500 to-blue-700 text-white font-bold py-3 rounded-xl">
+                      Abrir la página de pago →
+                    </a>
+                    <p className="text-[11px] leading-relaxed" style={{color:'#8aa0cc'}}>
+                      Se abre en otra pestaña. Cuando termines, vuelve aquí y sube la captura del
+                      pago: el envío se revisa y avanza en cuanto se confirme.
+                    </p>
+                  </div>
+
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'#aebfe2'}}>Comprobante del pago</p>
+                  <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl p-6 cursor-pointer transition-colors"
+                    style={proofFile
+                      ? {borderColor:'rgba(74,222,128,.3)', background:'rgba(74,222,128,.06)'}
+                      : {borderColor:'rgba(255,255,255,.1)', background:'rgba(6,13,40,.4)'}
+                    }>
+                    <input type="file" accept="image/*,.pdf" className="sr-only"
+                      onChange={e => handleProofChange(e.target.files?.[0] || null)} />
+                    {proofFile ? (
+                      <>
+                        {proofPreview ? (
+                          <img src={proofPreview} alt="preview" className="max-h-32 rounded-xl object-contain" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{background:'rgba(74,222,128,.12)'}}>
+                            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#4ade80" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                        <p className="text-sm font-semibold" style={{color:'#4ade80'}}>{proofFile.name}</p>
+                        <p className="text-xs" style={{color:'#4ade80', opacity:0.7}}>Toca para cambiar</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{background:'rgba(255,255,255,.06)'}}>
+                          <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#8aa0cc" strokeWidth="1.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                          </svg>
+                        </div>
+                        <p className="text-sm font-semibold" style={{color:'#aebfe2'}}>Adjuntar comprobante</p>
+                        <p className="text-xs" style={{color:'#8aa0cc'}}>JPG, PNG, HEIC o PDF — requerido</p>
+                      </>
+                    )}
+                  </label>
+
+                  {proofError && (
+                    <div className="rounded-xl px-3 py-2.5" style={{background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.25)'}}>
+                      <p className="text-xs leading-relaxed" style={{color:'#fca5a5'}}>{proofError}</p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setStep(4)}
+                    disabled={!proofFile}
+                    className="w-full bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-all">
+                    Continuar →
+                  </button>
                 </div>
               )}
 

@@ -65,6 +65,14 @@ CAMPOS = (CLAVE_RUT, CLAVE_API_KEY, CLAVE_ACCOUNT, CLAVE_SECRET)
 # El método tal como se guarda en `orders.payment_method` y viaja al navegador.
 METODO = "haulmer"
 
+# El otro camino: el link de pago que el comercio crea a mano en su Espacio de
+# Trabajo. No tiene API ni aviso de vuelta —por eso es un método aparte— pero
+# funciona hoy, sin esperar a que habiliten la pasarela. El cliente paga con
+# tarjeta en la página de Haulmer y sube el comprobante, como en una
+# transferencia.
+METODO_LINK = "link_pago"
+AJUSTE_LINK = "haulmer_link_url"
+
 # Lo único que admite su API hoy.
 MONEDA = "CLP"
 
@@ -218,6 +226,16 @@ def nombre_comercio() -> str:
 
 def identificador_plataforma() -> str:
     return _ajuste(AJUSTE_PLATAFORMA)
+
+
+def link_de_pago() -> str:
+    """La dirección del link de pago del comercio, si la hay."""
+    url = _ajuste(AJUSTE_LINK)
+    return url if url.startswith("http") else ""
+
+
+def es_metodo_link(metodo: str | None) -> bool:
+    return (metodo or "").strip().lower() == METODO_LINK
 
 
 def normaliza_rut(rut: str) -> str:

@@ -129,7 +129,7 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
             # Haulmer va con el mismo interruptor de tarjeta que Stripe: al
             # cliente le da igual quién cobra, ve «tarjeta», y apagarla en un
             # país tiene que quitar los dos botones.
-            if haulmer_service.is_configured():
+            if haulmer_service.is_configured() or haulmer_service.link_de_pago():
                 from services.exchange_service import get_rate
                 for moneda in cuentas_propias.MONEDAS:
                     if not cuentas_propias.tarjeta_activa(_db, dueno, moneda):
@@ -160,8 +160,17 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
             "enabled": stripe_service.is_configured(),
             "publishable_key": stripe_service.publishable_key(),
             "currencies": monedas_tarjeta,
+            # El link de pago va aparte de la pasarela: no necesita
+            # credenciales, solo la dirección del link.
+            "link_pago": {
+                "enabled": bool(haulmer_monedas) and bool(haulmer_service.link_de_pago()),
+                "url": haulmer_service.link_de_pago(),
+                "currencies": haulmer_monedas,
+                "tasas": haulmer_tasas,
+                "moneda": haulmer_service.MONEDA,
+            },
             "haulmer": {
-                "enabled": bool(haulmer_monedas),
+                "enabled": bool(haulmer_monedas) and haulmer_service.is_configured(),
                 # Desde qué monedas se puede pagar con él. El cargo siempre sale
                 # en CLP.
                 "currencies": haulmer_monedas,
@@ -402,6 +411,7 @@ class HaulmerKeysIn(BaseModel):
     haulmer_secret_key: Optional[str] = None
     haulmer_shop_name: Optional[str] = None
     haulmer_platform_secret: Optional[str] = None
+    haulmer_link_url: Optional[str] = None
 
 
 @router.get("/haulmer/keys", response_model=dict)
@@ -430,6 +440,7 @@ def get_haulmer_keys(
             "moneda": haulmer_service.MONEDA,
             "comercio": haulmer_service.nombre_comercio(),
             "plataforma": haulmer_service.identificador_plataforma(),
+            "link_url": haulmer_service.link_de_pago(),
             # La dirección a la que Haulmer avisa cuando el cobro se completa.
             # Va dentro de cada cobro, así que no hay nada que registrar en su
             # panel; verla sirve para revisar los avisos que llegan.
@@ -502,6 +513,7 @@ def save_haulmer_keys(
     for valor, clave, etiqueta in (
         (data.haulmer_shop_name, haulmer_service.AJUSTE_COMERCIO, "nombre del comercio"),
         (data.haulmer_platform_secret, haulmer_service.AJUSTE_PLATAFORMA, "identificador de plataforma"),
+        (data.haulmer_link_url, haulmer_service.AJUSTE_LINK, "link de pago"),
     ):
         texto = (valor or "").strip()
         if not texto:
@@ -1189,19 +1201,32 @@ def metodos_de_orden(
     # Haulmer: tarjeta cobrada en pesos chilenos, venga el envío en la moneda
     # que venga. Se ofrece solo si sabemos convertir, para que el botón no
     # lleve a un error al final.
-    if haulmer_service.is_configured() and tarjeta_ok:
+    link_pago = haulmer_service.link_de_pago()
+    if (haulmer_service.is_configured() or link_pago) and tarjeta_ok:
         try:
             monto_clp, _tasa = haulmer_service.monto_en_clp(
                 db, float(order.amount_sent or 0), moneda)
         except haulmer_service.HaulmerError:
             monto_clp = None
-        if monto_clp:
+        if monto_clp and haulmer_service.is_configured():
             metodos.append({
                 "codigo": haulmer_service.METODO,
                 "nombre": "Tarjeta (Haulmer)",
                 "desc": f"Se cobra {monto_clp:,} CLP".replace(",", "."),
                 "icono": "💳",
                 "monto_clp": monto_clp,
+            })
+        # El link no avisa de nada cuando se paga, así que se comprueba con el
+        # comprobante, igual que una transferencia. Por eso es otro botón y no
+        # el mismo de arriba.
+        if monto_clp and link_pago:
+            metodos.append({
+                "codigo": haulmer_service.METODO_LINK,
+                "nombre": "Link de pago",
+                "desc": f"Paga {monto_clp:,} CLP con tarjeta".replace(",", "."),
+                "icono": "🔗",
+                "monto_clp": monto_clp,
+                "url": link_pago,
             })
 
     metodos += [
