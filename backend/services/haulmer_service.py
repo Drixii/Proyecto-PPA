@@ -97,6 +97,15 @@ MAX_CLP = 99_999_999
 
 TIEMPO_ESPERA = 25.0
 
+# Credenciales del entorno de integración, las mismas que su plugin oficial de
+# WooCommerce rellena solo al ponerlo en modo desarrollo. Son públicas y sirven
+# para probar el circuito entero —token, firma, cobro y aviso— sin esperar a
+# que Haulmer habilite el comercio. En modo prueba se usan si no hay otras
+# guardadas; en modo real no se usan nunca.
+RUT_PRUEBA = "12345678-5"
+CLAVE_PRUEBA = ("b03b8a125decec19e12f9b8b425343008ce0f214c1e7e7483b15e546ecd"
+                "28c30434cee53ffb6c711")
+
 # Cuánto se reutilizan el account_id y el secret_key antes de volver a pedirlos.
 # Su API no dice cuánto duran; diez minutos es corto para que una rotación no
 # deje cobros rotos mucho tiempo, y largo para no pedir dos llamadas por cobro.
@@ -173,7 +182,13 @@ def _ajuste(clave: str, por_defecto: str = "") -> str:
 
 
 def credenciales(modo: str | None = None) -> dict:
-    return {c: _config(c, modo) for c in CAMPOS}
+    valores = {c: _config(c, modo) for c in CAMPOS}
+    if (modo or get_mode()) == "test":
+        # Sin nada pegado, las de su entorno de integración: en prueba lo útil
+        # es poder cobrar con una tarjeta de mentira desde el primer minuto.
+        valores[CLAVE_RUT] = valores[CLAVE_RUT] or RUT_PRUEBA
+        valores[CLAVE_API_KEY] = valores[CLAVE_API_KEY] or CLAVE_PRUEBA
+    return valores
 
 
 def is_configured(modo: str | None = None) -> bool:
@@ -244,6 +259,19 @@ def claves_de_firma(modo: str | None = None, refrescar: bool = False) -> dict:
         r = httpx.get(f"{base}/token/{rut}", headers=cabeceras, timeout=TIEMPO_ESPERA)
     except httpx.HTTPError as e:
         raise HaulmerError(f"No se pudo contactar con Haulmer: {e}") from e
+    if r.status_code == 401:
+        # Pasa con la API key del panel: autentica en TUU Pagos (la de la
+        # máquina POS) pero no en la pasarela online, que es otro producto y
+        # tiene su propia clave. Sin decirlo, el mensaje sería «no autorizado»
+        # y no habría por dónde empezar a mirar.
+        raise HaulmerError(
+            "Haulmer no reconoce esta clave para Pago Online. La API key que sale en su "
+            "panel es la de TUU Pagos (máquina POS); la clave de la pasarela online te la "
+            "mandan por correo al habilitar TUU Pago Online para el RUT del comercio.")
+    if r.status_code == 404:
+        raise HaulmerError(
+            f"Haulmer no encuentra el comercio {rut}. Comprueba el RUT, o pide que "
+            "habiliten TUU Pago Online para él.")
     if r.status_code != 200:
         raise HaulmerError(_motivo(r, "no entregó el token del comercio"))
 

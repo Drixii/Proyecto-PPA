@@ -896,7 +896,7 @@ function HaulmerKeysForm() {
 
   const campos = [
     { k: 'haulmer_rut', label: 'RUT del comercio', ph: '12345678-5 (sin puntos, con guion)', publico: true },
-    { k: 'haulmer_api_key', label: 'API key', ph: 'la clave larga de Integraciones' },
+    { k: 'haulmer_api_key', label: 'Clave secreta de Pago Online', ph: 'la que te mandaron por correo' },
     { k: 'haulmer_shop_name', label: 'Nombre del comercio', ph: 'lo que ve el cliente al pagar', publico: true, ajuste: 'comercio' },
     { k: 'haulmer_platform_secret', label: 'Identificador de plataforma (opcional)', ph: 'solo si Haulmer te pide uno', publico: true, ajuste: 'plataforma' },
   ]
@@ -985,10 +985,21 @@ function HaulmerKeysForm() {
               puede ser de cualquier país.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
-              Basta con el <strong>RUT del comercio</strong> y la <strong>API key</strong> que
-              aparece en Integraciones de su panel (solo la ve el propietario o un
-              administrador general). El identificador de cuenta y la clave de firma no hay
-              que buscarlos: se los pedimos a Haulmer con la API key en cada cobro.
+              Hacen falta el <strong>RUT del comercio</strong> y la <strong>clave secreta de
+              TUU Pago Online</strong>. El identificador de cuenta y la clave de firma no hay
+              que buscarlos: se los pedimos a Haulmer con esas dos en cada cobro.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#fcd34d', lineHeight: 1.6 }}>
+              Ojo: <strong>no es la API key que sale en Integraciones</strong> de su panel. Esa
+              es la de TUU Pagos, la de la máquina POS, y la pasarela online la rechaza. La de
+              Pago Online <strong>te la mandan por correo</strong> cuando habilitan ese producto
+              para tu RUT; si no la tienes, pídesela a Haulmer.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
+              Mientras tanto puedes dejarlo en <strong>Modo prueba</strong> sin escribir nada: usa
+              el entorno de integración de Haulmer y ya está comprobado que funciona de punta a
+              punta. Se paga con sus tarjetas de prueba (VISA 4051 8856 0044 6623) y no se mueve
+              dinero.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
               Cuando el cobro se completa, la orden avanza sola: el aviso viene firmado y
