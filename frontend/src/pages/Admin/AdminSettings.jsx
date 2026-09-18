@@ -839,9 +839,10 @@ function StripeKeysForm() {
 
 // Haulmer (TUU Pago Online): la tarjeta que cobra en pesos chilenos.
 //
-// Sus credenciales son dos: el número de cuenta, que viaja en cada cobro y no
-// es secreto, y la clave con la que se firma. Salen del Espacio de Trabajo, en
-// Pagos → Configuración → API.
+// Solo se pegan dos cosas: el RUT del comercio y la API key de su panel. El
+// identificador de cuenta y la clave de firma no se escriben en ningún sitio
+// —su panel no los muestra— porque se los pedimos a Haulmer con la API key
+// cada vez que hace falta cobrar.
 function HaulmerKeysForm() {
   const qc = useQueryClient()
   const [form, setForm] = useState({})
@@ -894,13 +895,21 @@ function HaulmerKeysForm() {
   })
 
   const campos = [
-    { k: 'haulmer_account_id', label: 'Número de cuenta', ph: 'el que aparece en Pagos → API', publico: true },
-    { k: 'haulmer_secret', label: 'Clave secreta', ph: 'la clave larga con la que se firma' },
-    { k: 'haulmer_shop_name', label: 'Nombre del comercio', ph: 'lo que ve el cliente al pagar', publico: true },
+    { k: 'haulmer_rut', label: 'RUT del comercio', ph: '12345678-5 (sin puntos, con guion)', publico: true },
+    { k: 'haulmer_api_key', label: 'API key', ph: 'la clave larga de Integraciones' },
+    { k: 'haulmer_shop_name', label: 'Nombre del comercio', ph: 'lo que ve el cliente al pagar', publico: true, ajuste: 'comercio' },
+    { k: 'haulmer_platform_secret', label: 'Identificador de plataforma (opcional)', ph: 'solo si Haulmer te pide uno', publico: true, ajuste: 'plataforma' },
   ]
 
   const hayAlgo = Object.values(form).some(v => (v || '').trim())
   const listo = !!haulmer?.listo
+  // Lo que ya hay guardado, para enseñarlo junto a la etiqueta. El nombre del
+  // comercio y el de plataforma no son credenciales y vienen por su cuenta.
+  const valorActual = (k) => (
+    k === 'haulmer_shop_name' ? haulmer?.comercio
+      : k === 'haulmer_platform_secret' ? haulmer?.plataforma
+      : haulmer?.[k]
+  )
 
   return (
     <div style={{ ...GLASS, padding: '20px 24px' }}>
@@ -976,8 +985,10 @@ function HaulmerKeysForm() {
               puede ser de cualquier país.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
-              Las credenciales salen del <strong>Espacio de Trabajo → Pagos → Configuración →
-              API</strong>. Solo las ve el propietario o un administrador general de la cuenta.
+              Basta con el <strong>RUT del comercio</strong> y la <strong>API key</strong> que
+              aparece en Integraciones de su panel (solo la ve el propietario o un
+              administrador general). El identificador de cuenta y la clave de firma no hay
+              que buscarlos: se los pedimos a Haulmer con la API key en cada cobro.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
               Cuando el cobro se completa, la orden avanza sola: el aviso viene firmado y
@@ -1018,15 +1029,13 @@ function HaulmerKeysForm() {
             <div key={k} style={{ marginBottom: 14 }}>
               <label style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, color: '#8aa0cc', marginBottom: 5 }}>
                 {label}
-                {k === 'haulmer_shop_name'
-                  ? (haulmer?.comercio && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{haulmer.comercio}</span>)
-                  : (haulmer?.[k] && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{haulmer[k]}</span>)}
+                {valorActual(k) && <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{valorActual(k)}</span>}
               </label>
               <input
                 type={publico ? 'text' : 'password'}
                 autoComplete="off"
                 value={form[k] || ''}
-                placeholder={(k === 'haulmer_shop_name' ? haulmer?.comercio : haulmer?.[k]) ? 'Dejar vacío para no cambiarlo' : ph}
+                placeholder={valorActual(k) ? 'Dejar vacío para no cambiarlo' : ph}
                 onChange={e => { setForm(f => ({ ...f, [k]: e.target.value })); setError('') }}
                 style={{ ...INP, width: '100%', fontFamily: 'monospace', fontSize: 13 }}
               />
@@ -1034,7 +1043,7 @@ function HaulmerKeysForm() {
           ))}
 
           <p style={{ margin: '0 0 14px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
-            La clave se guarda cifrada y no vuelve a salir de aquí. Para borrarla, escribe{' '}
+            La API key se guarda cifrada y no vuelve a salir de aquí. Para borrarla, escribe{' '}
             <code style={{ color: '#8aa0cc' }}>BORRAR</code> en su campo. Cada modo guarda su
             propio juego.
             {haulmer?.base_url && (

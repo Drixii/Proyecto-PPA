@@ -396,9 +396,10 @@ def save_stripe_keys(
 
 
 class HaulmerKeysIn(BaseModel):
-    haulmer_account_id: Optional[str] = None
-    haulmer_secret: Optional[str] = None
+    haulmer_rut: Optional[str] = None
+    haulmer_api_key: Optional[str] = None
     haulmer_shop_name: Optional[str] = None
+    haulmer_platform_secret: Optional[str] = None
 
 
 @router.get("/haulmer/keys", response_model=dict)
@@ -406,10 +407,11 @@ def get_haulmer_keys(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
-    """Estado de las credenciales de Haulmer, con el secreto enmascarado.
+    """Estado de las credenciales de Haulmer, con la API key enmascarada.
 
-    El número de cuenta va entero: no es secreto —viaja en cada cobro— y verlo
-    completo es la forma de comprobar que es el que da su panel.
+    El RUT va entero: no es un secreto y verlo completo es la forma de
+    comprobar que es el del comercio. El identificador de cuenta no aparece
+    porque no se guarda: se pide a Haulmer en cada cobro con la API key.
     """
     from services import secret_store as ss
 
@@ -425,12 +427,13 @@ def get_haulmer_keys(
             "listo": haulmer_service.is_configured(modo),
             "moneda": haulmer_service.MONEDA,
             "comercio": haulmer_service.nombre_comercio(),
+            "plataforma": haulmer_service.identificador_plataforma(),
             # La dirección a la que Haulmer avisa cuando el cobro se completa.
             # Va dentro de cada cobro, así que no hay nada que registrar en su
             # panel; verla sirve para revisar los avisos que llegan.
             "webhook_url": f"{base}/api/payments/haulmer/webhook",
-            "haulmer_account_id": creds[haulmer_service.CLAVE_ACCOUNT],
-            "haulmer_secret": ss.mask(creds[haulmer_service.CLAVE_SECRET]),
+            "haulmer_rut": creds[haulmer_service.CLAVE_RUT],
+            "haulmer_api_key": ss.mask(creds[haulmer_service.CLAVE_API_KEY]),
         },
         "message": "",
     }
@@ -489,20 +492,30 @@ def save_haulmer_keys(
         ss.set_secret(db, haulmer_service.clave_de(campo, modo), valor)
         guardados.append(campo)
 
-    # El nombre del comercio no es un secreto: lo ve el cliente en la pantalla
-    # de pago, y va en un ajuste normal para poder leerlo sin descifrar nada.
-    comercio = (data.haulmer_shop_name or "").strip()
-    if comercio:
-        fila = db.query(Setting).filter(Setting.key == haulmer_service.AJUSTE_COMERCIO).first()
+    # Ni el nombre del comercio ni el identificador de plataforma son secretos:
+    # el primero lo ve el cliente al pagar y el segundo lo publica su propio
+    # plugin. Van en ajustes normales para poder leerlos sin descifrar nada.
+    for valor, clave, etiqueta in (
+        (data.haulmer_shop_name, haulmer_service.AJUSTE_COMERCIO, "nombre del comercio"),
+        (data.haulmer_platform_secret, haulmer_service.AJUSTE_PLATAFORMA, "identificador de plataforma"),
+    ):
+        texto = (valor or "").strip()
+        if not texto:
+            continue
+        fila = db.query(Setting).filter(Setting.key == clave).first()
+        nuevo = "" if texto == "BORRAR" else texto
         if fila:
-            fila.value = comercio
-        else:
-            db.add(Setting(key=haulmer_service.AJUSTE_COMERCIO, value=comercio))
+            fila.value = nuevo
+        elif nuevo:
+            db.add(Setting(key=clave, value=nuevo))
         db.commit()
-        guardados.append("nombre del comercio")
+        guardados.append(etiqueta)
 
     if not guardados:
         return {"success": True, "data": {}, "message": "No había nada que guardar"}
+
+    # Las claves de cobro en memoria se pidieron con la API key anterior.
+    haulmer_service.olvidar_claves()
 
     return {
         "success": True,
@@ -513,14 +526,21 @@ def save_haulmer_keys(
 
 @router.get("/haulmer/test", response_model=dict)
 def probar_haulmer(_admin: User = Depends(require_super_admin)):
-    """Abre un cobro de prueba y dice si Haulmer lo aceptó.
+    """Comprueba las credenciales y abre un cobro de prueba.
 
-    Es la única forma de comprobar las credenciales: su API no tiene un
-    endpoint de estado. El cobro que se crea aquí no se le enseña a nadie y
-    nadie lo paga; queda abandonado en su panel, como un carrito vacío.
+    Dos pasos, porque fallan por motivos distintos: primero se piden a Haulmer
+    las claves de cobro con el RUT y la API key —ahí se ve si las credenciales
+    valen— y después se abre un cobro mínimo, que es donde se ve si el
+    comercio está activo. El cobro queda abandonado en su panel, como un
+    carrito vacío: nadie lo paga.
     """
     if not haulmer_service.is_configured():
-        raise HTTPException(status_code=400, detail="Faltan credenciales de Haulmer")
+        raise HTTPException(status_code=400, detail="Faltan el RUT o la API key de Haulmer")
+
+    try:
+        claves = haulmer_service.claves_de_firma(refrescar=True)
+    except haulmer_service.HaulmerError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     base = frontend_base()
     try:
@@ -540,8 +560,12 @@ def probar_haulmer(_admin: User = Depends(require_super_admin)):
 
     return {
         "success": True,
-        "data": {"tipo": cobro["tipo"], "modo": haulmer_service.get_mode()},
-        "message": "Haulmer aceptó el cobro de prueba",
+        "data": {
+            "tipo": cobro["tipo"],
+            "modo": haulmer_service.get_mode(),
+            "account_id": claves["account_id"],
+        },
+        "message": f"Conexión correcta — comercio {claves['account_id']}",
     }
 
 
@@ -749,7 +773,12 @@ async def haulmer_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Firma inválida")
 
     cuenta = (datos.get("x_account_id") or "").strip()
-    nuestra = haulmer_service.credenciales().get(haulmer_service.CLAVE_ACCOUNT, "")
+    try:
+        nuestra = haulmer_service.claves_de_firma()["account_id"]
+    except haulmer_service.HaulmerError:
+        # La firma ya demuestra que el aviso es de nuestro comercio; si su API
+        # no responde ahora, no se descarta un pago real por eso.
+        nuestra = ""
     if nuestra and cuenta and cuenta != nuestra:
         log.error("[haulmer] aviso de la cuenta %s, que no es la nuestra — se ignora", cuenta)
         return {"received": True}

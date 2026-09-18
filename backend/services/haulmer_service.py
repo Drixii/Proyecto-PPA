@@ -12,13 +12,25 @@ El aviso posterior se compara contra ese número guardado: recalcularlo con la
 tasa de después haría fallar la comprobación cualquier día que el mercado se
 moviera.
 
-Cómo se autentica
------------------
-No hay cabecera con una clave. Cada petición lleva `x_account_id` (el número
-de cuenta del comercio) y `x_signature`: HMAC-SHA256, con el secreto del
-comercio, sobre todos los campos que empiezan por `x_` ordenados
-alfabéticamente y pegados como clave+valor, sin separadores. El aviso de
-vuelta viene firmado igual, así que la firma sí se puede comprobar aquí —a
+Qué credenciales hacen falta, y por qué solo dos
+------------------------------------------------
+El RUT del comercio y la API key («clave secreta» en su panel). Eso es todo lo
+que su Espacio de Trabajo entrega, y basta: el identificador de cuenta y la
+clave de firma NO se pegan a mano, se piden en caliente.
+
+    GET  {base}/token/{rut}      con Bearer <api key>   ->  {"token": ...}
+    POST {base}/validatetoken    con Bearer <api key>   ->  {"account_id", "secret_key"}
+
+Con esos dos se arma el cobro: `x_account_id` es el account_id y la firma se
+calcula con el secret_key. Es exactamente lo que hace su plugin oficial de
+WooCommerce, que es la única implementación publicada de este flujo.
+
+La firma
+--------
+HMAC-SHA256 sobre los campos que empiezan por `x_`, ordenados
+alfabéticamente y pegados como clave+valor sin separadores. Los campos que no
+empiezan por `x_` (platform, dte...) viajan pero quedan fuera de la firma. El
+aviso de vuelta viene firmado igual, así que aquí sí se puede comprobar —a
 diferencia de Koywe, donde hay que preguntarle a su API.
 
 Qué NO hace este módulo
@@ -31,6 +43,8 @@ import hmac
 import json
 import logging
 import os
+import re
+import threading
 import time
 
 import httpx
@@ -39,10 +53,10 @@ from database import SessionLocal
 
 log = logging.getLogger("ppa")
 
-CLAVE_ACCOUNT = "haulmer_account_id"
-CLAVE_SECRET = "haulmer_secret"
+CLAVE_RUT = "haulmer_rut"
+CLAVE_API_KEY = "haulmer_api_key"
 
-CAMPOS = (CLAVE_ACCOUNT, CLAVE_SECRET)
+CAMPOS = (CLAVE_RUT, CLAVE_API_KEY)
 
 # El método tal como se guarda en `orders.payment_method` y viaja al navegador.
 METODO = "haulmer"
@@ -65,12 +79,28 @@ AJUSTE_MODO = "haulmer_mode"
 # Nombre del comercio que ve el cliente en la pantalla de pago.
 AJUSTE_COMERCIO = "haulmer_shop_name"
 
+# Su plugin manda un campo `secret` con un valor fijo que identifica a la
+# plataforma que integra. No está documentado, así que es un ajuste: vacío no
+# se manda, y si algún día su API lo exige se pega el valor que ellos den.
+AJUSTE_PLATAFORMA = "haulmer_platform_secret"
+
+# Documento tributario que se emite por el cobro. 0 es ninguno, que es lo que
+# corresponde aquí: el envío no es una venta de productos y la boleta la emite
+# —si toca— el sistema de facturación, no la pasarela. Su plugin de tienda usa
+# 48 porque ahí sí hay una venta detrás.
+DTE_TIPO = 0
+
 # Montos que acepta su API. Fuera de rango rechaza el cobro con un error
 # genérico, así que se avisa antes con un mensaje que se entiende.
 MIN_CLP = 100
 MAX_CLP = 99_999_999
 
 TIEMPO_ESPERA = 25.0
+
+# Cuánto se reutilizan el account_id y el secret_key antes de volver a pedirlos.
+# Su API no dice cuánto duran; diez minutos es corto para que una rotación no
+# deje cobros rotos mucho tiempo, y largo para no pedir dos llamadas por cobro.
+VIDA_CLAVES = 600
 
 
 class HaulmerError(Exception):
@@ -102,6 +132,9 @@ def set_mode(db, modo: str) -> None:
     else:
         db.add(Setting(key=AJUSTE_MODO, value=modo))
     db.commit()
+    # Las claves en memoria son del modo anterior: con ellas se firmaría un
+    # cobro de producción con las credenciales del sandbox.
+    olvidar_claves()
 
 
 def clave_de(nombre: str, modo: str | None = None) -> str:
@@ -127,6 +160,18 @@ def _config(nombre: str, modo: str | None = None) -> str:
     return (valor or "").strip()
 
 
+def _ajuste(clave: str, por_defecto: str = "") -> str:
+    from models.setting import Setting
+    db = SessionLocal()
+    try:
+        row = db.query(Setting).filter(Setting.key == clave).first()
+        return ((row.value if row else "") or por_defecto).strip()
+    except Exception:
+        return por_defecto
+    finally:
+        db.close()
+
+
 def credenciales(modo: str | None = None) -> dict:
     return {c: _config(c, modo) for c in CAMPOS}
 
@@ -141,15 +186,100 @@ def es_metodo(metodo: str | None) -> bool:
 
 
 def nombre_comercio() -> str:
-    from models.setting import Setting
-    db = SessionLocal()
+    return _ajuste(AJUSTE_COMERCIO, "Ksa Global Evolution") or "Ksa Global Evolution"
+
+
+def identificador_plataforma() -> str:
+    return _ajuste(AJUSTE_PLATAFORMA)
+
+
+def normaliza_rut(rut: str) -> str:
+    """Sin puntos y con guion, que es como lo pide su API.
+
+    El comercio lo escribe como lo tiene a mano —con puntos, en minúscula, con
+    espacios— y mandarlo así devuelve un 404 de token que no explica nada.
+    """
+    limpio = re.sub(r"[^0-9kK]", "", rut or "").upper()
+    if len(limpio) < 2:
+        return ""
+    return f"{limpio[:-1]}-{limpio[-1]}"
+
+
+# ── Claves de firma (se piden con la API key) ────────────────────────────────
+
+_claves_cache: dict = {}
+_candado = threading.Lock()
+
+
+def olvidar_claves() -> None:
+    with _candado:
+        _claves_cache.clear()
+
+
+def claves_de_firma(modo: str | None = None, refrescar: bool = False) -> dict:
+    """{'account_id', 'secret_key'} para firmar y cobrar.
+
+    Se piden con la API key y se guardan un rato en memoria: son dos llamadas
+    de red y harían falta en cada cobro y en cada aviso.
+    """
+    modo = modo or get_mode()
+    ahora = time.time()
+
+    if not refrescar:
+        with _candado:
+            guardado = _claves_cache.get(modo)
+        if guardado and guardado["expira"] > ahora:
+            return {"account_id": guardado["account_id"], "secret_key": guardado["secret_key"]}
+
+    creds = credenciales(modo)
+    rut = normaliza_rut(creds[CLAVE_RUT])
+    api_key = creds[CLAVE_API_KEY]
+    if not rut or not api_key:
+        raise HaulmerError("Faltan el RUT del comercio o la API key de Haulmer")
+
+    base = base_url(modo)
+    cabeceras = {"Accept": "application/json", "Authorization": f"Bearer {api_key}"}
+
     try:
-        row = db.query(Setting).filter(Setting.key == AJUSTE_COMERCIO).first()
-        return ((row.value if row else "") or "Ksa Global Evolution").strip()
-    except Exception:
-        return "Ksa Global Evolution"
-    finally:
-        db.close()
+        r = httpx.get(f"{base}/token/{rut}", headers=cabeceras, timeout=TIEMPO_ESPERA)
+    except httpx.HTTPError as e:
+        raise HaulmerError(f"No se pudo contactar con Haulmer: {e}") from e
+    if r.status_code != 200:
+        raise HaulmerError(_motivo(r, "no entregó el token del comercio"))
+
+    try:
+        token = (r.json() or {}).get("token")
+    except ValueError:
+        token = None
+    if not token:
+        raise HaulmerError("Haulmer no devolvió token: revisa el RUT y la API key")
+
+    try:
+        r2 = httpx.post(f"{base}/validatetoken", json={"token": token},
+                        headers={**cabeceras, "Content-Type": "application/json"},
+                        timeout=TIEMPO_ESPERA)
+    except httpx.HTTPError as e:
+        raise HaulmerError(f"No se pudo contactar con Haulmer: {e}") from e
+    if r2.status_code != 200:
+        raise HaulmerError(_motivo(r2, "no validó el token del comercio"))
+
+    try:
+        datos = r2.json() or {}
+    except ValueError:
+        datos = {}
+    account_id = str(datos.get("account_id") or "").strip()
+    secret_key = str(datos.get("secret_key") or "").strip()
+    if not account_id or not secret_key:
+        raise HaulmerError("Haulmer validó el token pero no devolvió las claves de cobro; "
+                           "comprueba que el comercio esté activo")
+
+    with _candado:
+        _claves_cache[modo] = {
+            "account_id": account_id,
+            "secret_key": secret_key,
+            "expira": ahora + VIDA_CLAVES,
+        }
+    return {"account_id": account_id, "secret_key": secret_key}
 
 
 # ── Firma ────────────────────────────────────────────────────────────────────
@@ -178,12 +308,25 @@ def firmar(campos: dict, secreto: str) -> str:
 
 
 def verificar_firma(campos: dict, modo: str | None = None) -> bool:
-    """Si el aviso lo firmó de verdad Haulmer con nuestro secreto."""
+    """Si el aviso lo firmó de verdad Haulmer con la clave de nuestro comercio.
+
+    Ante una firma que no cuadra se vuelven a pedir las claves y se comprueba
+    otra vez: si rotaron desde que se abrió el cobro, la copia en memoria ya no
+    sirve y rechazar sin reintentar dejaría un pago real sin registrar.
+    """
     recibida = (campos.get("x_signature") or "").strip().lower()
-    secreto = _config(CLAVE_SECRET, modo)
-    if not recibida or not secreto:
+    if not recibida:
         return False
-    return hmac.compare_digest(recibida, firmar(campos, secreto))
+
+    for refrescar in (False, True):
+        try:
+            secreto = claves_de_firma(modo, refrescar=refrescar)["secret_key"]
+        except HaulmerError as e:
+            log.error("[haulmer] no se pudieron pedir las claves para comprobar la firma: %s", e)
+            return False
+        if hmac.compare_digest(recibida, firmar(campos, secreto)):
+            return True
+    return False
 
 
 # ── Cobro ────────────────────────────────────────────────────────────────────
@@ -222,17 +365,14 @@ def crear_cobro(
 ) -> dict:
     """Abre el cobro y dice a dónde mandar al cliente.
 
-    Devuelve `{"tipo": "enlace", "url": ...}` cuando su API contesta con la
-    dirección del formulario, o `{"tipo": "formulario", "url": ..., "campos":
-    {...}}` cuando no: en ese caso el navegador manda esos mismos campos por
-    POST a la URL y Haulmer responde con su pantalla de pago. Los dos caminos
-    acaban igual; el segundo existe porque su documentación no promete qué
-    devuelve el modo sin redirección, y quedarse sin cobrar por eso sería peor.
+    Devuelve `{"tipo": "enlace", "url": ...}`: su API contesta con la dirección
+    de la pantalla de pago, en texto plano. Si algún día devolviera otra cosa,
+    se cae a `{"tipo": "formulario", "campos": {...}}` y el navegador manda los
+    mismos campos —ya firmados— por POST, que es como funcionaba antes de que
+    existiera la respuesta directa.
     """
     modo = modo or get_mode()
-    creds = credenciales(modo)
-    if not all(creds[c] for c in CAMPOS):
-        raise HaulmerError("Haulmer no está configurado")
+    claves = claves_de_firma(modo)
 
     monto = int(round(monto_clp))
     if monto < MIN_CLP:
@@ -247,7 +387,7 @@ def crear_cobro(
         raise HaulmerError("Haulmer exige el nombre de quien paga")
 
     campos = {
-        "x_account_id": creds[CLAVE_ACCOUNT],
+        "x_account_id": claves["account_id"],
         "x_amount": monto,
         "x_currency": MONEDA,
         "x_customer_email": email,
@@ -256,32 +396,38 @@ def crear_cobro(
         "x_customer_phone": telefono or "",
         "x_description": (descripcion or "")[:120],
         "x_reference": referencia,
+        "x_shop_country": "CL",
         "x_shop_name": nombre_comercio(),
         "x_url_callback": url_callback,
         "x_url_cancel": url_cancelado,
         "x_url_complete": url_completo,
     }
-    campos["x_signature"] = firmar(campos, creds[CLAVE_SECRET])
+    campos["x_signature"] = firmar(campos, claves["secret_key"])
+
+    # Fuera de la firma, como en su plugin: estos no empiezan por `x_`.
+    cuerpo = {
+        **campos,
+        "platform": "ksa-global-evolution",
+        "paymentMethod": "webpay",
+        "dte_type": DTE_TIPO,
+    }
+    plataforma = identificador_plataforma()
+    if plataforma:
+        cuerpo["secret"] = plataforma
 
     url = base_url(modo)
     try:
-        r = httpx.post(
-            url,
-            json=campos,
-            headers={"Content-Type": "application/json", "X-REDIRECT": "false"},
-            timeout=TIEMPO_ESPERA,
-            follow_redirects=False,
-        )
+        r = httpx.post(url, json=cuerpo, headers={"Content-Type": "application/json"},
+                       timeout=TIEMPO_ESPERA, follow_redirects=False)
     except httpx.HTTPError as e:
         raise HaulmerError(f"No se pudo contactar con Haulmer: {e}") from e
 
-    # Redirección: la dirección del formulario viene en la cabecera.
     destino = r.headers.get("Location")
     if destino:
         return {"tipo": "enlace", "url": destino, "campos": campos}
 
     if r.status_code >= 400:
-        raise HaulmerError(_motivo(r))
+        raise HaulmerError(_motivo(r, "rechazó el cobro"))
 
     destino = _url_de_respuesta(r)
     if destino:
@@ -291,15 +437,19 @@ def crear_cobro(
     # campos ya van firmados, así que Haulmer los acepta igual.
     log.warning("[haulmer] su API no devolvió URL de pago (%s): %s — se usa el envío "
                 "por formulario", r.status_code, (r.text or "")[:300])
-    return {"tipo": "formulario", "url": url, "campos": campos}
+    return {"tipo": "formulario", "url": url, "campos": cuerpo}
 
 
 def _url_de_respuesta(r: httpx.Response) -> str:
-    """Busca la dirección del formulario en lo que haya contestado.
+    """Saca la dirección de la pantalla de pago de lo que hayan contestado.
 
-    Su documentación no fija el nombre del campo, así que se aceptan los
-    habituales en vez de escoger uno y romper el día que devuelvan otro.
+    Normalmente es la URL pelada, en texto. Se aceptan además los nombres de
+    campo habituales por si viene envuelta en JSON.
     """
+    texto = (r.text or "").strip().strip('"')
+    if texto.startswith("http"):
+        return texto
+
     try:
         cuerpo = r.json()
     except ValueError:
@@ -320,16 +470,17 @@ def _url_de_respuesta(r: httpx.Response) -> str:
     return ""
 
 
-def _motivo(r: httpx.Response) -> str:
+def _motivo(r: httpx.Response, que_pasaba: str = "respondió con un error") -> str:
     try:
         cuerpo = r.json()
     except ValueError:
-        return f"Haulmer respondió {r.status_code}: {(r.text or '')[:200]}"
+        texto = (r.text or "").strip()[:200]
+        return f"Haulmer {que_pasaba} ({r.status_code}){': ' + texto if texto else ''}"
     if isinstance(cuerpo, dict):
         for clave in ("message", "error", "detail", "x_message"):
             if cuerpo.get(clave):
                 return f"Haulmer: {cuerpo[clave]}"
-    return f"Haulmer respondió {r.status_code}: {json.dumps(cuerpo)[:200]}"
+    return f"Haulmer {que_pasaba} ({r.status_code}): {json.dumps(cuerpo)[:200]}"
 
 
 # ── Conversión ───────────────────────────────────────────────────────────────
