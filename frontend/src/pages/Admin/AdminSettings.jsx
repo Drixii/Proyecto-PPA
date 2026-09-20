@@ -1438,22 +1438,53 @@ function TablaRecibe({ pais: pais_ }) {
     onError: () => setOrdenLocal(null),
   })
 
-  // Margen que se le suma al precio de cada país en este cartel. Mientras se
-  // escribe manda el borrador local; al salir de la casilla se guarda.
+  // Margen de cada país en este cartel.
+  //
+  // Mientras se escribe manda el borrador local, y el borrador NO se borra al
+  // guardar: la pantalla se refresca sola cada 15 segundos y, si se borraba,
+  // ese refresco llegaba antes que la respuesta y dejaba la casilla con el
+  // valor viejo —parecía que no se había guardado nada.
   const [margen, setMargen] = useState({})
+  const [estado, setEstado] = useState({})   // pais -> 'guardando' | 'guardado'
+  const temporizadores = useRef({})
+
   const guardarMargen = useMutation({
     mutationFn: ({ pais, porcentaje }) => api.put('/admin/commissions/imagen/recargo',
       { pais, porcentaje }, { params: { from_country: pais_.name, sentido: 'recibe' } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['imagen-editor'] }),
+    onSuccess: (_r, { pais }) => {
+      qc.invalidateQueries({ queryKey: ['imagen-editor'] })
+      setEstado(e => ({ ...e, [pais]: 'guardado' }))
+      setTimeout(() => setEstado(e => { const n = { ...e }; delete n[pais]; return n }), 2000)
+    },
+    onError: (_e, { pais }) => setEstado(e => ({ ...e, [pais]: 'error' })),
   })
 
-  const sueltaMargen = (nombre, valorPrevio) => {
+  const mandaMargen = (nombre, valorPrevio) => {
     const escrito = margen[nombre]
     if (escrito === undefined) return
     const pct = parseFloat(String(escrito).replace(',', '.')) || 0
-    setMargen(m => { const n = { ...m }; delete n[nombre]; return n })
-    if (pct !== valorPrevio) guardarMargen.mutate({ pais: nombre, porcentaje: pct })
+    if (pct === valorPrevio) return
+    setEstado(e => ({ ...e, [nombre]: 'guardando' }))
+    guardarMargen.mutate({ pais: nombre, porcentaje: pct })
   }
+
+  // Un segundo después de dejar de escribir. Así no hace falta salir de la
+  // casilla ni acordarse de pulsar nada.
+  const escribeMargen = (nombre, valor, valorPrevio) => {
+    setMargen(m => ({ ...m, [nombre]: valor }))
+    clearTimeout(temporizadores.current[nombre])
+    temporizadores.current[nombre] = setTimeout(
+      () => mandaMargen(nombre, valorPrevio), 1000)
+  }
+
+  const sueltaMargen = (nombre, valorPrevio) => {
+    clearTimeout(temporizadores.current[nombre])
+    mandaMargen(nombre, valorPrevio)
+  }
+
+  // Los temporizadores pendientes al cerrar la pantalla no deben disparar
+  // sobre un componente que ya no está.
+  useEffect(() => () => Object.values(temporizadores.current).forEach(clearTimeout), [])
 
   const base = data?.filas || []
   const filas = ordenLocal
@@ -1481,6 +1512,11 @@ function TablaRecibe({ pais: pais_ }) {
         Quién le envía a <strong style={{ color: '#eaf2ff' }}>{pais?.name}</strong> y a qué precio,
         con la comisión de cada ruta ya descontada. Para cambiar una comisión, entra en la
         pestaña del país que envía.
+        <br />
+        El <strong style={{ color: '#eaf2ff' }}>margen</strong> solo afecta a este cartel: en los
+        países con tasa la sube ese tanto por ciento, y en los que van en dólares o euros
+        —donde no hay tasa que publicar— <strong style={{ color: '#eaf2ff' }}>es el porcentaje
+        que sale impreso</strong>. Se guarda solo.
       </p>
 
       <div style={{ overflowX: 'auto' }}>
@@ -1527,7 +1563,7 @@ function TablaRecibe({ pais: pais_ }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <input
                       value={margen[f.name] ?? (f.recargo || '')}
-                      onChange={e => setMargen(m => ({ ...m, [f.name]: e.target.value.replace(/[^\d.,-]/g, '') }))}
+                      onChange={e => escribeMargen(f.name, e.target.value.replace(/[^\d.,-]/g, ''), f.recargo || 0)}
                       onBlur={() => sueltaMargen(f.name, f.recargo || 0)}
                       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                       inputMode="decimal"
@@ -1535,9 +1571,13 @@ function TablaRecibe({ pais: pais_ }) {
                       style={{
                         width: 64, padding: '5px 8px', borderRadius: 8, fontSize: 12.5,
                         textAlign: 'right', background: 'rgba(6,13,40,.8)', color: '#eaf2ff',
-                        border: `1px solid ${f.recargo ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.12)'}`,
+                        border: `1px solid ${estado[f.name] === 'error' ? 'rgba(248,113,113,.6)'
+                          : (margen[f.name] ?? f.recargo) ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.12)'}`,
                       }} />
                     <span style={{ fontSize: 12, color: '#8aa0cc' }}>%</span>
+                    <span style={{ fontSize: 11, minWidth: 58, color: estado[f.name] === 'error' ? '#fca5a5' : '#4ade80' }}>
+                      {estado[f.name] === 'guardando' ? '…' : estado[f.name] === 'guardado' ? '✓ guardado' : estado[f.name] === 'error' ? 'error' : ''}
+                    </span>
                   </div>
                 </td>
               </tr>

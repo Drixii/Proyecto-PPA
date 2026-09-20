@@ -2074,27 +2074,36 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
             continue
 
         texto = None
+        extra = margenes.get(otro.name)
         if recibe:
             # El cartel de lo que llega no cotiza la ruta, sino a cómo está
             # cada moneda: cuántas unidades por un dólar, que es el precio al
             # que se compra. En los países que ya usan el dólar eso sería 1 y
-            # no dice nada, así que ahí sale la comisión de su ruta.
+            # no dice nada, así que ahí sale un porcentaje.
+            #
+            # Y ahí el margen no puede multiplicar nada, porque no hay tasa:
+            # es el porcentaje que se publica. Escribir 12 en Estados Unidos
+            # pone 12% en el cartel, en vez de la comisión de la ruta. Sin
+            # margen sigue saliendo esa comisión, como siempre.
             if (otro.currency or "").upper() == "USD":
-                pct = _get_commission(
-                    db, otro.currency, pais.currency, None,
-                    from_country=otro.name, to_country=pais.name,
-                )
+                if extra:
+                    pct = extra
+                else:
+                    pct = _get_commission(
+                        db, otro.currency, pais.currency, None,
+                        from_country=otro.name, to_country=pais.name,
+                    )
                 valor, texto = None, f"{pct:g}%"
             elif (otro.currency or "").upper() == "EUR":
                 # El euro se publica a la par a propósito. Su cambio real anda
                 # por 0,87 y el cartel diría eso, que para quien lo lee no es
                 # un precio sino un número raro; la casa lo trabaja 1 a 1.
-                valor, texto = None, "1 a 1"
+                # Con margen escrito manda el margen, igual que en los dólares.
+                valor, texto = None, (f"{extra:g}%" if extra else "1 a 1")
             else:
                 valor = get_rate(db, "USD", otro.currency)
 
-            # El margen que se le haya puesto a ese país, encima del precio.
-            extra = margenes.get(otro.name)
+            # En los demás sí hay tasa, y el margen se le suma por encima.
             if valor is not None and extra:
                 valor = valor * (1 + extra / 100)
         else:
