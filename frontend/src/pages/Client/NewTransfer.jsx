@@ -554,23 +554,15 @@ export default function NewTransfer() {
     queryFn: () => api.get('/admin/banks', { params: { country: receiver.receiver_country } }).then(r => r.data.data).catch(() => []),
   })
 
+  // Los contactos vienen de su propio endpoint, no del listado de envíos:
+  // borrar un envío sin pagar no puede llevarse por delante al destinatario.
+  // Allí se deduplican y se incluye lo que está en la papelera.
   const { data: prevOrdersData } = useQuery({
-    queryKey: ['my-orders-contacts'],
-    queryFn: () => api.get('/orders', { params: { page_size: 50 } }).then(r => r.data.data.items || []),
+    queryKey: ['my-contacts'],
+    queryFn: () => api.get('/orders/contactos').then(r => r.data.data || []),
   })
 
-  const previousContacts = (() => {
-    if (!prevOrdersData?.length) return []
-    const seen = new Set()
-    return prevOrdersData
-      .filter(o => {
-        const key = `${o.receiver_name}|${o.receiver_account || ''}|${o.receiver_country}`
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-      .slice(0, 6)
-  })()
+  const previousContacts = (prevOrdersData || []).slice(0, 6)
 
   const selectContact = (order) => {
     setReceiver({

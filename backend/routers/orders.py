@@ -114,6 +114,51 @@ def get_client_notifications(db: Session = Depends(get_db), current_user: User =
     }
 
 
+@router.get("/contactos", response_model=dict)
+def contactos_del_cliente(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """A quién le ha enviado este cliente alguna vez.
+
+    Incluye los envíos de la papelera a propósito: borrar un envío que no se
+    llegó a pagar no debería borrar al destinatario. El contacto es de quien
+    envía, no del envío; perderlo obliga a volver a teclear cuenta, banco y
+    documento de alguien a quien ya se le mandó.
+
+    Solo salen los datos del destinatario: ni montos, ni estados, ni nada del
+    envío en sí.
+    """
+    filas = (
+        db.query(Order)
+        .filter(Order.client_id == current_user.id)
+        .order_by(Order.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+    vistos, contactos = set(), []
+    for o in filas:
+        clave = f"{o.receiver_name}|{o.receiver_account or ''}|{o.receiver_country}"
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        contactos.append({
+            "id": o.id,
+            "receiver_name": o.receiver_name,
+            "receiver_phone": o.receiver_phone,
+            "receiver_country": o.receiver_country,
+            "receiver_bank_id": o.receiver_bank_id,
+            "receiver_account": o.receiver_account,
+            "receiver_id_type": o.receiver_id_type,
+            "receiver_id_num": o.receiver_id_num,
+            "currency_to": o.currency_to,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+        })
+
+    return {"success": True, "data": contactos[:30], "message": ""}
+
+
 @router.get("/{order_id}", response_model=dict)
 def get_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     order = db.query(Order).filter(
