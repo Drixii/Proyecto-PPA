@@ -713,7 +713,7 @@ export default function NewTransfer() {
         /* Checkout: los métodos a un lado y el detalle al otro. Antes eran
            botones en rejilla y todo lo demás debajo, y en un envío con
            cuenta bancaria larga el botón elegido quedaba fuera de pantalla. */
-        .ck{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:18px;align-items:start;}
+        .ck{display:grid;grid-template-columns:minmax(250px,310px) minmax(0,1fr);gap:20px;align-items:start;}
         .ck-col{display:flex;flex-direction:column;gap:12px;min-width:0;}
         .ck-titulo{margin:0 0 2px;font-size:11px;font-weight:700;letter-spacing:.08em;
           text-transform:uppercase;color:#64748b;}
@@ -762,7 +762,7 @@ export default function NewTransfer() {
         </div>
       )}
 
-      <div className="p-6 max-w-2xl mx-auto">
+      <div className={`p-6 mx-auto ${step === 3 ? 'max-w-5xl' : 'max-w-2xl'}`}>
         <div className="mb-6">
           <h1 className="text-2xl font-bold" style={{color:'#eaf2ff'}}>Nueva transferencia</h1>
           <p className="text-sm mt-1" style={{color:'#8aa0cc'}}>Envía dinero de forma rápida y segura</p>

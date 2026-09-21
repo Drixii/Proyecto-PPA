@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CampoSelector from './CampoSelector'
+import MarcaPago, { ProcesadoPor, nombreDeMetodo } from './MarcaPago'
 import ImagenAmpliable from './ImagenAmpliable'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -688,8 +689,32 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
     <Portal>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.75)'}}
         onClick={cerrar}>
-        <div className="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl p-6" style={GLASS}
+        <div className="w-full max-w-3xl max-h-[88dvh] overflow-y-auto rounded-2xl p-6" style={GLASS}
           onClick={e => e.stopPropagation()}>
+          <style>{`
+            /* Mismo reparto que el checkout de nueva transferencia: cómo pagar
+               a un lado, qué se paga al otro. Antes cada paso reemplazaba al
+               anterior y al elegir transferencia desaparecían los demás
+               métodos: para cambiar de idea había que cerrar y volver a abrir. */
+            .ck2{display:grid;grid-template-columns:minmax(230px,280px) minmax(0,1fr);gap:18px;align-items:start;}
+            .ck2-col{display:flex;flex-direction:column;gap:10px;min-width:0;}
+            .ck2-rotulo{margin:0 0 2px;font-size:10.5px;font-weight:700;letter-spacing:.08em;
+              text-transform:uppercase;color:#64748b;}
+            .ck2-metodo{display:flex;align-items:center;gap:10px;width:100%;padding:10px 11px;border-radius:14px;
+              cursor:pointer;text-align:left;background:rgba(255,255,255,.04);
+              border:1.5px solid rgba(255,255,255,.08);transition:background .2s,border-color .2s;}
+            .ck2-metodo:hover{background:rgba(255,255,255,.06);border-color:rgba(56,189,248,.35);}
+            .ck2-metodo.ck2-on{background:rgba(56,189,248,.1);border-color:#38bdf8;}
+            .ck2-metodo:disabled{opacity:.5;cursor:default;}
+            .ck2-txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
+            .ck2-nombre{font-size:12.5px;font-weight:700;color:#eaf2ff;line-height:1.25;}
+            .ck2-desc{font-size:10.5px;color:#8aa0cc;line-height:1.3;}
+            .ck2-resumen{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:16px;
+              background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.16);}
+            .ck2-fila{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:12.5px;color:#aebfe2;}
+            .ck2-fila strong{color:#eaf2ff;font-size:14px;}
+            @media(max-width:760px){ .ck2{grid-template-columns:1fr;} }
+          `}</style>
           <div className="flex items-start justify-between mb-1 gap-3">
             <h3 className="font-semibold" style={{color:'#eaf2ff'}}>
               {qr ? `Escanea con ${qr.metodo}`
@@ -711,6 +736,54 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
           {/* Métodos que se cobran mostrando un código (Ligo en Perú, SIP en
               Bolivia): Koywe devuelve la imagen del QR en vez de un enlace, así
               que el cliente paga sin salir de aquí. */}
+          <div className="ck2">
+          <div className="ck2-col">
+            {!isLoading && !pidiendoDatos && (
+              <>
+                <p className="ck2-rotulo">Cómo quieres pagar</p>
+                {(data?.metodos || []).map(m => (
+                  <button key={m.codigo} type="button"
+                    onClick={() => elegir(m.codigo)}
+                    disabled={!!enCurso}
+                    className={`ck2-metodo${data?.actual === m.codigo ? ' ck2-on' : ''}`}>
+                    <MarcaPago codigo={m.codigo} banco={cuenta?.banco} tam={38} />
+                    <span className="ck2-txt">
+                      <span className="ck2-nombre">
+                        {enCurso === m.codigo ? 'Abriendo…' : nombreDeMetodo(m.codigo, m.nombre, cuenta?.banco)}
+                      </span>
+                      <span className="ck2-desc">{m.desc}</span>
+                    </span>
+                    <ProcesadoPor codigo={m.codigo} />
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+
+          <div className="ck2-col">
+          {/* Lo que se está pagando, siempre delante. */}
+          <div className="ck2-resumen">
+            <div className="ck2-fila">
+              <span>Total</span>
+              <strong>{Number(order.amount_sent).toLocaleString('es-CL')} {order.currency_from}</strong>
+            </div>
+            <div className="ck2-fila" style={{fontSize:12, color:'#8aa0cc'}}>
+              <span>Recibe</span>
+              <span>{order.receiver_name}</span>
+            </div>
+            <div className="ck2-fila" style={{fontSize:12, color:'#8aa0cc'}}>
+              <span>Destino</span>
+              <span>{order.receiver_country}</span>
+            </div>
+          </div>
+
+          {!data?.actual && !transferencia && !qr && !isLoading && (
+            <p style={{margin:0, padding:'18px 14px', borderRadius:14, textAlign:'center', fontSize:12.5,
+              color:'#8aa0cc', background:'rgba(255,255,255,.03)', border:'1px dashed rgba(255,255,255,.12)'}}>
+              Elige a la izquierda cómo quieres pagar.
+            </p>
+          )}
+
           {qr && (
             <div className="space-y-3">
               <div className="rounded-2xl p-4 flex justify-center" style={{background:'#fff'}}>
@@ -818,26 +891,6 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
             </div>
           )}
 
-          {!isLoading && !transferencia && !pidiendoDatos && !qr && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(data?.metodos || []).map(m => (
-                <button key={m.codigo} type="button"
-                  onClick={() => elegir(m.codigo)}
-                  disabled={!!enCurso}
-                  className="flex flex-col items-center gap-2 p-4 rounded-2xl transition-all text-center disabled:opacity-50"
-                  style={data?.actual === m.codigo
-                    ? {background:'rgba(56,189,248,.1)', border:'2px solid #38bdf8'}
-                    : {background:'rgba(255,255,255,.04)', border:'2px solid rgba(255,255,255,.08)'}}>
-                  <span className="text-2xl">{m.icono}</span>
-                  <span className="text-xs font-semibold" style={{color:'#eaf2ff'}}>
-                    {enCurso === m.codigo ? 'Abriendo...' : m.nombre}
-                  </span>
-                  <span className="text-[10px]" style={{color:'#8aa0cc'}}>{m.desc}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
           {transferencia && !qr && (
             <div className="space-y-3">
               {cuenta ? (
@@ -900,6 +953,8 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
               </label>
             </div>
           )}
+          </div>
+          </div>
         </div>
       </div>
     </Portal>

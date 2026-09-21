@@ -117,8 +117,8 @@ export function ProcesadoPor({ codigo }) {
 export function nombreDeMetodo(codigo, nombre, banco) {
   const cod = String(codigo || '').toUpperCase()
   if (cod === 'TRANSFERENCIA') return banco ? `Transferencia a ${banco}` : 'Transferencia bancaria'
-  if (cod === 'TARJETA') return 'Pago con tarjeta'
-  if (cod === 'LINK_PAGO') return 'Pago con tarjeta'
+  if (cod === 'TARJETA') return 'Tarjeta de crédito o débito'
+  if (cod === 'LINK_PAGO') return 'Tarjeta con Haulmer'
   if (cod === 'HAULMER') return 'Tarjeta internacional'
   if (cod === 'KHIPU') return 'Transferencia con Khipu'
   if (cod === 'PSE') return 'Débito con PSE'
