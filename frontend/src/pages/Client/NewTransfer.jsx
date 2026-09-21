@@ -235,13 +235,6 @@ export default function NewTransfer() {
     && (payCfg?.link_pago?.currencies || []).includes(calc.fromCurrency)
     ? payCfg.link_pago.url : ''
   const esLinkPago = (metodo) => String(metodo || '').toLowerCase() === 'link_pago'
-  const montoHaulmerCLP = (() => {
-    const monto = rawAmount || parseFloat(calc.amount || '0')
-    if (!monto) return null
-    if (calc.fromCurrency === 'CLP') return Math.round(monto)
-    const tasa = payCfg?.haulmer?.tasas?.[calc.fromCurrency]
-    return tasa ? Math.round(monto * tasa) : null
-  })()
   const koyweElegido = koyweMethods.find(m => String(m.codigo).toLowerCase() === String(payment.payment_method).toLowerCase())
 
   // Datos de quien paga. El remitente sale del nombre de la cuenta, que no
@@ -403,6 +396,18 @@ export default function NewTransfer() {
   // completados; el backend decide de verdad, esto solo avisa.
   const umbralCLP = payCfg?.retencion?.activa ? payCfg?.retencion?.umbral_clp : null
   const montoActual = rawAmount || parseFloat(calc.amount || '0')
+
+  // Lo que se le cobra en pesos a quien paga con Haulmer o con su link. Va
+  // AQUÍ y no arriba con el resto de Haulmer porque necesita `rawAmount`, que
+  // se declara unas líneas antes: leerlo desde arriba reventaba la pantalla
+  // entera de transferir con un "Cannot access before initialization".
+  const montoHaulmerCLP = (() => {
+    if (!montoActual) return null
+    if (calc.fromCurrency === 'CLP') return Math.round(montoActual)
+    const tasa = payCfg?.link_pago?.tasas?.[calc.fromCurrency]
+      ?? payCfg?.haulmer?.tasas?.[calc.fromCurrency]
+    return tasa ? Math.round(montoActual * tasa) : null
+  })()
   const superaUmbral = (() => {
     if (!umbralCLP || !montoActual) return false
     if (calc.fromCurrency === 'CLP') return montoActual >= umbralCLP
