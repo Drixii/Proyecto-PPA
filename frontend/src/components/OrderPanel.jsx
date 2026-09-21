@@ -874,6 +874,7 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
                     <span className="text-sm ml-1.5" style={{color:'#8aa0cc'}}>CLP</span>
                   </p>
                   <a href={metodoLink.url} target="_blank" rel="noopener noreferrer"
+                    onClick={() => navigator.clipboard?.writeText(String(metodoLink.monto_clp || ''))}
                     className="block w-full text-center text-sm font-bold py-2.5 rounded-xl"
                     style={{background:'linear-gradient(135deg,#22d3ee,#1d4ed8)', color:'#fff'}}>
                     Abrir la página de pago →
