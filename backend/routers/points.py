@@ -17,6 +17,24 @@ from auth.dependencies import get_current_user, require_super_admin
 router = APIRouter(prefix="/api", tags=["points"])
 
 _DEFAULTS = {"points_fee_pct": "10", "points_clp_rate": "50"}
+
+# Interruptor general. Apagado, el sistema de puntos deja de existir para el
+# cliente: no se ganan, no se canjean y no sale en el menú. Lo ya acumulado no
+# se borra —volver a encenderlo lo devuelve tal cual— pero no se puede usar.
+AJUSTE_ACTIVO = "points_enabled"
+
+
+def puntos_activos(db: Session) -> bool:
+    fila = db.query(Setting).filter(Setting.key == AJUSTE_ACTIVO).first()
+    # Sin fila, encendido: es como se comportaba antes de que el interruptor
+    # existiera, y apagarlo por omisión le quitaría los puntos a quien ya los
+    # tiene sin haberlo pedido.
+    return True if fila is None else fila.value == "1"
+
+
+def _exigir_activos(db: Session):
+    if not puntos_activos(db):
+        raise HTTPException(status_code=404, detail="El sistema de puntos está desactivado")
 REWARDS_DIR = "uploads/rewards"
 os.makedirs(REWARDS_DIR, exist_ok=True)
 
@@ -81,8 +99,15 @@ def _redemption_to_dict(r: PointRedemption) -> dict:
 
 # ── Client ────────────────────────────────────────────────
 
+@router.get("/points/activos")
+def puntos_estan_activos(db: Session = Depends(get_db)):
+    """Si el sistema de puntos está encendido. Lo consulta el menú del cliente."""
+    return {"data": {"activo": puntos_activos(db)}}
+
+
 @router.get("/points/my")
 def get_my_points(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _exigir_activos(db)
     acc = _get_or_create_account(db, current_user.id)
     txns = (db.query(PointTransaction)
             .filter(PointTransaction.account_id == acc.id)
@@ -92,12 +117,14 @@ def get_my_points(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 @router.get("/points/rewards")
 def get_rewards_public(db: Session = Depends(get_db)):
+    _exigir_activos(db)
     rewards = db.query(PointReward).filter(PointReward.active == True).order_by(PointReward.points_cost).all()
     return {"data": [_reward_to_dict(r) for r in rewards]}
 
 
 @router.get("/points/my-redemptions")
 def get_my_redemptions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _exigir_activos(db)
     items = (db.query(PointRedemption)
              .filter(PointRedemption.user_id == current_user.id)
              .order_by(PointRedemption.created_at.desc()).all())
@@ -110,6 +137,7 @@ class RedeemRequest(BaseModel):
 
 @router.post("/points/redeem")
 def redeem_reward(body: RedeemRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _exigir_activos(db)
     reward = db.query(PointReward).filter(PointReward.id == body.reward_id, PointReward.active == True).first()
     if not reward:
         raise HTTPException(404, "Canjeable no encontrado o inactivo")
@@ -138,6 +166,7 @@ def redeem_reward(body: RedeemRequest, db: Session = Depends(get_db), current_us
 # ── Admin ─────────────────────────────────────────────────
 
 class PointsConfigUpdate(BaseModel):
+    activo: Optional[bool] = None
     points_fee_pct: Optional[float] = None
     points_envio_pct: Optional[float] = None
     points_clp_rate: Optional[float] = None
@@ -159,6 +188,7 @@ class ManualAwardRequest(BaseModel):
 def get_points_config(db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
     fila = db.query(Setting).filter(Setting.key == "points_envio_pct").first()
     return {"data": {
+        "activo": puntos_activos(db),
         "points_fee_pct": float(_setting(db, "points_fee_pct")),
         # None mientras siga la regla vieja, sobre la comisión.
         "points_envio_pct": float(fila.value) if fila and fila.value else None,
@@ -168,6 +198,8 @@ def get_points_config(db: Session = Depends(get_db), _: User = Depends(require_s
 
 @router.put("/admin/points/config")
 def update_points_config(body: PointsConfigUpdate, db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
+    if body.activo is not None:
+        _set_setting(db, AJUSTE_ACTIVO, "1" if body.activo else "")
     if body.points_fee_pct is not None:
         _set_setting(db, "points_fee_pct", str(body.points_fee_pct))
     if body.points_envio_pct is not None:

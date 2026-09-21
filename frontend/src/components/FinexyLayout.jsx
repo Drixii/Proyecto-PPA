@@ -29,7 +29,7 @@ const CLIENT_TABS = [
   { label: 'Mi panel', path: '/dashboard' },
   { label: 'Transferir', path: '/new-transfer' },
   { label: 'Historial', path: '/historial' },
-  { label: 'Mis puntos', path: '/mis-puntos' },
+  { label: 'Mis puntos', path: '/mis-puntos', puntos: true },
   { label: 'Perfil', path: '/perfil' },
 ]
 
@@ -49,7 +49,7 @@ const CLIENT_SIDEBAR = [
   { icon: <IcoHome />, path: '/dashboard', label: 'Inicio', exact: true },
   { icon: <IcoTransfer />, path: '/new-transfer', label: 'Nuevo envío' },
   { icon: <IcoHistory />, path: '/historial', label: 'Historial' },
-  { icon: <IcoGift />, path: '/mis-puntos', label: 'Mis puntos' },
+  { icon: <IcoGift />, path: '/mis-puntos', label: 'Mis puntos', puntos: true },
   { icon: <IcoProfile />, path: '/perfil', label: 'Perfil' },
 ]
 
@@ -641,8 +641,17 @@ export default function FinexyLayout({ children, fullHeight = false }) {
 
   const isAdmin = user?.role === 'admin'
   const isSubAdmin = user?.role === 'sub_admin'
-  const tabs = isAdmin ? ADMIN_TABS : (isSubAdmin ? SUB_ADMIN_TABS : CLIENT_TABS)
-  const sidebar = isAdmin ? ADMIN_SIDEBAR : (isSubAdmin ? SUB_ADMIN_SIDEBAR : CLIENT_SIDEBAR)
+  // Con el sistema de puntos apagado, sus entradas desaparecen del menú: si se
+  // quedaran, llevarían a una pantalla que el servidor ya no atiende.
+  const { data: puntosActivos } = useQuery({
+    queryKey: ['puntos-activos'],
+    queryFn: () => api.get('/points/activos').then(r => r.data.data.activo),
+    staleTime: 60000,
+  })
+  const sinPuntos = (lista) => (lista || []).filter(x => !x.puntos || puntosActivos !== false)
+
+  const tabs = sinPuntos(isAdmin ? ADMIN_TABS : (isSubAdmin ? SUB_ADMIN_TABS : CLIENT_TABS))
+  const sidebar = sinPuntos(isAdmin ? ADMIN_SIDEBAR : (isSubAdmin ? SUB_ADMIN_SIDEBAR : CLIENT_SIDEBAR))
 
   const mobileBottomNav = isAdmin
     ? [
@@ -662,10 +671,10 @@ export default function FinexyLayout({ children, fullHeight = false }) {
           { icon: <IcoHome />, path: '/dashboard', label: 'Inicio', exact: true },
           { icon: <IcoTransfer />, path: '/new-transfer', label: 'Transferir' },
           { icon: <IcoHistory />, path: '/historial', label: 'Historial' },
-          { icon: <IcoGift />, path: '/mis-puntos', label: 'Mis puntos' },
+          { icon: <IcoGift />, path: '/mis-puntos', label: 'Mis puntos', puntos: true },
         ]
 
-  const slideMenuItems = isAdmin
+  const slideMenuItems = sinPuntos(isAdmin
     ? [
         { icon: <IcoUsers />, path: '/admin/users', label: 'Usuarios' },
         { icon: <IcoGift />, path: '/admin/points', label: 'Puntos' },
@@ -676,7 +685,7 @@ export default function FinexyLayout({ children, fullHeight = false }) {
       ? [
           { icon: <IcoProfile />, path: '/sub-admin/profile', label: 'Perfil' },
         ]
-      : [{ icon: <IcoProfile />, path: '/perfil', label: 'Perfil' }]
+      : [{ icon: <IcoProfile />, path: '/perfil', label: 'Perfil' }])
 
   const isTabActive = (path) => {
     if (path === '/admin' || path === '/dashboard' || path === '/sub-admin') return location.pathname === path

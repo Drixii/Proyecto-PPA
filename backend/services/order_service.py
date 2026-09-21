@@ -369,6 +369,11 @@ def puntos_de_envio(db: Session, monto: float, moneda: str, fee: float = 0) -> i
 def _award_points(db: Session, order: Order):
     try:
         from models.point import PointAccount, PointTransaction
+        from routers.points import puntos_activos
+        # Con el sistema apagado no se acumula nada: encenderlo luego no debe
+        # regalar puntos por envíos hechos mientras estaba desactivado.
+        if not puntos_activos(db):
+            return
         points = puntos_de_envio(db, order.amount_sent, order.currency_from, order.fee)
         if points <= 0:
             return

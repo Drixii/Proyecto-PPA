@@ -206,11 +206,41 @@ function ConfigSection() {
     mut.mutate({ points_envio_pct: p, points_clp_rate: v })
   }
 
+  const activo = data?.activo !== false
+
   const caja = 'w-full rounded-xl px-4 py-3 text-2xl font-bold focus:outline-none'
 
   return (
     <div className="max-w-xl space-y-4">
-      <div className="rounded-2xl p-6" style={GLASS}>
+      {/* Interruptor general. Apagado, el cliente no ve los puntos por ninguna
+          parte y deja de acumularlos; lo que ya tenga se queda guardado. */}
+      <div className="rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap" style={GLASS}>
+        <div>
+          <p className="font-semibold" style={{ color: '#eaf2ff' }}>
+            Sistema de puntos {activo
+              ? <span style={{ color: '#4ade80' }}>activado</span>
+              : <span style={{ color: '#f87171' }}>desactivado</span>}
+          </p>
+          <p className="text-xs mt-1 leading-relaxed" style={{ color: '#8aa0cc' }}>
+            {activo
+              ? 'Los clientes ganan puntos con cada envío y pueden canjearlos.'
+              : 'No se ganan ni se canjean, y no aparece en el menú del cliente. Lo acumulado no se borra.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => mut.mutate({ activo: !activo })}
+          disabled={mut.isPending}
+          className="px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+          style={activo
+            ? { background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: '#f87171' }
+            : { background: 'linear-gradient(135deg,#22c55e,#15803d)', border: 'none', color: '#fff' }}
+        >
+          {mut.isPending ? '…' : activo ? 'Desactivar' : 'Activar'}
+        </button>
+      </div>
+
+      <div className="rounded-2xl p-6" style={{ ...GLASS, opacity: activo ? 1 : .55 }}>
         <h3 className="font-semibold mb-1" style={{ color: '#eaf2ff' }}>Puntos</h3>
         <p className="text-xs mb-5" style={{ color: '#8aa0cc' }}>
           Cuánto le devuelves al cliente por cada envío
