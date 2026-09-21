@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import CampoSelector from './CampoSelector'
 import MarcaPago, { ProcesadoPor, nombreDeMetodo } from './MarcaPago'
+import CopiaMontoLink from './CopiaMontoLink'
 import ImagenAmpliable from './ImagenAmpliable'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -534,6 +535,8 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
   const [enCurso, setEnCurso] = useState('')
   const [error, setError] = useState('')
   const [transferencia, setTransferencia] = useState(false)
+  // Igual que en nueva transferencia: al link no se va sin copiar antes.
+  const [abrirLink, setAbrirLink] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [pidiendoDatos, setPidiendoDatos] = useState(null)
   const [pagador, setPagador] = useState({})
@@ -607,11 +610,10 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
     // Link de pago: se abre su página en otra pestaña y el envío queda
     // esperando el comprobante, porque el link no avisa de nada.
     if (codigo === 'link_pago') {
-      const metodo = (data?.metodos || []).find(m => m.codigo === 'link_pago')
-      if (metodo?.url) window.open(metodo.url, '_blank', 'noopener')
       refrescar()
       setEnCurso('')
       setTransferencia(true)
+      setAbrirLink(true)
       return
     }
 
@@ -691,6 +693,8 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
         onClick={cerrar}>
         <div className="w-full max-w-3xl max-h-[88dvh] overflow-y-auto rounded-2xl p-6" style={GLASS}
           onClick={e => e.stopPropagation()}>
+          <CopiaMontoLink monto={metodoLink?.monto_clp} url={metodoLink?.url}
+            abierto={abrirLink && !!metodoLink} cerrar={() => setAbrirLink(false)} />
           <style>{`
             /* Mismo reparto que el checkout de nueva transferencia: cómo pagar
                a un lado, qué se paga al otro. Antes cada paso reemplazaba al
@@ -926,12 +930,11 @@ export function ElegirMetodoPago({ order, cerrar, alElegirTarjeta, alFallar }) {
                     {Number(metodoLink.monto_clp || 0).toLocaleString('es-CL')}
                     <span className="text-sm ml-1.5" style={{color:'#8aa0cc'}}>CLP</span>
                   </p>
-                  <a href={metodoLink.url} target="_blank" rel="noopener noreferrer"
-                    onClick={() => navigator.clipboard?.writeText(String(metodoLink.monto_clp || ''))}
+                  <button type="button" onClick={() => setAbrirLink(true)}
                     className="block w-full text-center text-sm font-bold py-2.5 rounded-xl"
-                    style={{background:'linear-gradient(135deg,#22d3ee,#1d4ed8)', color:'#fff'}}>
+                    style={{background:'linear-gradient(135deg,#22d3ee,#1d4ed8)', color:'#fff', border:'none'}}>
                     Abrir la página de pago →
-                  </a>
+                  </button>
                   <p className="text-[11px]" style={{color:'#8aa0cc'}}>
                     Paga con tu tarjeta y vuelve con la captura: el envío avanza cuando se revise.
                   </p>

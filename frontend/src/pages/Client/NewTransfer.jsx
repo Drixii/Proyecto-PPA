@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import CampoSelector from '../../components/CampoSelector'
 import MarcaPago, { ProcesadoPor, nombreDeMetodo } from '../../components/MarcaPago'
+import CopiaMontoLink from '../../components/CopiaMontoLink'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -117,6 +118,8 @@ export default function NewTransfer() {
   const [toOpen, setToOpen] = useState(false)
   const [proofFile, setProofFile] = useState(null)
   const [montoCopiado, setMontoCopiado] = useState(false)
+  // El paso intermedio del link de pago: copiar el monto antes de salir.
+  const [abrirLink, setAbrirLink] = useState(false)
   const [proofError, setProofError] = useState('')
   // Orden ya creada en este envio. En una ref y no en estado: no repinta,
   // y sobrevive a los reintentos dentro del mismo submit.
@@ -709,6 +712,8 @@ export default function NewTransfer() {
 
   return (
     <FinexyLayout>
+      <CopiaMontoLink monto={montoHaulmerCLP} url={linkPago}
+        abierto={abrirLink} cerrar={() => setAbrirLink(false)} />
       <style>{`
         /* Checkout: los métodos a un lado y el detalle al otro. Antes eran
            botones en rejilla y todo lo demás debajo, y en un envío con
@@ -1547,19 +1552,14 @@ export default function NewTransfer() {
                         Escribe exactamente este monto en la página de pago.
                       </p>
                     )}
-                    {/* Se copia el monto al abrir: la página de Haulmer pide
-                        escribirlo a mano y no admite que se lo pasemos en la
-                        dirección —probado—, así que al menos se pega. */}
-                    <a href={linkPago} target="_blank" rel="noopener noreferrer"
-                      onClick={() => { if (montoHaulmerCLP) { navigator.clipboard?.writeText(String(montoHaulmerCLP)); setMontoCopiado(true); setTimeout(() => setMontoCopiado(false), 4000) } }}
-                      className="block w-full text-center bg-gradient-to-r from-cyan-500 to-blue-700 text-white font-bold py-3 rounded-xl">
+                    {/* No lleva directo a Haulmer: primero hay que copiar el
+                        monto. Su página lo pide a mano y un dígito de menos
+                        deja un cobro que no cuadra con ningún envío. */}
+                    <button type="button" onClick={() => setAbrirLink(true)}
+                      disabled={!montoHaulmerCLP}
+                      className="block w-full text-center bg-gradient-to-r from-cyan-500 to-blue-700 text-white font-bold py-3 rounded-xl disabled:opacity-40">
                       Abrir la página de pago →
-                    </a>
-                    {montoCopiado && (
-                      <p className="text-xs text-center" style={{color:'#4ade80'}}>
-                        Monto copiado: pégalo en «Ingresar el monto a pagar».
-                      </p>
-                    )}
+                    </button>
                     <p className="text-[11px] leading-relaxed" style={{color:'#8aa0cc'}}>
                       Se abre en otra pestaña. Cuando termines, vuelve aquí y sube la captura del
                       pago: el envío se revisa y avanza en cuanto se confirme.
