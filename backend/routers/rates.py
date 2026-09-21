@@ -128,11 +128,26 @@ def get_all_rates(db: Session = Depends(get_db)):
     }
 
 
+# Monedas que no se manejan con decimales: nadie transfiere 17.512,34 pesos.
+SIN_DECIMALES = {"CLP", "COP", "PYG", "JPY", "VES", "ARS", "CRC", "GTQ", "BOB"}
+
+
+def _redondea_monto(valor: float, moneda: str) -> float:
+    """Un monto que el cliente pueda teclear tal cual en su banco."""
+    if moneda in SIN_DECIMALES:
+        return float(round(valor))
+    return round(valor, 2)
+
+
 @router.get("/convert", response_model=dict)
 def convert(
     from_currency: str = Query(..., alias="from"),
     to_currency: str = Query(..., alias="to"),
-    amount: float = Query(..., gt=0),
+    # Uno de los dos. `amount` es lo normal: se fija cuanto se envia. Con
+    # `amount_received` se fija lo que tiene que llegar y aqui sale cuanto hay
+    # que mandar para que llegue eso.
+    amount: float | None = Query(None, gt=0),
+    amount_received: float | None = Query(None, gt=0),
     # Paises opcionales: varios comparten divisa y pueden tener comisiones
     # distintas. Sin ellos se cobra la de la moneda, que es el nivel anterior.
     from_country: str | None = Query(None),
@@ -153,6 +168,9 @@ def convert(
     """
     from services.order_service import _get_commission
 
+    if amount is None and amount_received is None:
+        raise HTTPException(status_code=422, detail="Falta amount o amount_received")
+
     rate = get_rate(db, from_currency.upper(), to_currency.upper())
     if not rate:
         raise HTTPException(status_code=404, detail=f"Tasa no disponible: {from_currency} → {to_currency}")
@@ -165,6 +183,20 @@ def convert(
     # que no hay nada que elegir: la portada cotiza lo que cobran todos.
     pct = _get_commission(db, from_currency.upper(), to_currency.upper(), dueno,
                           from_country=from_country, to_country=to_country)
+    # Al reves: lo que recibe el destinatario es (enviado - comision) x tasa,
+    # asi que enviado = recibido / ((1 - pct) x tasa). El monto que sale se
+    # redondea a algo que se pueda teclear —los pesos no llevan decimales— y
+    # con ESE monto se rehace la cuenta normal: lo que se enseña arriba y
+    # abajo tiene que cuadrar entre si, aunque el recibido quede a un peso de
+    # lo que se pidio.
+    if amount is None:
+        factor = (1 - pct / 100) * rate
+        if factor <= 0:
+            raise HTTPException(status_code=400, detail="No se puede calcular con esa tasa")
+        amount = _redondea_monto(amount_received / factor, from_currency.upper())
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="El monto es demasiado pequeño")
+
     fee = round(amount * pct / 100, 2)
     amount_received = round((amount - fee) * rate, 2)
 

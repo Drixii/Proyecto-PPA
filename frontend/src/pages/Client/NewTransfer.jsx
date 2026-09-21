@@ -305,6 +305,11 @@ export default function NewTransfer() {
   const [cuentaElegida, setCuentaElegida] = useState(0)
   const cuentaTransfer = cuentasTransfer[cuentaElegida] || cuentasTransfer[0] || null
 
+  // Cuál de las dos casillas manda. El cliente puede escribir arriba
+  // —«quiero mandar 20 dólares»— o abajo —«quiero que le lleguen 17.500
+  // pesos— y la otra se rellena sola.
+  const [lado, setLado] = useState('envia')
+  const [displayRecibe, setDisplayRecibe] = useState('')
   const [displayAmount, setDisplayAmount] = useState(
     calc.amount ? formatDisplay(parseRaw(String(calc.amount)), calc.fromCurrency) : ''
   )
@@ -368,6 +373,7 @@ export default function NewTransfer() {
   useEffect(() => { setCuentaElegida(0) }, [calc.fromCountry, calc.fromCurrency])
 
   const rawAmount = parseRaw(displayAmount)
+  const rawRecibe = parseRaw(displayRecibe)
 
   // Los datos de la cuenta a la que hay que transferir, en un solo sitio: los
   // pinta la lista y los copia el botón de «todos», así que no pueden decir
@@ -424,18 +430,32 @@ export default function NewTransfer() {
     || sendCountries.find(c => c.code === calc.fromCurrency)
 
   useEffect(() => {
-    if (!rawAmount) { setLiveResult(null); return }
+    const monto = lado === 'envia' ? rawAmount : rawRecibe
+    if (!monto) {
+      setLiveResult(null)
+      // Vaciar una casilla vacía la otra: dejar ahí el resultado de un monto
+      // que ya no existe es peor que no enseñar nada.
+      if (lado === 'envia') setDisplayRecibe('')
+      else setDisplayAmount('')
+      return
+    }
     setLiveLoading(true)
     setLiveResult(null)
     const t = setTimeout(async () => {
       try {
         const res = await api.get('/rates/convert', {
           params: {
-            from: calc.fromCurrency, to: calc.toCurrency, amount: rawAmount,
+            from: calc.fromCurrency, to: calc.toCurrency,
+            ...(lado === 'envia' ? { amount: rawAmount } : { amount_received: rawRecibe }),
             from_country: calc.fromCountry, to_country: calc.toCountry,
           }
         })
-        setLiveResult(res.data.data)
+        const d = res.data.data
+        // Se rellena SOLO la casilla que no se está escribiendo. Tocar la
+        // otra mientras alguien teclea le borraría lo escrito a media cifra.
+        if (lado === 'envia') setDisplayRecibe(formatDisplay(d.amount_received, calc.toCurrency))
+        else setDisplayAmount(formatDisplay(d.amount_sent, calc.fromCurrency))
+        setLiveResult(d)
       } catch {
         setLiveResult(null)
       } finally {
@@ -443,12 +463,22 @@ export default function NewTransfer() {
       }
     }, 600)
     return () => { clearTimeout(t); setLiveLoading(false) }
-  }, [displayAmount, calc.fromCurrency, calc.toCurrency])
+    // Solo la casilla activa en las dependencias: con las dos, rellenar una
+    // disparaba otra consulta y las dos se perseguian.
+  }, [lado === 'envia' ? displayAmount : displayRecibe, lado, calc.fromCurrency, calc.toCurrency])
 
   const handleAmountChange = (e) => {
+    setLado('envia')
     const num = parseRaw(e.target.value)
     if (!e.target.value.replace(/\D/g, '')) { setDisplayAmount(''); return }
     setDisplayAmount(formatDisplay(num, calc.fromCurrency))
+  }
+
+  const handleRecibeChange = (e) => {
+    setLado('recibe')
+    const num = parseRaw(e.target.value)
+    if (!e.target.value.replace(/\D/g, '')) { setDisplayRecibe(''); return }
+    setDisplayRecibe(formatDisplay(num, calc.toCurrency))
   }
 
   const handleFromCurrencyChange = (origen) => {
@@ -472,6 +502,10 @@ export default function NewTransfer() {
       ...(newCountry ? { toCountry: newCountry, toCurrency: newCurrency } : {}),
     }))
     if (newCountry) setReceiver(r => ({ ...r, receiver_country: newCountry }))
+    if (displayRecibe) {
+      const otro = parseRaw(displayRecibe)
+      if (otro) setDisplayRecibe(formatDisplay(otro, calc.toCurrency))
+    }
     if (displayAmount) {
       const num = parseRaw(displayAmount)
       if (num) setDisplayAmount(formatDisplay(num, code))
@@ -1030,9 +1064,16 @@ export default function NewTransfer() {
                           onCerrar={() => setToOpen(false)} />
                       )}
                     </div>
-                    <p className="flex-1 text-3xl font-bold text-right" style={{color: receivedDisplay ? '#38bdf8' : '#64748b'}}>
-                      {receivedDisplay || '—'}
-                    </p>
+                    {/* Se escribe igual que la de arriba: quien sabe cuánto
+                        tiene que llegar no debería tener que ir probando
+                        montos arriba hasta acertar. */}
+                    <input
+                      type="text" inputMode="decimal" value={displayRecibe}
+                      onChange={handleRecibeChange}
+                      onFocus={() => setLado('recibe')}
+                      placeholder="0"
+                      className="flex-1 min-w-0 bg-transparent text-3xl font-bold text-right focus:outline-none"
+                      style={{color:'#38bdf8'}} />
                   </div>
                 </div>
               </div>

@@ -33,6 +33,10 @@ export default function CalculatorDark({ onSend }) {
   const [toOpen, setToOpen]     = useState(false)
   const [isMobile]              = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768)
   const receivedRef = useRef(null)
+  // Qué casilla manda. Se puede escribir arriba —cuánto envío— o abajo
+  // —cuánto quiero que le llegue— y la otra se rellena sola.
+  const [lado, setLado] = useState('envia')
+  const [displayRecibe, setDisplayRecibe] = useState('')
   const countRaf    = useRef(null)
 
   const { sendCountries, receiveCountries } = useCountries()
@@ -43,6 +47,7 @@ export default function CalculatorDark({ onSend }) {
   const selectedFrom = sendCountries.find(c => c.country === fromCountry)
     || sendCountries.find(c => c.code === fromCurrency)
   const rawAmount   = parseRaw(displayAmount)
+  const rawRecibe = parseRaw(displayRecibe)
 
   // Si el admin quita el país o la moneda que estaba elegida, hay que caer en
   // una válida; si no, el calculador se queda pidiendo una tasa que ya no
@@ -67,31 +72,44 @@ export default function CalculatorDark({ onSend }) {
   }, [toCountry, countries])
 
   useEffect(() => {
-    if (!rawAmount || rawAmount <= 0) { setResult(null); setRateError(null); return }
+    const monto = lado === 'envia' ? rawAmount : rawRecibe
+    if (!monto || monto <= 0) {
+      setResult(null); setRateError(null)
+      if (lado === 'envia') setDisplayRecibe('')
+      else setDisplayAmount('')
+      return
+    }
     if (fromCurrency === toCurrency) { setResult(null); setRateError('Misma moneda en ambos lados'); return }
     const timer = setTimeout(fetchRate, 600)
     return () => clearTimeout(timer)
-  }, [displayAmount, fromCurrency, toCurrency])
+    // Solo la casilla activa: con las dos, rellenar una disparaba otra
+    // consulta y las dos se perseguían.
+  }, [lado === 'envia' ? displayAmount : displayRecibe, lado, fromCurrency, toCurrency])
 
   useEffect(() => {
     if (!result) return
     const interval = setInterval(fetchRate, 60000)
     return () => clearInterval(interval)
-  }, [result, fromCurrency, toCurrency, displayAmount])
+  }, [result, fromCurrency, toCurrency, displayAmount, displayRecibe])
 
   const fetchRate = async () => {
-    if (!rawAmount || rawAmount <= 0) return
+    const monto = lado === 'envia' ? rawAmount : rawRecibe
+    if (!monto || monto <= 0) return
     setLoading(true); setRateError(null)
     try {
       const res = await api.get('/rates/convert', {
         params: {
-          from: fromCurrency, to: toCurrency, amount: rawAmount,
+          from: fromCurrency, to: toCurrency,
+          ...(lado === 'envia' ? { amount: rawAmount } : { amount_received: rawRecibe }),
           from_country: fromCountry, to_country: toCountry,
         },
       })
-      const prev = result?.amount_received || 0
-      setResult(res.data.data)
-      animateCount(prev, res.data.data.amount_received, res.data.data)
+      const d = res.data.data
+      // Se rellena la casilla que NO se está escribiendo: tocar la otra a
+      // media cifra le borraría lo tecleado a quien está escribiendo.
+      if (lado === 'envia') setDisplayRecibe(fmt(d.amount_received, toCurrency))
+      else setDisplayAmount(fmt(d.amount_sent, fromCurrency))
+      setResult(d)
     } catch (err) {
       setResult(null)
       const detail = err.response?.data?.detail || ''
@@ -118,9 +136,16 @@ export default function CalculatorDark({ onSend }) {
   }
 
   const handleAmountChange = e => {
+    setLado('envia')
     const num = parseRaw(e.target.value)
     if (!e.target.value.replace(/\D/g, '')) { setDisplayAmount(''); return }
     setDisplayAmount(fmt(num, fromCurrency))
+  }
+  const handleRecibeChange = e => {
+    setLado('recibe')
+    const num = parseRaw(e.target.value)
+    if (!e.target.value.replace(/\D/g, '')) { setDisplayRecibe(''); return }
+    setDisplayRecibe(fmt(num, toCurrency))
   }
   const handleFromChange = (origen) => {
     const code = origen.code
@@ -238,9 +263,10 @@ export default function CalculatorDark({ onSend }) {
                   onCerrar={() => setToOpen(false)} />
               )}
             </div>
-            <p ref={receivedRef} className="calc-received" style={{ flex: 1, margin: 0, textAlign: 'right', fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: result ? '#7dd3fc' : 'rgba(125,211,252,.3)', textShadow: result ? '0 0 22px rgba(56,189,248,.45)' : 'none' }}>
-              {result ? fmt(result.amount_received, toCurrency) : '—'}
-            </p>
+            <input ref={receivedRef} className="calc-received" type="text" inputMode="decimal"
+              value={displayRecibe} onChange={handleRecibeChange} onFocus={() => setLado('recibe')}
+              placeholder="0"
+              style={{ flex: 1, minWidth: 0, margin: 0, textAlign: 'right', background: 'transparent', border: 'none', outline: 'none', fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: displayRecibe ? '#7dd3fc' : 'rgba(125,211,252,.3)', textShadow: displayRecibe ? '0 0 22px rgba(56,189,248,.45)' : 'none' }} />
           </div>
         </div>
 
