@@ -89,6 +89,15 @@ export default function CopiaMontoLink({ monto, url, abierto, cerrar }) {
           </p>
         )}
 
+        {/* El aviso del comprobante va aquí y no al volver: al volver, la
+            pantalla de pago ya se cerró y la captura hay que haberla tomado
+            antes. */}
+        <p className="text-xs text-center mt-3 px-3 py-2.5 rounded-xl leading-relaxed"
+          style={{ background: 'rgba(56,189,248,.08)', border: '1px solid rgba(56,189,248,.2)', color: '#aebfe2' }}>
+          <strong style={{ color: '#eaf2ff' }}>Recuerda tomar captura del pago</strong> para que la
+          subas aquí: es lo que nos deja confirmar tu envío.
+        </p>
+
         <button type="button" onClick={() => { setCopiado(false); cerrar() }}
           className="w-full text-xs font-semibold py-2.5 mt-2 rounded-xl"
           style={{ background: 'transparent', border: 'none', color: '#64748b' }}>
