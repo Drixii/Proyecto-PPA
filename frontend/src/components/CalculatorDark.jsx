@@ -238,6 +238,14 @@ export default function CalculatorDark({ onSend }) {
               : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
             }
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 500, color: rateError ? '#fbbf24' : '#bfe4ff', whiteSpace: 'nowrap' }}>{rateText}</span>
+            {/* La casa no cobra comisión aparte: va dentro de la tasa. Decirlo
+                donde se ve la cifra evita la pregunta de siempre. */}
+            {result && !rateError && (
+              <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                background: 'rgba(74,222,128,.12)', color: '#4ade80', whiteSpace: 'nowrap' }}>
+                0 comisión
+              </span>
+            )}
           </div>
           <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg,rgba(255,255,255,.18),transparent)' }} />
         </div>

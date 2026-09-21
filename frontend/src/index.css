@@ -166,3 +166,68 @@ body {
 .flex-1.overflow-hidden {
   min-height: 0;
 }
+
+
+/* ─── Hover en todo lo que se pulsa ────────────────────────────────────────
+   La mitad de los botones son <button> con estilos en línea y sin :hover, así
+   que al pasar por encima no pasaba nada y la interfaz se sentía plana e
+   incluso muerta: no había forma de saber qué era pulsable.
+
+   Se resuelve aquí, para TODOS —cliente y panel, los de ahora y los que
+   vengan—, y con algo que no pisa ningún diseño: se aclara un poco lo que
+   haya, sea del color que sea. Los que ya traen su propio :hover lo mantienen
+   y esto se suma.
+
+   Nada de mover el botón de sitio: un translate global descolocaría filas de
+   tablas y barras de iconos. El hundido va solo al pulsar. */
+button,
+[role="button"],
+summary,
+a.btn,
+label[for],
+input[type="submit"],
+input[type="button"] {
+  transition: filter .18s ease, box-shadow .18s ease, background-color .18s ease,
+              border-color .18s ease, color .18s ease, transform .12s ease;
+}
+
+button:hover:not(:disabled):not([aria-disabled="true"]),
+[role="button"]:hover:not([aria-disabled="true"]),
+summary:hover,
+a.btn:hover,
+input[type="submit"]:hover:not(:disabled),
+input[type="button"]:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+button:active:not(:disabled):not([aria-disabled="true"]),
+[role="button"]:active:not([aria-disabled="true"]),
+input[type="submit"]:active:not(:disabled),
+input[type="button"]:active:not(:disabled) {
+  transform: scale(.985);
+  filter: brightness(1.04);
+}
+
+/* Un botón apagado no reacciona: si se aclara igual, parece que sí se puede
+   pulsar y no pasa nada. */
+button:disabled,
+[aria-disabled="true"],
+input[type="submit"]:disabled,
+input[type="button"]:disabled {
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* El cursor de mano también faltaba en unos cuantos. */
+button:not(:disabled),
+[role="button"],
+summary {
+  cursor: pointer;
+}
+
+/* Para quien tenga el sistema en «menos movimiento», solo el cambio de luz. */
+@media (prefers-reduced-motion: reduce) {
+  button, [role="button"], summary, a.btn,
+  input[type="submit"], input[type="button"] { transition: filter .18s ease; }
+  button:active:not(:disabled), [role="button"]:active { transform: none; }
+}

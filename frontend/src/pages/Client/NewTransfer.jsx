@@ -1010,6 +1010,14 @@ export default function NewTransfer() {
                   <span className="text-xs font-medium truncate" style={{color:'#8aa0cc'}}>
                     {liveLoading ? 'Calculando...' : rateDisplay || 'Ingresa un monto para ver la tasa'}
                   </span>
+                  {/* Igual que en la calculadora de la portada: la comisión va
+                      dentro de la tasa, no se suma aparte. */}
+                  {liveResult && !liveLoading && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                      style={{background:'rgba(74,222,128,.12)', color:'#4ade80'}}>
+                      0 comisión
+                    </span>
+                  )}
                 </div>
                 {/* BOTTOM ROW: Destinatario recibe */}
                 <div className="p-4">
