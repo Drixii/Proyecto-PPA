@@ -54,13 +54,21 @@ from database import SessionLocal
 log = logging.getLogger("ppa")
 
 CLAVE_RUT = "haulmer_rut"
+# La clave secreta de TUU Pago Online: la que mandan por correo al habilitar
+# el producto, la misma que se pega en su plugin de WooCommerce. Con ella y el
+# RUT se piden las claves de cobro.
 CLAVE_API_KEY = "haulmer_api_key"
+# La API key del Espacio de Trabajo (Pagos -> Configuración -> API). Es OTRA:
+# no sirve para cobrar —la pasarela la rechaza— pero es la que abre el reporte
+# de ventas del comercio. Se guardan por separado para que pegar una no borre
+# la otra.
+CLAVE_POS = "haulmer_pos_api_key"
 # Los dos que su documentación llama «proporcionados por TUU». Si los entregan
 # directamente se pegan aquí y no hace falta pedirlos con el RUT.
 CLAVE_ACCOUNT = "haulmer_account_id"
 CLAVE_SECRET = "haulmer_secret_key"
 
-CAMPOS = (CLAVE_RUT, CLAVE_API_KEY, CLAVE_ACCOUNT, CLAVE_SECRET)
+CAMPOS = (CLAVE_RUT, CLAVE_API_KEY, CLAVE_ACCOUNT, CLAVE_SECRET, CLAVE_POS)
 
 # El método tal como se guarda en `orders.payment_method` y viaja al navegador.
 METODO = "haulmer"
@@ -220,6 +228,8 @@ def is_configured(modo: str | None = None) -> bool:
     creds = credenciales(modo)
     directas = creds[CLAVE_ACCOUNT] and creds[CLAVE_SECRET]
     por_rut = creds[CLAVE_RUT] and creds[CLAVE_API_KEY]
+    # La del panel queda fuera a propósito: sirve para leer las ventas, no
+    # para cobrar, y exigirla dejaría la pasarela apagada sin motivo.
     return bool(directas or por_rut)
 
 
@@ -595,9 +605,10 @@ def transacciones(desde, hasta, pagina: int = 1, por_pagina: int = 20) -> dict:
     confirme que los pagos por link aparecen aquí— dar una orden por pagada sin
     pedirle el comprobante al cliente.
     """
-    key = credenciales("live").get(CLAVE_API_KEY, "")
+    creds = credenciales("live")
+    key = creds.get(CLAVE_POS) or creds.get(CLAVE_API_KEY, "")
     if not key:
-        raise HaulmerError("Falta la API key de Haulmer")
+        raise HaulmerError("Falta la API key del panel de Haulmer")
 
     try:
         r = httpx.post(

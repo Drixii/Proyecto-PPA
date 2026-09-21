@@ -910,8 +910,9 @@ function HaulmerKeysForm() {
   // —por si algún día Haulmer los entrega— pero no son algo que haya que
   // rellenar: con la API KEY se piden solos.
   const campos = [
-    { k: 'haulmer_api_key', label: 'API KEY', ph: 'la clave larga de su panel' },
+    { k: 'haulmer_api_key', label: 'API KEY', ph: 'la clave secreta que te mandaron por correo' },
     { k: 'haulmer_rut', label: 'RUT del comercio', ph: '12345678-5', publico: true },
+    { k: 'haulmer_pos_api_key', label: 'API key del panel (ver ventas)', ph: 'la de Pagos → Configuración → API' },
     { k: 'haulmer_link_url', label: 'Link de pago', ph: 'https://…', publico: true, ajuste: 'link' },
   ]
 
@@ -998,7 +999,9 @@ function HaulmerKeysForm() {
               cobra el equivalente del momento. La tarjeta puede ser de cualquier país.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
-              <strong>API KEY y RUT</strong> encienden el cobro automático. El{' '}
+              <strong>API KEY y RUT</strong> encienden el cobro automático: la API KEY es la{' '}
+              <strong>clave secreta de Pago Online</strong>, la que manda TUU por correo (la misma
+              del plugin de WooCommerce). La del panel es otra y solo sirve para ver las ventas. El{' '}
               <strong>link de pago</strong> funciona por su cuenta: lo creas en su panel con
               precio variable, pegas la dirección y el cliente paga ahí.
             </p>

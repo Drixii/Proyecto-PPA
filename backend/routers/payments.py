@@ -409,6 +409,7 @@ class HaulmerKeysIn(BaseModel):
     haulmer_api_key: Optional[str] = None
     haulmer_account_id: Optional[str] = None
     haulmer_secret_key: Optional[str] = None
+    haulmer_pos_api_key: Optional[str] = None
     haulmer_shop_name: Optional[str] = None
     haulmer_platform_secret: Optional[str] = None
     haulmer_link_url: Optional[str] = None
@@ -449,6 +450,7 @@ def get_haulmer_keys(
             "haulmer_api_key": ss.mask(creds[haulmer_service.CLAVE_API_KEY]),
             "haulmer_account_id": creds[haulmer_service.CLAVE_ACCOUNT],
             "haulmer_secret_key": ss.mask(creds[haulmer_service.CLAVE_SECRET]),
+            "haulmer_pos_api_key": ss.mask(creds[haulmer_service.CLAVE_POS]),
         },
         "message": "",
     }
