@@ -48,7 +48,12 @@ def list_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    q = db.query(Order).filter(Order.client_id == current_user.id).order_by(Order.created_at.desc())
+    # Sin las de la papelera. Faltaba el filtro y por eso un envío borrado
+    # —por el cliente o por el barrido de los sin pagar— seguía en la lista
+    # como si nada: se borraba de verdad, pero en pantalla no se notaba.
+    q = (db.query(Order)
+         .filter(Order.client_id == current_user.id, Order.deleted_at == None)
+         .order_by(Order.created_at.desc()))
     total = q.count()
     orders = q.offset((page - 1) * page_size).limit(page_size).all()
     order_ids = [o.id for o in orders]
@@ -77,6 +82,7 @@ def list_orders(
 def get_client_notifications(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     active = db.query(Order).filter(
         Order.client_id == current_user.id,
+        Order.deleted_at == None,
         Order.status != "completado"
     ).order_by(Order.created_at.desc()).all()
 
@@ -86,6 +92,7 @@ def get_client_notifications(db: Session = Depends(get_db), current_user: User =
         .join(User, Message.sender_id == User.id)
         .filter(
             Order.client_id == current_user.id,
+            Order.deleted_at == None,
             User.role.in_(["admin", "sub_admin"]),
             Message.is_read == False
         )
@@ -109,7 +116,11 @@ def get_client_notifications(db: Session = Depends(get_db), current_user: User =
 
 @router.get("/{order_id}", response_model=dict)
 def get_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    order = db.query(Order).filter(Order.id == order_id, Order.client_id == current_user.id).first()
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     return {"success": True, "data": _sin_comision(OrderOut.model_validate(order).model_dump()), "message": ""}
@@ -165,7 +176,9 @@ def comprobante_de_orden(
     from services import comprobante
 
     orden = db.query(Order).filter(
-        Order.id == order_id, Order.client_id == current_user.id
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
     ).first()
     if not orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -187,7 +200,11 @@ def upload_proof(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    order = db.query(Order).filter(Order.id == order_id, Order.client_id == current_user.id).first()
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     # El link de pago de Haulmer no avisa a nadie cuando el cliente paga, así
