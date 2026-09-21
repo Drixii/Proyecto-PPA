@@ -129,7 +129,7 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
             # Haulmer va con el mismo interruptor de tarjeta que Stripe: al
             # cliente le da igual quién cobra, ve «tarjeta», y apagarla en un
             # país tiene que quitar los dos botones.
-            if haulmer_service.is_configured() or haulmer_service.link_de_pago():
+            if haulmer_service.pasarela_lista() or haulmer_service.link_de_pago():
                 from services.exchange_service import get_rate
                 for moneda in cuentas_propias.MONEDAS:
                     if not cuentas_propias.tarjeta_activa(_db, dueno, moneda):
@@ -170,7 +170,7 @@ def payment_config(quien: Optional[User] = Depends(get_current_user_optional)):
                 "moneda": haulmer_service.MONEDA,
             },
             "haulmer": {
-                "enabled": bool(haulmer_monedas) and haulmer_service.is_configured(),
+                "enabled": bool(haulmer_monedas) and haulmer_service.pasarela_lista(),
                 # Desde qué monedas se puede pagar con él. El cargo siempre sale
                 # en CLP.
                 "currencies": haulmer_monedas,
@@ -559,6 +559,7 @@ def probar_haulmer(_admin: User = Depends(require_super_admin)):
     try:
         claves = haulmer_service.claves_de_firma(refrescar=True)
     except haulmer_service.HaulmerError as e:
+        haulmer_service.marcar_verificada(False)
         raise HTTPException(status_code=400, detail=str(e))
 
     base = frontend_base()
@@ -575,8 +576,10 @@ def probar_haulmer(_admin: User = Depends(require_super_admin)):
             url_cancelado=f"{base}/dashboard",
         )
     except haulmer_service.HaulmerError as e:
+        haulmer_service.marcar_verificada(False)
         raise HTTPException(status_code=400, detail=str(e))
 
+    haulmer_service.marcar_verificada(True)
     return {
         "success": True,
         "data": {
@@ -1226,13 +1229,13 @@ def metodos_de_orden(
     # que venga. Se ofrece solo si sabemos convertir, para que el botón no
     # lleve a un error al final.
     link_pago = haulmer_service.link_de_pago()
-    if (haulmer_service.is_configured() or link_pago) and tarjeta_ok:
+    if (haulmer_service.pasarela_lista() or link_pago) and tarjeta_ok:
         try:
             monto_clp, _tasa = haulmer_service.monto_en_clp(
                 db, float(order.amount_sent or 0), moneda)
         except haulmer_service.HaulmerError:
             monto_clp = None
-        if monto_clp and haulmer_service.is_configured():
+        if monto_clp and haulmer_service.pasarela_lista():
             metodos.append({
                 "codigo": haulmer_service.METODO,
                 "nombre": "Tarjeta (Haulmer)",

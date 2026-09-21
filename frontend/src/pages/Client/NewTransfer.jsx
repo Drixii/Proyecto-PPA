@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import CampoSelector from '../../components/CampoSelector'
+import MarcaPago, { ProcesadoPor, nombreDeMetodo } from '../../components/MarcaPago'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -708,6 +709,35 @@ export default function NewTransfer() {
 
   return (
     <FinexyLayout>
+      <style>{`
+        /* Checkout: los métodos a un lado y el detalle al otro. Antes eran
+           botones en rejilla y todo lo demás debajo, y en un envío con
+           cuenta bancaria larga el botón elegido quedaba fuera de pantalla. */
+        .ck{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:18px;align-items:start;}
+        .ck-col{display:flex;flex-direction:column;gap:12px;min-width:0;}
+        .ck-titulo{margin:0 0 2px;font-size:11px;font-weight:700;letter-spacing:.08em;
+          text-transform:uppercase;color:#64748b;}
+        .ck-lista{display:flex;flex-direction:column;gap:8px;}
+        .ck-metodo{display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px;
+          border-radius:16px;cursor:pointer;text-align:left;transition:border-color .2s,background .2s,transform .2s;
+          background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);}
+        .ck-metodo:hover{background:rgba(255,255,255,.06);border-color:rgba(56,189,248,.35);}
+        .ck-metodo.ck-elegido{background:rgba(56,189,248,.1);border-color:#38bdf8;}
+        .ck-metodo-txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
+        .ck-metodo-nombre{font-size:13.5px;font-weight:700;color:#eaf2ff;line-height:1.25;}
+        .ck-metodo-desc{font-size:11.5px;color:#8aa0cc;line-height:1.3;}
+        .ck-detalle{gap:14px;}
+        .ck-resumen{display:flex;flex-direction:column;gap:7px;padding:14px 16px;border-radius:18px;
+          background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.16);}
+        .ck-fila{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:13px;color:#aebfe2;}
+        .ck-fila strong{font-size:15px;color:#eaf2ff;}
+        .ck-fila.ck-suave{font-size:12px;color:#8aa0cc;}
+        .ck-vacio{margin:0;padding:22px 16px;border-radius:16px;text-align:center;font-size:13px;color:#8aa0cc;
+          background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.12);}
+        @media(max-width:900px){
+          .ck{grid-template-columns:1fr;}
+        }
+      `}</style>
       {qrPago && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,.8)'}}>
           <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.25)'}}>
@@ -1174,7 +1204,10 @@ export default function NewTransfer() {
                 </div>
               )}
 
-              <div className={`grid gap-3 ${(cardEnabled || koyweMethods.length) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className="ck">
+                <div className="ck-col">
+                  <p className="ck-titulo">Cómo quieres pagar</p>
+                  <div className="ck-lista">
                 {[
                   // Transferencia solo si hay a dónde transferir. Sin cuenta
                   // —ni de Koywe ni cargada por el super-admin— el cliente
@@ -1183,26 +1216,26 @@ export default function NewTransfer() {
                   // pagarle.
                   ...(cuentaTransfer
                     ? [{
-                      value: 'transferencia', label: 'Transferencia', icon: '🏦',
-                      desc: 'Te damos la cuenta',
+                      value: 'transferencia', banco: cuentaTransfer?.banco,
+                      desc: 'Subes el comprobante',
                     }]
                     : []),
                   ...(cardEnabled
-                    ? [{ value: 'tarjeta', label: 'Pago con tarjeta', icon: '💳', desc: 'Portal de pago' }]
+                    ? [{ value: 'tarjeta', desc: 'Débito o crédito, al instante' }]
                     : []),
                   // Tarjeta cobrada en Chile. Se distingue de la de arriba en
                   // la moneda del cargo, no en el medio: por eso el texto dice
                   // en qué se cobra.
                   ...(haulmerActivo
                     ? [{
-                      value: 'haulmer', label: 'Tarjeta internacional', icon: '🌎',
+                      value: 'haulmer',
                       desc: calc.fromCurrency === 'CLP' ? 'Se cobra en pesos' : 'El cargo sale en pesos',
                     }]
                     : []),
                   ...(linkPago
                     ? [{
-                      value: 'link_pago', label: 'Link de pago', icon: '🔗',
-                      desc: 'Tarjeta, con comprobante',
+                      value: 'link_pago',
+                      desc: calc.fromCurrency === 'CLP' ? 'Tarjeta, en pesos' : 'Tarjeta, el cargo va en pesos',
                     }]
                     : []),
                   // El icono lo manda el backend con el método: un banco para
@@ -1211,24 +1244,60 @@ export default function NewTransfer() {
                   // solo por el texto.
                   ...koyweMethods.map(m => ({
                     value: String(m.codigo).toLowerCase(),
+                    codigo: m.codigo,
                     label: m.nombre,
-                    icon: m.icono || '💸',
                     desc: m.desc,
                   })),
-                ].map(({ value, label, icon, desc }) => (
-                  <button key={value} type="button"
-                    onClick={() => { setPayment(p => ({ ...p, payment_method: value, payment_bank: '' })); setProofFile(null); setProofPreview(null) }}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl transition-all text-center"
-                    style={payment.payment_method === value
-                      ? {background:'rgba(56,189,248,.1)', border:'2px solid #38bdf8'}
-                      : {background:'rgba(255,255,255,.04)', border:'2px solid rgba(255,255,255,.08)'}
-                    }>
-                    <span className="text-2xl">{icon}</span>
-                    <p className="font-semibold text-sm" style={{color:'#eaf2ff'}}>{label}</p>
-                    <p className="text-xs" style={{color:'#8aa0cc'}}>{desc}</p>
-                  </button>
-                ))}
-              </div>
+                ].map(({ value, codigo, label, desc, banco }) => {
+                  const elegido = payment.payment_method === value
+                  return (
+                    <button key={value} type="button"
+                      onClick={() => { setPayment(p => ({ ...p, payment_method: value, payment_bank: '' })); setProofFile(null); setProofPreview(null) }}
+                      className={`ck-metodo${elegido ? ' ck-elegido' : ''}`}>
+                      <MarcaPago codigo={codigo || value} banco={banco} />
+                      <span className="ck-metodo-txt">
+                        <span className="ck-metodo-nombre">{nombreDeMetodo(codigo || value, label, banco)}</span>
+                        <span className="ck-metodo-desc">{desc}</span>
+                      </span>
+                      <ProcesadoPor codigo={codigo || value} />
+                    </button>
+                  )
+                })}
+                  </div>
+                </div>
+
+                <div className="ck-col ck-detalle">
+                  {/* Lo que se está pagando, siempre a la vista: al elegir cómo
+                      pagar hay que poder comprobar cuánto y a quién, sin
+                      volver atrás. */}
+                  <div className="ck-resumen">
+                    <p className="ck-titulo" style={{margin:0}}>Tu envío</p>
+                    <div className="ck-fila">
+                      <span>Tú envías</span>
+                      <strong>{montoActual ? montoActual.toLocaleString('es-CL') : '—'} {calc.fromCurrency}</strong>
+                    </div>
+                    <div className="ck-fila">
+                      <span>{receiver.receiver_name || 'El destinatario'} recibe</span>
+                      <strong style={{color:'#38bdf8'}}>{receivedDisplay || '—'}</strong>
+                    </div>
+                    {rateDisplay && (
+                      <div className="ck-fila ck-suave"><span>Tasa</span><span>{rateDisplay.replace('Tasa: ', '')}</span></div>
+                    )}
+                    <div className="ck-fila ck-suave">
+                      <span>Destino</span>
+                      <span>{calc.toCountry || calc.toCurrency}</span>
+                    </div>
+                    {(liveResult || calc.result)?.fee != null && (
+                      <div className="ck-fila ck-suave">
+                        <span>Comisión</span>
+                        <span>{Number((liveResult || calc.result).fee).toLocaleString('es-CL')} {calc.fromCurrency}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {!payment.payment_method && (
+                    <p className="ck-vacio">Elige a la izquierda cómo quieres pagar.</p>
+                  )}
 
               {/* Transferencia: file upload */}
               {payment.payment_method === 'transferencia' && (
@@ -1708,6 +1777,9 @@ export default function NewTransfer() {
                   </div>
                 </div>
               )}
+
+                </div>
+              </div>
 
               {error && <p className="text-sm" style={{color:'#f87171'}}>{error}</p>}
             </div>

@@ -91,6 +91,13 @@ AJUSTE_MODO = "haulmer_mode"
 # Nombre del comercio que ve el cliente en la pantalla de pago.
 AJUSTE_COMERCIO = "haulmer_shop_name"
 
+# Si la pasarela llegó a contestar alguna vez con estas credenciales. Tener el
+# RUT y la API key guardados no basta para enseñar el botón al cliente: la API
+# key del panel de Haulmer autentica en su servicio de POS y la pasarela la
+# rechaza con un 401, así que el botón saldría y el cobro fallaría. Se enciende
+# solo cuando "Probar conexión" funciona.
+AJUSTE_VERIFICADO = "haulmer_verificado"
+
 # Su plugin manda un campo `secret` con un valor fijo que identifica a la
 # plataforma que integra. No está documentado, así que es un ajuste: vacío no
 # se manda, y si algún día su API lo exige se pega el valor que ellos den.
@@ -222,6 +229,32 @@ def es_metodo(metodo: str | None) -> bool:
 
 def nombre_comercio() -> str:
     return _ajuste(AJUSTE_COMERCIO, "Ksa Global Evolution") or "Ksa Global Evolution"
+
+
+def marcar_verificada(ok: bool) -> None:
+    """Deja constancia de si la pasarela contestó con estas credenciales."""
+    from models.setting import Setting
+    db = SessionLocal()
+    try:
+        fila = db.query(Setting).filter(Setting.key == AJUSTE_VERIFICADO).first()
+        if fila:
+            fila.value = "1" if ok else ""
+        elif ok:
+            db.add(Setting(key=AJUSTE_VERIFICADO, value="1"))
+        db.commit()
+    except Exception as e:
+        log.warning("[haulmer] no se pudo guardar el estado de la pasarela: %s", e)
+    finally:
+        db.close()
+
+
+def pasarela_lista(modo: str | None = None) -> bool:
+    """Si se le puede enseñar el botón de tarjeta al cliente.
+
+    Credenciales guardadas Y una prueba de conexión que haya salido bien. Sin
+    lo segundo, el botón llevaba a un cobro que Haulmer rechaza.
+    """
+    return is_configured(modo) and bool(_ajuste(AJUSTE_VERIFICADO))
 
 
 def identificador_plataforma() -> str:
