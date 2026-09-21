@@ -894,14 +894,14 @@ function HaulmerKeysForm() {
     onError: (e) => { setError(e.response?.data?.detail || 'No se pudo cambiar el modo'); setMsg('') },
   })
 
+  // Tres y no siete. El id de cuenta, la llave de firma, el nombre del
+  // comercio y el identificador de plataforma siguen aceptandose por la API
+  // —por si algún día Haulmer los entrega— pero no son algo que haya que
+  // rellenar: con la API KEY se piden solos.
   const campos = [
-    { k: 'haulmer_rut', label: 'RUT del comercio', ph: '12345678-5 (sin puntos, con guion)', publico: true },
-    { k: 'haulmer_api_key', label: 'Clave secreta de Pago Online', ph: 'la que te mandaron por correo' },
-    { k: 'haulmer_account_id', label: 'ID de cuenta (si te lo dieron)', ph: '62224230', publico: true },
-    { k: 'haulmer_secret_key', label: 'Llave secreta (si te la dieron)', ph: 'la clave con la que se firma' },
-    { k: 'haulmer_shop_name', label: 'Nombre del comercio', ph: 'lo que ve el cliente al pagar', publico: true, ajuste: 'comercio' },
-    { k: 'haulmer_platform_secret', label: 'Identificador de plataforma (opcional)', ph: 'solo si Haulmer te pide uno', publico: true, ajuste: 'plataforma' },
-    { k: 'haulmer_link_url', label: 'Link de pago', ph: 'https://... el que creaste en su panel', publico: true, ajuste: 'link' },
+    { k: 'haulmer_api_key', label: 'API KEY', ph: 'la clave larga de su panel' },
+    { k: 'haulmer_rut', label: 'RUT del comercio', ph: '12345678-5', publico: true },
+    { k: 'haulmer_link_url', label: 'Link de pago', ph: 'https://…', publico: true, ajuste: 'link' },
   ]
 
   const hayAlgo = Object.values(form).some(v => (v || '').trim())
@@ -983,46 +983,13 @@ function HaulmerKeysForm() {
         <div style={{ marginTop: 14 }}>
           <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', marginBottom: 16 }}>
             <p style={{ margin: 0, fontSize: 12.5, color: '#aebfe2', lineHeight: 1.6 }}>
-              Haulmer cobra <strong>siempre en pesos chilenos</strong>. Si el envío está en otra
-              moneda, al cliente se le cobra el equivalente con la tasa del momento, y esa
-              cifra queda guardada: el aviso de pago se compara contra ella. La tarjeta
-              puede ser de cualquier país.
+              Cobra <strong>siempre en pesos chilenos</strong>: si el envío va en otra moneda se
+              cobra el equivalente del momento. La tarjeta puede ser de cualquier país.
             </p>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
-              Hacen falta el <strong>RUT del comercio</strong> y la <strong>clave secreta de
-              TUU Pago Online</strong>. El identificador de cuenta y la clave de firma no hay
-              que buscarlos: se los pedimos a Haulmer con esas dos en cada cobro.
-            </p>
-            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#fcd34d', lineHeight: 1.6 }}>
-              Ojo: <strong>no es la API key que sale en Integraciones</strong> de su panel. Esa
-              es la de TUU Pagos, la de la máquina POS, y la pasarela online la rechaza. La de
-              Pago Online <strong>te la mandan por correo</strong> cuando habilitan ese producto
-              para tu RUT; si no la tienes, pídesela a Haulmer.
-            </p>
-            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
-              Sirven dos caminos, según lo que te entreguen. Si te mandan el{' '}
-              <strong>ID de cuenta y la llave secreta</strong> —que es como lo documenta su
-              API— se pegan en los dos últimos campos y listo. Si te mandan el{' '}
-              <strong>RUT y una clave secreta</strong>, van en los dos primeros y con ellas les
-              pedimos las otras dos en cada cobro. Con cualquiera de los dos juegos funciona.
-            </p>
-            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#7dd3fc', lineHeight: 1.6 }}>
-              <strong>Sin esperar a nadie:</strong> crea un <strong>Link de pago</strong> en su
-              Espacio de Trabajo con <strong>precio variable</strong> y pega su dirección abajo.
-              Al cliente le sale un botón con el monto exacto en pesos, paga con tarjeta en la
-              página de Haulmer y sube el comprobante. Lo único que no hace el link es avisarnos
-              solo, así que ese envío lo apruebas tú, como una transferencia.
-            </p>
-            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
-              Mientras tanto puedes dejarlo en <strong>Modo prueba</strong> sin escribir nada: usa
-              el entorno de integración de Haulmer y ya está comprobado que funciona de punta a
-              punta. Se paga con sus tarjetas de prueba (VISA 4051 8856 0044 6623) y no se mueve
-              dinero.
-            </p>
-            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8aa0cc', lineHeight: 1.6 }}>
-              Cuando el cobro se completa, la orden avanza sola: el aviso viene firmado y
-              se comprueba antes de dar nada por pagado. <strong>No hay nada que aprobar a
-              mano.</strong>
+              <strong>API KEY y RUT</strong> encienden el cobro automático. El{' '}
+              <strong>link de pago</strong> funciona por su cuenta: lo creas en su panel con
+              precio variable, pegas la dirección y el cliente paga ahí.
             </p>
           </div>
 
