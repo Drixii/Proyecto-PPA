@@ -82,7 +82,15 @@ function formatDisplay(num, currency) {
 }
 
 function parseRaw(str) {
-  return parseInt((str || '').replace(/\D/g, '')) || 0
+  // Formato chileno: el punto separa miles y la coma los decimales. Antes se
+  // borraba todo lo que no fuera dígito, así que "61,34" se leía como 6134:
+  // cien veces más. Se vio al rellenar el monto desde el servidor —al
+  // teclear a mano nunca salían decimales— y llevó a una pantalla de pago
+  // pidiendo 6.134 dólares por un envío de 61,34.
+  const limpio = String(str || '').replace(/[^\d.,]/g, '')
+  if (!limpio) return 0
+  const numero = parseFloat(limpio.replace(/\./g, '').replace(',', '.'))
+  return Number.isFinite(numero) ? numero : 0
 }
 
 function ChevronDown() {
@@ -467,18 +475,22 @@ export default function NewTransfer() {
     // disparaba otra consulta y las dos se perseguian.
   }, [lado === 'envia' ? displayAmount : displayRecibe, lado, calc.fromCurrency, calc.toCurrency])
 
+  // Mientras se escribe la parte decimal el texto se deja tal cual: darle
+  // formato a "61," lo convierte en "61" y borra la coma recién tecleada.
+  const escribiendoDecimales = (texto) => /[.,]\d?$/.test(texto)
+
   const handleAmountChange = (e) => {
     setLado('envia')
-    const num = parseRaw(e.target.value)
-    if (!e.target.value.replace(/\D/g, '')) { setDisplayAmount(''); return }
-    setDisplayAmount(formatDisplay(num, calc.fromCurrency))
+    const texto = e.target.value
+    if (!texto.replace(/\D/g, '')) { setDisplayAmount(''); return }
+    setDisplayAmount(escribiendoDecimales(texto) ? texto : formatDisplay(parseRaw(texto), calc.fromCurrency))
   }
 
   const handleRecibeChange = (e) => {
     setLado('recibe')
-    const num = parseRaw(e.target.value)
-    if (!e.target.value.replace(/\D/g, '')) { setDisplayRecibe(''); return }
-    setDisplayRecibe(formatDisplay(num, calc.toCurrency))
+    const texto = e.target.value
+    if (!texto.replace(/\D/g, '')) { setDisplayRecibe(''); return }
+    setDisplayRecibe(escribiendoDecimales(texto) ? texto : formatDisplay(parseRaw(texto), calc.toCurrency))
   }
 
   const handleFromCurrencyChange = (origen) => {
@@ -613,6 +625,18 @@ export default function NewTransfer() {
     setLoading(true)
     setError('')
     try {
+      // El monto que se manda tiene que ser EL MISMO que el último que cotizó
+      // el servidor. Si por lo que sea difieren, se para aquí: una orden por
+      // otra cifra es dinero real cobrado de más o de menos.
+      const cotizado = (liveResult || calc.result)?.amount_sent
+      const aEnviar = rawAmount || parseFloat(calc.amount)
+      if (cotizado && Math.abs(cotizado - aEnviar) > Math.max(1, cotizado * 0.001)) {
+        setError('El monto cambió mientras confirmabas. Vuelve a calcularlo, por favor.')
+        setLoading(false)
+        setShowConfirm(false)
+        return
+      }
+
       const payload = {
         sender_name: (pagador.sender_name || '').trim() || user.full_name,
         sender_phone: (pagador.sender_phone || '').trim() || user.phone || '',

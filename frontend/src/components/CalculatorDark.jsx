@@ -16,7 +16,17 @@ function fmt(num, currency) {
     minimumFractionDigits: 0,
   }).format(num)
 }
-function parseRaw(str) { return parseInt((str || '').replace(/\D/g, ''), 10) || 0 }
+function parseRaw(str) {
+  // Formato chileno: el punto separa miles y la coma los decimales. Antes se
+  // borraba todo lo que no fuera dígito, así que "61,34" se leía como 6134:
+  // cien veces más. Se vio al rellenar el monto desde el servidor —al
+  // teclear a mano nunca salían decimales— y llevó a una pantalla de pago
+  // pidiendo 6.134 dólares por un envío de 61,34.
+  const limpio = String(str || '').replace(/[^\d.,]/g, '')
+  if (!limpio) return 0
+  const numero = parseFloat(limpio.replace(/\./g, '').replace(',', '.'))
+  return Number.isFinite(numero) ? numero : 0
+}
 
 export default function CalculatorDark({ onSend }) {
   const [fromCurrency, setFromCurrency] = useState('CLP')
@@ -135,17 +145,20 @@ export default function CalculatorDark({ onSend }) {
     countRaf.current = requestAnimationFrame(step)
   }
 
+  // Con "61," a medio escribir no se formatea: hacerlo borra la coma.
+  const escribiendoDecimales = texto => /[.,]\d?$/.test(texto)
+
   const handleAmountChange = e => {
     setLado('envia')
-    const num = parseRaw(e.target.value)
-    if (!e.target.value.replace(/\D/g, '')) { setDisplayAmount(''); return }
-    setDisplayAmount(fmt(num, fromCurrency))
+    const texto = e.target.value
+    if (!texto.replace(/\D/g, '')) { setDisplayAmount(''); return }
+    setDisplayAmount(escribiendoDecimales(texto) ? texto : fmt(parseRaw(texto), fromCurrency))
   }
   const handleRecibeChange = e => {
     setLado('recibe')
-    const num = parseRaw(e.target.value)
-    if (!e.target.value.replace(/\D/g, '')) { setDisplayRecibe(''); return }
-    setDisplayRecibe(fmt(num, toCurrency))
+    const texto = e.target.value
+    if (!texto.replace(/\D/g, '')) { setDisplayRecibe(''); return }
+    setDisplayRecibe(escribiendoDecimales(texto) ? texto : fmt(parseRaw(texto), toCurrency))
   }
   const handleFromChange = (origen) => {
     const code = origen.code
