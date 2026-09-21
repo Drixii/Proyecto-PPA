@@ -974,6 +974,22 @@ export function ClientOrderPanel({ order }) {
   // se vuelve a poner en false salvo que falle.
   const [abrirPagoError, setAbrirPagoError] = useState('')
   const [eligiendoMetodo, setEligiendoMetodo] = useState(false)
+  // Descartar un envío sin pagar. Con confirmación: es la única cosa de esta
+  // ficha que no se puede deshacer desde aquí.
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false)
+  const [errorBorrado, setErrorBorrado] = useState('')
+
+  const borrarEnvio = useMutation({
+    mutationFn: () => api.delete(`/orders/${order.id}`),
+    onSuccess: () => {
+      setConfirmandoBorrado(false)
+      qc.invalidateQueries({ queryKey: ['my-orders'] })
+      qc.invalidateQueries({ queryKey: ['my-orders-history'] })
+      qc.invalidateQueries({ queryKey: ['client-order', order.id] })
+      navigate('/dashboard')
+    },
+    onError: (err) => setErrorBorrado(err.response?.data?.detail || 'No se pudo eliminar'),
+  })
 
   // Rechazar no cancela el envío: el cliente sube otro comprobante y la orden
   // vuelve sola a "en aprobación" (backend/routers/orders.py).
@@ -1069,13 +1085,57 @@ export function ClientOrderPanel({ order }) {
           {abrirPagoError && (
             <p className="text-xs mb-2" style={{color:'#fca5a5'}}>{abrirPagoError}</p>
           )}
-          <button
-            onClick={() => { setAbrirPagoError(''); setEligiendoMetodo(true) }}
-            className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
-            style={{background:'rgba(239,68,68,.14)', border:'1px solid rgba(239,68,68,.35)', color:'#f87171'}}
-          >
-            Pagar ahora
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => { setAbrirPagoError(''); setEligiendoMetodo(true) }}
+              className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+              style={{background:'rgba(239,68,68,.14)', border:'1px solid rgba(239,68,68,.35)', color:'#f87171'}}
+            >
+              Pagar ahora
+            </button>
+            {/* Descartarlo solo se ofrece aquí: en cuanto se paga, el envío
+                ya no es del cliente solo —hay dinero dentro y alguien
+                trabajando en él— y deja de poder borrarlo. */}
+            <button
+              onClick={() => { setErrorBorrado(''); setConfirmandoBorrado(true) }}
+              className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+              style={{background:'transparent', border:'1px solid rgba(255,255,255,.14)', color:'#8aa0cc'}}
+            >
+              Eliminar envío
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmandoBorrado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{background:'rgba(2,6,23,.8)'}} onClick={() => setConfirmandoBorrado(false)}>
+          <div className="w-full max-w-sm rounded-2xl p-6" onClick={e => e.stopPropagation()}
+            style={{background:'rgba(8,16,44,.98)', border:'1px solid rgba(239,68,68,.3)'}}>
+            <h4 className="font-semibold mb-1" style={{color:'#eaf2ff'}}>¿Eliminar este envío?</h4>
+            <p className="text-xs mb-4 leading-relaxed" style={{color:'#8aa0cc'}}>
+              {order.order_number} · {Number(order.amount_sent).toLocaleString('es-CL')} {order.currency_from} a{' '}
+              {order.receiver_name}. No lo has pagado, así que no se pierde nada: si lo necesitas
+              luego, tendrás que crearlo otra vez.
+            </p>
+            {errorBorrado && (
+              <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{color:'#fca5a5', background:'rgba(239,68,68,.08)'}}>
+                {errorBorrado}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmandoBorrado(false)}
+                className="flex-1 text-xs font-semibold py-2.5 rounded-lg"
+                style={{background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.12)', color:'#aebfe2'}}>
+                Cancelar
+              </button>
+              <button onClick={() => borrarEnvio.mutate()} disabled={borrarEnvio.isPending}
+                className="flex-1 text-xs font-semibold py-2.5 rounded-lg disabled:opacity-50"
+                style={{background:'linear-gradient(135deg,#ef4444,#b91c1c)', border:'none', color:'#fff'}}>
+                {borrarEnvio.isPending ? 'Eliminando…' : 'Sí, eliminar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

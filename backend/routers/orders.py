@@ -115,6 +115,41 @@ def get_order(order_id: int, db: Session = Depends(get_db), current_user: User =
     return {"success": True, "data": _sin_comision(OrderOut.model_validate(order).model_dump()), "message": ""}
 
 
+@router.delete("/{order_id}", response_model=dict)
+def borrar_envio_sin_pagar(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El cliente descarta un envío que creó y no llegó a pagar.
+
+    Solo esos: `pendiente_pago` y sin `paid_at`. Un envío pagado o ya en manos
+    de un encargado no lo puede hacer desaparecer quien lo creó —hay dinero
+    dentro y alguien trabajando en él—, y uno con comprobante subido está
+    esperando que lo revisen. Lo que se borra aquí es un carrito abandonado.
+
+    Va a la papelera, no se destruye: el super-admin la ve durante 30 días,
+    igual que cuando borra él. Si el cliente se arrepiente, se recupera.
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.client_id == current_user.id,
+        Order.deleted_at == None,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    if order.paid_at or order.status != "pendiente_pago":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo puedes eliminar un envío que todavía no has pagado",
+        )
+
+    order.deleted_at = datetime.utcnow()
+    db.commit()
+    return {"success": True, "data": None, "message": "Envío eliminado"}
+
+
 @router.get("/{order_id}/comprobante")
 def comprobante_de_orden(
     order_id: int,
