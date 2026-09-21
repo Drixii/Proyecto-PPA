@@ -149,10 +149,20 @@ export default function Dashboard() {
     if (newlyDone.length > 0) setCompletedPopup(newlyDone)
   }, [orders, user?.id])
 
+  // Si el super-admin apagó el sistema de puntos, aquí no se pide nada ni se
+  // enseña la tarjeta: el endpoint responde 404 y quedaría un cero raro.
+  const { data: puntosActivos } = useQuery({
+    queryKey: ['puntos-activos'],
+    queryFn: () => api.get('/points/activos').then(r => r.data.data.activo),
+    staleTime: 60000,
+  })
+  const hayPuntos = puntosActivos !== false
+
   const { data: pointsData } = useQuery({
     queryKey: ['my-points'],
     queryFn: () => api.get('/points/my').then(r => r.data.data),
     staleTime: 60000,
+    enabled: hayPuntos,
   })
 
   const { data: countriesData } = useQuery({
@@ -222,20 +232,24 @@ export default function Dashboard() {
           />
 
           {/* Los puntos, al lado de transferir: se ganan enviando. */}
-          <TarjetaPuntos
-            className="hidden sm:flex"
-            puntos={pointsData?.total_points || 0}
-            onClick={() => navigate('/mis-puntos')}
-          />
+          {hayPuntos && (
+            <TarjetaPuntos
+              className="hidden sm:flex"
+              puntos={pointsData?.total_points || 0}
+              onClick={() => navigate('/mis-puntos')}
+            />
+          )}
         </div>
 
         {/* ── Cómo van tus envíos ─────────────────────── */}
         <div className="flex sm:grid sm:grid-cols-2 gap-3 sm:gap-4 mb-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory -mx-1 px-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <TarjetaPuntos
-            className="flex w-[78%] shrink-0 snap-start sm:hidden"
-            puntos={pointsData?.total_points || 0}
-            onClick={() => navigate('/mis-puntos')}
-          />
+          {hayPuntos && (
+            <TarjetaPuntos
+              className="flex w-[78%] shrink-0 snap-start sm:hidden"
+              puntos={pointsData?.total_points || 0}
+              onClick={() => navigate('/mis-puntos')}
+            />
+          )}
           <button
             onClick={() => navigate('/historial', { state: { filter: 'en_proceso' } })}
             className="w-[78%] shrink-0 snap-start sm:w-auto sm:shrink rounded-2xl p-5 flex items-center justify-between text-left transition-all"
