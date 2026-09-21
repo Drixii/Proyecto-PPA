@@ -547,6 +547,66 @@ def _motivo(r: httpx.Response, que_pasaba: str = "respondió con un error") -> s
     return f"Haulmer {que_pasaba} ({r.status_code}): {json.dumps(cuerpo)[:200]}"
 
 
+# ── Ventas del comercio ──────────────────────────────────────────────────────
+
+# Las ventas que Haulmer tiene registradas, con la API key del panel. Su
+# documentación escribe los campos en mayúscula («Filters», «StartDate») pero
+# su API solo acepta la forma de abajo: con las otras devuelve un 500.
+URL_REPORTE = "https://integrations.payment.haulmer.com/Report/get-report"
+
+
+def transacciones(desde, hasta, pagina: int = 1, por_pagina: int = 20) -> dict:
+    """Ventas del comercio entre dos fechas (objetos date).
+
+    Sirve para dos cosas: mirar en el panel si un cobro entró, y —cuando se
+    confirme que los pagos por link aparecen aquí— dar una orden por pagada sin
+    pedirle el comprobante al cliente.
+    """
+    key = credenciales("live").get(CLAVE_API_KEY, "")
+    if not key:
+        raise HaulmerError("Falta la API key de Haulmer")
+
+    try:
+        r = httpx.post(
+            URL_REPORTE,
+            headers={"X-API-Key": key, "Content-Type": "application/json"},
+            json={
+                "filters": {"startDate": desde.isoformat(), "endDate": hasta.isoformat()},
+                "page": pagina,
+                "pageSize": min(int(por_pagina), 20),
+            },
+            timeout=TIEMPO_ESPERA,
+        )
+    except httpx.HTTPError as e:
+        raise HaulmerError(f"No se pudo contactar con Haulmer: {e}") from e
+
+    if r.status_code != 200:
+        raise HaulmerError(_motivo(r, "no entregó el reporte de ventas"))
+
+    try:
+        contenido = (r.json() or {}).get("content") or {}
+    except ValueError:
+        raise HaulmerError("Haulmer devolvió un reporte que no se entiende")
+
+    return {
+        "comercio": (contenido.get("commerce") or {}).get("commerceName") or "",
+        "total": contenido.get("totalItems") or 0,
+        "paginas": contenido.get("totalPages") or 1,
+        "ventas": [
+            {
+                "id": v.get("saleId"),
+                "fecha": v.get("paymentDataTime"),
+                "estado": (v.get("status") or "").lower(),
+                "monto": v.get("amount"),
+                "moneda": v.get("currency"),
+                "tipo": v.get("typeTransaction"),
+                "pos": v.get("posSerialNumber"),
+            }
+            for v in (contenido.get("reports") or [])
+        ],
+    }
+
+
 # ── Conversión ───────────────────────────────────────────────────────────────
 
 def monto_en_clp(db, monto: float, moneda: str) -> tuple[int, float]:

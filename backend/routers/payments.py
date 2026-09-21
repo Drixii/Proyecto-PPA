@@ -588,6 +588,30 @@ def probar_haulmer(_admin: User = Depends(require_super_admin)):
     }
 
 
+@router.get("/haulmer/ventas", response_model=dict)
+def ventas_haulmer(
+    dias: int = 7,
+    _admin: User = Depends(require_super_admin),
+):
+    """Las ventas que Haulmer tiene registradas del comercio.
+
+    Con la API key del panel, que es distinta de las credenciales de la
+    pasarela. Sirve para comprobar si un cobro entró —el link de pago no avisa
+    de nada— sin tener que entrar a su Espacio de Trabajo.
+    """
+    from datetime import date, timedelta
+
+    hasta = date.today()
+    desde = hasta - timedelta(days=max(1, min(int(dias), 30)))
+    try:
+        datos = haulmer_service.transacciones(desde, hasta)
+    except haulmer_service.HaulmerError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True, "data": {**datos, "desde": desde.isoformat(),
+                                      "hasta": hasta.isoformat()}, "message": ""}
+
+
 @router.post("/orders/{order_id}/haulmer/checkout", response_model=dict)
 def crear_checkout_haulmer(
     order_id: int,

@@ -856,6 +856,17 @@ function HaulmerKeysForm() {
     queryFn: () => api.get('/payments/haulmer/keys').then(r => r.data.data),
   })
 
+  // Las ventas que Haulmer tiene registradas. Se piden solo con el bloque
+  // abierto: por dentro sale a su API y no hay por qué hacerlo en cada
+  // refresco de la pantalla de ajustes.
+  const [verVentas, setVerVentas] = useState(false)
+  const { data: ventas, isFetching: cargandoVentas, error: errorVentas } = useQuery({
+    queryKey: ['haulmer-ventas'],
+    queryFn: () => api.get('/payments/haulmer/ventas', { params: { dias: 7 } }).then(r => r.data.data),
+    enabled: verVentas,
+    refetchInterval: false,
+  })
+
   // Su API no tiene un endpoint de estado, así que probar es abrir un cobro
   // mínimo que nadie va a pagar. Es la única forma de saber si las
   // credenciales sirven antes de que lo descubra un cliente.
@@ -1074,7 +1085,68 @@ function HaulmerKeysForm() {
             >
               {probar.isPending ? 'Probando...' : 'Probar conexión'}
             </button>
+
+            <button
+              onClick={() => setVerVentas(v => !v)}
+              style={{
+                fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 10,
+                border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)',
+                color: '#aebfe2', cursor: 'pointer',
+              }}
+            >
+              {verVentas ? 'Ocultar ventas' : 'Ver ventas de Haulmer'}
+            </button>
           </div>
+
+          {verVentas && (
+            <div style={{ marginTop: 16 }}>
+              <p style={{ margin: '0 0 8px', fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>
+                Lo que Haulmer tiene registrado de los últimos 7 días, con la API KEY de arriba.
+                Aquí se ve si un cobro entró sin entrar a su panel.
+              </p>
+              {cargandoVentas && <p style={{ fontSize: 12.5, color: '#8aa0cc' }}>Consultando…</p>}
+              {errorVentas && (
+                <p style={{ fontSize: 12.5, color: '#f87171' }}>
+                  {errorVentas.response?.data?.detail || 'No se pudo consultar'}
+                </p>
+              )}
+              {ventas && (
+                <>
+                  <p style={{ margin: '0 0 8px', fontSize: 12, color: '#aebfe2' }}>
+                    {ventas.comercio} — <strong>{ventas.total}</strong> venta(s) entre {ventas.desde} y {ventas.hasta}
+                  </p>
+                  {ventas.ventas?.length > 0 ? (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(4,10,30,.6)' }}>
+                          {['Fecha', 'Monto', 'Tipo', 'Estado'].map(h => (
+                            <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: '#8aa0cc', textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ventas.ventas.map(v => (
+                          <tr key={v.id} style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                            <td style={{ padding: '7px 10px', color: '#aebfe2' }}>{(v.fecha || '').replace('T', ' ').slice(0, 16)}</td>
+                            <td style={{ padding: '7px 10px', color: '#eaf2ff', fontWeight: 700 }}>
+                              {Number(v.monto || 0).toLocaleString('es-CL')} {v.moneda}
+                            </td>
+                            <td style={{ padding: '7px 10px', color: '#8aa0cc' }}>{v.tipo || '—'}</td>
+                            <td style={{ padding: '7px 10px', color: v.estado === 'completed' ? '#4ade80' : '#fcd34d' }}>{v.estado || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p style={{ fontSize: 12.5, color: '#8aa0cc' }}>
+                      Ninguna venta en estos días. En cuanto cobres una —por link o por la máquina—
+                      aparece aquí.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
