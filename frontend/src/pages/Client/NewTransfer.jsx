@@ -750,6 +750,12 @@ export default function NewTransfer() {
     }
   }
 
+  // Mínimo de envío: 20 dólares al cambio, igual en todos los países. Lo dice
+  // el servidor con la moneda ya convertida para no repetir aquí la tabla de
+  // tasas, y se avisa mientras se escribe en vez de al final.
+  const minimoTexto = liveResult?.minimo_texto || ''
+  const faltaMinimo = !!liveResult && liveResult.cumple_minimo === false
+
   const rateDisplay = liveResult?.rate != null
     ? `Tasa: ${liveResult.rate.toLocaleString('es-CL', { maximumFractionDigits: 4, minimumFractionDigits: 4 })}`
     : null
@@ -1102,6 +1108,17 @@ export default function NewTransfer() {
                 </div>
               </div>
 
+              {faltaMinimo && (
+                <div className="rounded-xl px-4 py-3" style={{background:'rgba(251,191,36,.08)', border:'1px solid rgba(251,191,36,.25)'}}>
+                  <p className="text-xs font-semibold" style={{color:'#fcd34d'}}>
+                    El mínimo para enviar son {minimoTexto}
+                  </p>
+                  <p className="text-[11px] mt-0.5" style={{color:'#8aa0cc'}}>
+                    Son 20 dólares al cambio, igual para todos los países.
+                  </p>
+                </div>
+              )}
+
               {error && <p className="text-sm" style={{color:'#f87171'}}>{error}</p>}
 
               {destinatarioType === 'anterior' && (
@@ -1111,7 +1128,7 @@ export default function NewTransfer() {
                     setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult }))
                     setStep(2)
                   }}
-                  disabled={!liveResult || !rawAmount}
+                  disabled={!liveResult || !rawAmount || faltaMinimo}
                   className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all"
                   style={{background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.12)', color:'#8aa0cc', opacity: (!liveResult || !rawAmount) ? 0.4 : 1}}
                 >
@@ -1123,7 +1140,7 @@ export default function NewTransfer() {
                   setCalc(prev => ({ ...prev, amount: String(rawAmount), result: liveResult }))
                   setStep(destinatarioType === 'anterior' ? 3 : 2)
                 }}
-                disabled={!liveResult || !rawAmount}
+                disabled={!liveResult || !rawAmount || faltaMinimo}
                 className="w-full bg-gradient-to-r from-blue-400 to-blue-700 hover:from-blue-500 hover:to-blue-800 disabled:opacity-40 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm shadow-blue-200"
               >
                 {destinatarioType === 'anterior' ? 'Ir a pago →' : 'Continuar →'}

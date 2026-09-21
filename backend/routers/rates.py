@@ -221,6 +221,15 @@ def convert(
     if not es_del_equipo:
         datos.pop("fee", None)
 
+    # El mínimo de envío en la moneda de origen, para que la pantalla pueda
+    # avisar mientras se escribe en vez de al final, cuando ya se rellenó todo.
+    from services.order_service import cumple_minimo, minimo_en
+    minimo = minimo_en(db, from_currency.upper())
+    ok, texto = cumple_minimo(db, amount, from_currency.upper())
+    datos["minimo"] = minimo
+    datos["minimo_texto"] = texto
+    datos["cumple_minimo"] = ok
+
     return {"success": True, "data": datos, "message": ""}
 
 

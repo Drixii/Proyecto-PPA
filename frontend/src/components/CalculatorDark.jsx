@@ -172,6 +172,9 @@ export default function CalculatorDark({ onSend }) {
   }
   const handleCountryChange = c => { setToCountry(c.country); setToCurrency(c.currency); setResult(null); setRateError(null); setToOpen(false) }
 
+  const faltaMinimo = !!result && result.cumple_minimo === false
+  const minimoTexto = result?.minimo_texto || ''
+
   const rateText = result?.rate != null
     ? `1 ${fromCurrency} = ${result.rate.toLocaleString('es-CL', { maximumFractionDigits: 4, minimumFractionDigits: 2 })} ${toCurrency}`
     : loading ? 'Calculando...' : rateError || 'Ingresa un monto para ver la tasa'
@@ -291,9 +294,20 @@ export default function CalculatorDark({ onSend }) {
           </div>
         </div>
 
+        {/* El mínimo se avisa aquí y no al final del formulario: son 20 dólares
+            al cambio para todos los países, y enterarse después de rellenar el
+            envío entero es perder el viaje. */}
+        {faltaMinimo && (
+          <p style={{ margin: '12px 0 0', padding: '9px 12px', borderRadius: 12, fontSize: 12, lineHeight: 1.5,
+            background: 'rgba(251,191,36,.1)', border: '1px solid rgba(251,191,36,.25)', color: '#fcd34d' }}>
+            El mínimo para enviar son <strong>{minimoTexto}</strong> — 20 dólares al cambio.
+          </p>
+        )}
+
         {/* CTA */}
-        <button className="calc-cta" onClick={() => onSend?.({ amount: rawAmount, fromCurrency, fromCountry, toCountry, toCurrency, result })}
-          style={{ marginTop: 16, width: '100%', padding: 15, fontSize: 16, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 14px 38px rgba(56,189,248,.4)' }}>
+        <button className="calc-cta" disabled={faltaMinimo}
+          onClick={() => onSend?.({ amount: rawAmount, fromCurrency, fromCountry, toCountry, toCurrency, result })}
+          style={{ marginTop: 16, width: '100%', padding: 15, fontSize: 16, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 16, cursor: faltaMinimo ? 'not-allowed' : 'pointer', opacity: faltaMinimo ? .45 : 1, boxShadow: '0 14px 38px rgba(56,189,248,.4)' }}>
           ¡Comienza tu envío ahora! →
         </button>
         <p className="calc-footer" style={{ margin: '11px 0 0', textAlign: 'center', fontSize: 11.5, color: '#8aa0cc' }}>🔒 Cifrado de extremo a extremo · Sin sorpresas</p>

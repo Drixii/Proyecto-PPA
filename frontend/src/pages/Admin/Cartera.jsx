@@ -167,21 +167,25 @@ export default function Cartera() {
               <table className="w-full text-sm" style={{ minWidth: 860 }}>
                 <colgroup>
                   <col style={{ width: '13%' }} />
-                  <col style={{ width: '19%' }} />
-                  <col style={{ width: '15%' }} />
-                  <col style={{ width: '17%' }} />
-                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '12%' }} />
                   <col style={{ width: '13%' }} />
-                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '7%' }} />
                 </colgroup>
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
                     {[
                       ['Orden', 'left'],
                       ['Cliente', 'left'],
+                      ['Origen', 'left'],
                       ['Destino', 'left'],
                       ['Encargado', 'left'],
                       ['Envió', 'left'],
+                      ['Recibe', 'left'],
                       ['Comisión', 'right'],
                       ['Hora', 'right'],
                     ].map(([t, al]) => (
@@ -200,7 +204,7 @@ export default function Cartera() {
                   <tbody key={d.dia}>
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={9}
                         className="px-4 py-2.5"
                         style={{
                           background: 'rgba(4,10,30,.6)',
@@ -266,6 +270,17 @@ function Fila({ it, onClick }) {
       <td className="px-4 py-3">
         <span className="text-sm font-medium truncate block" style={{ color: '#c8d8f0' }}>{it.sender_name}</span>
       </td>
+      {/* De dónde sale el dinero. Faltaba, y con varios países de origen no
+          había forma de saber si un envío a Venezuela venía de Chile o de
+          Estados Unidos sin abrir la ficha. */}
+      <td className="px-4 py-3">
+        <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: '#8aa0cc' }}>
+          {flagUrl(it.sender_country) && (
+            <img src={flagUrl(it.sender_country)} alt="" className="w-4 h-[11px] rounded-sm object-cover shrink-0" />
+          )}
+          <span className="truncate">{it.sender_country || it.currency_from}</span>
+        </span>
+      </td>
       <td className="px-4 py-3">
         <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: '#8aa0cc' }}>
           {flagUrl(it.receiver_country) && (
@@ -285,6 +300,11 @@ function Fila({ it, onClick }) {
       <td className="px-4 py-3 whitespace-nowrap">
         <span className="text-xs" style={{ color: '#64748b' }}>
           {money(it.amount_sent, it.currency_from)}
+        </span>
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <span className="text-xs" style={{ color: '#8aa0cc' }}>
+          {money(it.amount_received, it.currency_to)}
         </span>
       </td>
       <td className="px-4 py-3 text-right whitespace-nowrap">

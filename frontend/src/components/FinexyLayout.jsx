@@ -791,6 +791,23 @@ export default function FinexyLayout({ children, fullHeight = false }) {
 
           {/* Right actions */}
           <div className="flex items-center gap-1.5 md:gap-2">
+            {/* Volver a la web pública. Desde el panel no había forma de ir a
+                la portada sin escribir la dirección a mano, y es donde están
+                la calculadora, las tasas y lo que se le enseña a un cliente. */}
+            <Link
+              to="/"
+              title="Ir a la página de inicio"
+              className="flex items-center gap-1.5 rounded-full px-2.5 md:px-3 h-9 text-xs font-semibold transition-colors"
+              style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', color: '#aebfe2' }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <path d="M3 10.5 12 3l9 7.5" />
+                <path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5" />
+              </svg>
+              <span className="hidden md:inline">Ir a Inicio</span>
+            </Link>
+
             {isAdmin ? <AdminSearch /> : isSubAdmin ? <SubAdminSearch /> : <ClientSearch />}
 
             {/* User bubble (desktop) */}

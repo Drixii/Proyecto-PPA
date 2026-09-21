@@ -32,6 +32,42 @@ def generate_order_number(db: Session) -> str:
     return f"{prefijo}{ultimo + 1:04d}"
 
 
+# Mínimo de envío, en dólares. Es uno solo para todos los países: se convierte
+# a la moneda de cada uno con la tasa del día, así que "20 USD" significa lo
+# mismo en Chile que en Colombia aunque las cifras se vean distintas.
+MINIMO_USD = 20.0
+
+
+def minimo_en(db: Session, moneda: str) -> float | None:
+    """El mínimo de envío en esa moneda. None si no hay tasa para calcularlo."""
+    moneda = (moneda or "").upper()
+    if moneda == "USD":
+        return MINIMO_USD
+    tasa = get_rate(db, "USD", moneda)
+    if not tasa or tasa <= 0:
+        return None
+    valor = MINIMO_USD * tasa
+    # Se redondea hacia arriba a algo redondo: un mínimo de "18.437" no se
+    # recuerda ni se explica. Sube al siguiente múltiplo de 100 (o de 1000 si
+    # la cifra es grande, como en pesos colombianos o bolívares).
+    paso = 1000 if valor >= 20000 else 100 if valor >= 200 else 1
+    import math
+    return math.ceil(valor / paso) * paso
+
+
+def cumple_minimo(db: Session, monto: float, moneda: str) -> tuple[bool, str]:
+    """Si ese monto llega al mínimo, y cómo se dice el mínimo en su moneda.
+
+    Sin tasa para convertir se deja pasar: bloquear un envío porque no se pudo
+    consultar una tasa sería peor que aceptarlo.
+    """
+    minimo = minimo_en(db, moneda)
+    if minimo is None:
+        return True, ""
+    texto = f"{minimo:,.0f} {(moneda or '').upper()}".replace(",", ".")
+    return (float(monto or 0) + 1e-9) >= minimo, texto
+
+
 def _get_commission(db: Session, from_currency: str = None, to_currency: str = None,
                     super_admin_id: int = None, from_country: str = None,
                     to_country: str = None) -> float:
@@ -188,6 +224,10 @@ def create_order(db: Session, data, client: User) -> Order:
     rate = get_rate(db, data.currency_from, data.currency_to)
     if not rate:
         raise ValueError(f"Tasa no disponible: {data.currency_from} -> {data.currency_to}")
+
+    minimo_ok, minimo_texto = cumple_minimo(db, data.amount_sent, data.currency_from)
+    if not minimo_ok:
+        raise ValueError(f"El mínimo para enviar son {minimo_texto}")
 
     # La tasa que vio el cliente manda, si sigue siendo razonable.
     #
