@@ -59,14 +59,16 @@ export default function AvisoActualizacion() {
     // Sin esto, una versión nueva podía tardar horas en notarse: el service
     // worker solo comprueba al arrancar, y una app instalada en el teléfono no
     // arranca casi nunca —se queda en segundo plano y se vuelve a ella—. Se
-    // mira cada cinco minutos y cada vez que se vuelve a la pantalla.
+    // mira cada minuto y cada vez que se vuelve a la pantalla.
     onRegisteredSW(url, registro) {
       if (!registro) return
       const mirar = () => {
         if (navigator.onLine === false) return
         registro.update().catch(() => { /* sin red; ya se reintenta */ })
       }
-      setInterval(mirar, 5 * 60 * 1000)
+      // Cada minuto: un despliegue tiene que llegar a quien está con la web
+      // abierta en un rato razonable, no cuando se acuerde el navegador.
+      setInterval(mirar, 60 * 1000)
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') mirar()
       })
@@ -194,5 +196,3 @@ export default function AvisoActualizacion() {
     </div>
   )
 }
-
-// prueba de actualización en vivo 1790115919
