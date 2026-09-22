@@ -1,37 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useRegisterSW } from 'virtual:pwa-register/react'
 
 // Actualización sola, sin botón.
 //
-// Esto pasó por los dos extremos. Primero el service worker recargaba en
-// cuanto había versión nueva, y la web se reiniciaba en mitad de lo que uno
-// estuviera haciendo. Después un botón "Actualizar", que nadie pulsaba: la
-// gente seguía días con una versión vieja viendo errores ya arreglados.
+// Esto pasó por tres versiones. Primero el service worker recargaba por su
+// cuenta en cuanto había un despliegue, y la web se reiniciaba en mitad de lo
+// que uno estuviera haciendo. Después un botón "Actualizar", que nadie
+// pulsaba: la gente seguía días con una versión vieja viendo errores ya
+// arreglados. Después el aviso automático del propio service worker, que en
+// pruebas no llegaba a dispararse: depende de que el navegador decida que hay
+// un worker «esperando», y eso no se puede provocar ni comprobar con
+// fiabilidad.
 //
-// Ahora se actualiza sola y solo se ve el final: una cuenta atrás de cuatro
-// segundos —"Actualizando… 4"— y al volver, "Web actualizada". Mientras tanto
-// no se enseña nada; que una versión esté esperando es asunto nuestro, no de
-// quien está usando la web.
-//
-// Lo único que la retrasa es estar escribiendo o tener una ventana abierta, y
-// aun así no indefinidamente: pasado un minuto y medio se actualiza igual.
+// Ahora es una cosa sola y verificable: cada build publica `version.json`, la
+// web lo mira cada minuto y, si cambió, es que hay versión nueva. Solo se ve
+// el final —una cuenta atrás de cuatro segundos y, al volver, "Web
+// actualizada"—, porque que haya una versión esperando es asunto nuestro, no
+// de quien está usando la web.
 
 const MARCA = 'ksa-recien-actualizada'
 const CUENTA_ATRAS = 4          // segundos de aviso antes de recargar
+const CADA = 60_000             // cada cuánto se mira si hay versión nueva
 const ESPERA_MAXIMA = 90_000    // tras esto se actualiza aunque estorbe
 
 // Si ahora mismo se perdería algo al recargar.
 //
-// Mira dos cosas, y solo dos: que haya una ventana abierta —casi siempre un
+// Mira dos cosas y solo dos: que haya una ventana abierta —casi siempre un
 // pago o una confirmación a medias— o que el cursor esté dentro de un campo,
 // es decir, que la persona esté escribiendo en este instante.
 //
-// La primera versión miraba si CUALQUIER casilla tenía texto, y eso no
+// Una versión anterior miraba si CUALQUIER casilla tenía texto, y eso no
 // funcionaba: la calculadora de la portada siempre lleva un monto escrito, así
-// que la actualización no llegaba nunca y el cartel se quedaba dando vueltas
-// para siempre. Un campo con algo escrito pero sin el cursor dentro no es
-// trabajo en curso: es una pantalla que quedó abierta.
+// que la actualización no llegaba nunca y el cartel se quedaba dando vueltas.
+// Un campo con algo escrito pero sin el cursor dentro no es trabajo en curso:
+// es una pantalla que quedó abierta.
 function estorba() {
   try {
     if (document.querySelector('.fixed.inset-0')) return true
@@ -49,36 +51,24 @@ function estorba() {
   }
 }
 
+async function versionPublicada() {
+  try {
+    const r = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
+    if (!r.ok) return null
+    const d = await r.json()
+    return d?.build || null
+  } catch {
+    return null   // sin red; se vuelve a mirar dentro de un minuto
+  }
+}
+
 export default function AvisoActualizacion() {
-  const {
-    needRefresh: [hayVersionNueva],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegisterError(e) { console.warn('[sw] no se pudo registrar', e) },
-
-    // Sin esto, una versión nueva podía tardar horas en notarse: el service
-    // worker solo comprueba al arrancar, y una app instalada en el teléfono no
-    // arranca casi nunca —se queda en segundo plano y se vuelve a ella—. Se
-    // mira cada minuto y cada vez que se vuelve a la pantalla.
-    onRegisteredSW(url, registro) {
-      if (!registro) return
-      const mirar = () => {
-        if (navigator.onLine === false) return
-        registro.update().catch(() => { /* sin red; ya se reintenta */ })
-      }
-      // Cada minuto: un despliegue tiene que llegar a quien está con la web
-      // abierta en un rato razonable, no cuando se acuerde el navegador.
-      setInterval(mirar, 60 * 1000)
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') mirar()
-      })
-    },
-  })
-
   const location = useLocation()
+  const mia = useRef(null)          // la versión con la que arrancó esta pestaña
+  const hayNueva = useRef(false)
   const lanzado = useRef(false)
   const desde = useRef(0)
-  const [quedan, setQuedan] = useState(null)        // null = no hay cuenta atrás
+  const [quedan, setQuedan] = useState(null)        // null = sin cuenta atrás
   const [reciénActualizada, setReciénActualizada] = useState(false)
 
   // Al volver de la recarga: el cartel de que todo fue bien.
@@ -92,32 +82,53 @@ export default function AvisoActualizacion() {
     } catch { /* modo privado */ }
   }, [])
 
-  // Decidir cuándo toca.
+  // Mirar si cambió la versión publicada, y decidir cuándo recargar.
   useEffect(() => {
-    if (!hayVersionNueva || lanzado.current) return
-    if (!desde.current) desde.current = Date.now()
+    let vivo = true
 
-    const intentar = () => {
-      if (lanzado.current) return
-      const urge = Date.now() - desde.current > ESPERA_MAXIMA
+    const arrancar = () => {
+      if (lanzado.current || !hayNueva.current) return
+      const urge = desde.current && Date.now() - desde.current > ESPERA_MAXIMA
       if (estorba() && !urge) return
       lanzado.current = true
       setQuedan(CUENTA_ATRAS)
     }
 
-    intentar()
-    const reloj = setInterval(intentar, 3000)
-    const alVolver = () => { if (document.visibilityState === 'visible') intentar() }
+    const mirar = async () => {
+      if (!vivo || lanzado.current) return
+      if (hayNueva.current) { arrancar(); return }
+
+      const publicada = await versionPublicada()
+      if (!vivo || !publicada) return
+
+      // La primera lectura solo sirve para saber con qué versión se abrió esta
+      // pestaña; no hay nada que actualizar todavía.
+      if (mia.current === null) { mia.current = publicada; return }
+
+      if (publicada !== mia.current) {
+        hayNueva.current = true
+        desde.current = Date.now()
+        arrancar()
+      }
+    }
+
+    mirar()
+    const reloj = setInterval(mirar, CADA)
+    // Y también al volver a la pestaña o al cambiar de pantalla: son los dos
+    // momentos en que se puede recargar sin cortarle nada a nadie.
+    const alVolver = () => { if (document.visibilityState === 'visible') mirar() }
     document.addEventListener('visibilitychange', alVolver)
+    const reintento = setInterval(arrancar, 3000)
+
     return () => {
+      vivo = false
       clearInterval(reloj)
+      clearInterval(reintento)
       document.removeEventListener('visibilitychange', alVolver)
     }
-    // location: cambiar de pantalla es buen momento —lo que se estaba
-    // rellenando ya se envió o se abandonó.
-  }, [hayVersionNueva, location.pathname])
+  }, [location.pathname])
 
-  // La cuenta atrás, y la recarga al llegar a cero.
+  // La cuenta atrás y la recarga.
   useEffect(() => {
     if (quedan === null) return
 
@@ -129,27 +140,27 @@ export default function AvisoActualizacion() {
     let cancelado = false
     ;(async () => {
       try { sessionStorage.setItem(MARCA, '1') } catch { /* da igual */ }
-      try { await updateServiceWorker(true) } catch { /* se recarga igual */ }
 
-      // Red de seguridad: a veces no hay ningún service worker esperando —ya
-      // activó, o el aviso venía de una comprobación anterior— y la recarga
-      // que hace updateServiceWorker no llega nunca. Se vacían las cachés y se
-      // recarga a mano; vaciarlas importa, porque si no se vuelven a servir
-      // los mismos archivos viejos y la web se queda igual que estaba.
-      setTimeout(async () => {
-        if (cancelado) return
-        try {
-          if (window.caches) {
-            const nombres = await caches.keys()
-            await Promise.all(nombres.map(n => caches.delete(n)))
-          }
-        } catch { /* si no deja borrarlas, se recarga igual */ }
-        window.location.reload()
-      }, 1200)
+      // Vaciar las cachés es lo que hace que la recarga sirva de algo: el
+      // service worker guarda la aplicación entera y, sin esto, volvería a
+      // servir exactamente los mismos archivos viejos.
+      try {
+        if (window.caches) {
+          const nombres = await caches.keys()
+          await Promise.all(nombres.map(n => caches.delete(n)))
+        }
+      } catch { /* si no deja borrarlas, se recarga igual */ }
+
+      try {
+        const regs = (await navigator.serviceWorker?.getRegistrations?.()) || []
+        await Promise.all(regs.map(r => r.update().catch(() => {})))
+      } catch { /* idem */ }
+
+      if (!cancelado) window.location.reload()
     })()
 
     return () => { cancelado = true }
-  }, [quedan, updateServiceWorker])
+  }, [quedan])
 
   const enCuenta = quedan !== null
   if (!reciénActualizada && !enCuenta) return null

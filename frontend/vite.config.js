@@ -36,6 +36,32 @@ function minificarGlobo() {
   }
 }
 
+// Un archivo con la versión del build, para saber desde la web si hay una
+// versión nueva publicada.
+//
+// Existe porque el ciclo de vida del service worker es difícil de comprobar:
+// el aviso de "hay versión nueva" depende de que el navegador decida que un
+// worker está «esperando», y eso no se puede provocar ni verificar con
+// fiabilidad. Un archivo pequeño que cambia en cada build sí: se pide, se
+// compara y ya está.
+function archivoDeVersion() {
+  return {
+    name: 'archivo-de-version',
+    apply: 'build',
+    async closeBundle() {
+      const { writeFile } = await import('node:fs/promises')
+      const { execSync } = await import('node:child_process')
+      let commit = ''
+      try {
+        commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+      } catch { /* fuera de un repo; basta con la fecha */ }
+      const datos = { build: `${Date.now()}`, commit }
+      await writeFile(new URL('./dist/version.json', import.meta.url),
+        JSON.stringify(datos), 'utf8')
+    },
+  }
+}
+
 // index.html: las etiquetas Open Graph llevan el dominio escrito a mano
 // (WhatsApp y Facebook exigen URLs absolutas). Si el dominio cambia, hay que
 // cambiarlo ahí, en sitemap.xml, robots.txt y llms.txt.
@@ -43,6 +69,7 @@ export default defineConfig({
   plugins: [
     sinComentariosCss(),
     minificarGlobo(),
+    archivoDeVersion(),
     react(),
     tailwindcss(),
     VitePWA({
