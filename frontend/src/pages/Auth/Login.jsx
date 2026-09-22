@@ -540,7 +540,7 @@ function CampoClave({ value, onChange, visible, onVer, style }) {
         value={value}
         onChange={e => onChange(e.target.value)}
         required
-        placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+        placeholder="••••••••"
         style={{ ...style, paddingRight: 44 }}
       />
       <button
