@@ -4,40 +4,49 @@ import { useRegisterSW } from 'virtual:pwa-register/react'
 
 // Actualización sola, sin botón.
 //
-// Esto ha pasado por los dos extremos. Primero el service worker recargaba en
+// Esto pasó por los dos extremos. Primero el service worker recargaba en
 // cuanto había versión nueva, y la web se reiniciaba en mitad de lo que uno
-// estuviera haciendo. Después se puso un botón "Actualizar", y el problema fue
-// el contrario: la gente lo ignoraba y seguía días con una versión vieja,
-// viendo errores ya arreglados.
+// estuviera haciendo. Después un botón "Actualizar", que nadie pulsaba: la
+// gente seguía días con una versión vieja viendo errores ya arreglados.
 //
-// Ahora se actualiza sola pero mirando qué está haciendo la persona: si hay un
-// formulario a medio rellenar o una ventana abierta, espera —a que cambie de
-// pantalla, a que cierre lo que tenga abierto, o a que vuelva a la pestaña— y
-// entonces recarga. Al volver, un aviso de tres segundos dice qué pasó, para
-// que una recarga inesperada no parezca un fallo.
+// Ahora se actualiza sola y solo se ve el final: una cuenta atrás de cuatro
+// segundos —"Actualizando… 4"— y al volver, "Web actualizada". Mientras tanto
+// no se enseña nada; que una versión esté esperando es asunto nuestro, no de
+// quien está usando la web.
+//
+// Lo único que la retrasa es estar escribiendo o tener una ventana abierta, y
+// aun así no indefinidamente: pasado un minuto y medio se actualiza igual.
 
 const MARCA = 'ksa-recien-actualizada'
+const CUENTA_ATRAS = 4          // segundos de aviso antes de recargar
+const ESPERA_MAXIMA = 90_000    // tras esto se actualiza aunque estorbe
 
-// Si hay algo que se perdería al recargar.
+// Si ahora mismo se perdería algo al recargar.
 //
-// Un dato escrito a mano es trabajo de verdad: una cuenta bancaria, un
-// documento, un monto. Las casillas de búsqueda no cuentan —se vuelven a
-// escribir en dos segundos— y una ventana abierta sí, porque casi siempre es
-// un pago o una confirmación a medias.
-function hayTrabajoAMedias() {
+// Mira dos cosas, y solo dos: que haya una ventana abierta —casi siempre un
+// pago o una confirmación a medias— o que el cursor esté dentro de un campo,
+// es decir, que la persona esté escribiendo en este instante.
+//
+// La primera versión miraba si CUALQUIER casilla tenía texto, y eso no
+// funcionaba: la calculadora de la portada siempre lleva un monto escrito, así
+// que la actualización no llegaba nunca y el cartel se quedaba dando vueltas
+// para siempre. Un campo con algo escrito pero sin el cursor dentro no es
+// trabajo en curso: es una pantalla que quedó abierta.
+function estorba() {
   try {
     if (document.querySelector('.fixed.inset-0')) return true
 
-    const campos = document.querySelectorAll('input, textarea')
-    for (const campo of campos) {
-      const tipo = (campo.type || '').toLowerCase()
-      if (tipo === 'hidden' || tipo === 'checkbox' || tipo === 'radio' || tipo === 'submit') continue
-      const nombre = `${campo.name || ''} ${campo.placeholder || ''} ${campo.className || ''}`.toLowerCase()
-      if (nombre.includes('buscar') || nombre.includes('search')) continue
-      if ((campo.value || '').trim().length > 2) return true
-    }
-  } catch { /* ante la duda, se actualiza */ }
-  return false
+    const activo = document.activeElement
+    if (!activo) return false
+    const etiqueta = (activo.tagName || '').toLowerCase()
+    if (etiqueta !== 'input' && etiqueta !== 'textarea') return false
+
+    const tipo = (activo.type || '').toLowerCase()
+    if (tipo === 'checkbox' || tipo === 'radio' || tipo === 'submit') return false
+    return true
+  } catch {
+    return false   // ante la duda, se actualiza
+  }
 }
 
 export default function AvisoActualizacion() {
@@ -65,8 +74,9 @@ export default function AvisoActualizacion() {
   })
 
   const location = useLocation()
-  const yaVa = useRef(false)
-  const [esperando, setEsperando] = useState(false)
+  const lanzado = useRef(false)
+  const desde = useRef(0)
+  const [quedan, setQuedan] = useState(null)        // null = no hay cuenta atrás
   const [reciénActualizada, setReciénActualizada] = useState(false)
 
   // Al volver de la recarga: el cartel de que todo fue bien.
@@ -80,22 +90,52 @@ export default function AvisoActualizacion() {
     } catch { /* modo privado */ }
   }, [])
 
+  // Decidir cuándo toca.
   useEffect(() => {
-    if (!hayVersionNueva || yaVa.current) return
+    if (!hayVersionNueva || lanzado.current) return
+    if (!desde.current) desde.current = Date.now()
 
-    const intentar = async () => {
-      if (yaVa.current) return
-      if (hayTrabajoAMedias()) { setEsperando(true); return }
-      yaVa.current = true
+    const intentar = () => {
+      if (lanzado.current) return
+      const urge = Date.now() - desde.current > ESPERA_MAXIMA
+      if (estorba() && !urge) return
+      lanzado.current = true
+      setQuedan(CUENTA_ATRAS)
+    }
 
+    intentar()
+    const reloj = setInterval(intentar, 3000)
+    const alVolver = () => { if (document.visibilityState === 'visible') intentar() }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => {
+      clearInterval(reloj)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
+    // location: cambiar de pantalla es buen momento —lo que se estaba
+    // rellenando ya se envió o se abandonó.
+  }, [hayVersionNueva, location.pathname])
+
+  // La cuenta atrás, y la recarga al llegar a cero.
+  useEffect(() => {
+    if (quedan === null) return
+
+    if (quedan > 0) {
+      const t = setTimeout(() => setQuedan(q => q - 1), 1000)
+      return () => clearTimeout(t)
+    }
+
+    let cancelado = false
+    ;(async () => {
       try { sessionStorage.setItem(MARCA, '1') } catch { /* da igual */ }
       try { await updateServiceWorker(true) } catch { /* se recarga igual */ }
 
       // Red de seguridad: a veces no hay ningún service worker esperando —ya
-      // activó, o el aviso venía de una comprobación anterior— y la recarga no
-      // llega nunca. Se vacían las cachés y se recarga a mano; vaciarlas
-      // importa, porque si no se vuelven a servir los mismos archivos viejos.
+      // activó, o el aviso venía de una comprobación anterior— y la recarga
+      // que hace updateServiceWorker no llega nunca. Se vacían las cachés y se
+      // recarga a mano; vaciarlas importa, porque si no se vuelven a servir
+      // los mismos archivos viejos y la web se queda igual que estaba.
       setTimeout(async () => {
+        if (cancelado) return
         try {
           if (window.caches) {
             const nombres = await caches.keys()
@@ -103,25 +143,14 @@ export default function AvisoActualizacion() {
           }
         } catch { /* si no deja borrarlas, se recarga igual */ }
         window.location.reload()
-      }, 1500)
-    }
+      }, 1200)
+    })()
 
-    intentar()
+    return () => { cancelado = true }
+  }, [quedan, updateServiceWorker])
 
-    // Y si había trabajo a medias, se vuelve a mirar cuando cambie algo:
-    // al volver a la pestaña o cada pocos segundos, por si cerró la ventana.
-    const alVolver = () => { if (document.visibilityState === 'visible') intentar() }
-    document.addEventListener('visibilitychange', alVolver)
-    const reloj = setInterval(intentar, 8000)
-    return () => {
-      document.removeEventListener('visibilitychange', alVolver)
-      clearInterval(reloj)
-    }
-    // location: cambiar de pantalla es el momento perfecto —lo que se estaba
-    // rellenando ya se envió o se abandonó.
-  }, [hayVersionNueva, location.pathname, updateServiceWorker])
-
-  if (!reciénActualizada && !esperando) return null
+  const enCuenta = quedan !== null
+  if (!reciénActualizada && !enCuenta) return null
 
   return (
     <div style={{
@@ -129,15 +158,17 @@ export default function AvisoActualizacion() {
       display: 'flex', alignItems: 'center', gap: 9,
       padding: '11px 15px', borderRadius: 14, maxWidth: 'calc(100vw - 32px)',
       background: 'rgba(8,16,44,.95)',
-      border: `1px solid ${reciénActualizada ? 'rgba(74,222,128,.35)' : 'rgba(56,189,248,.28)'}`,
+      border: `1px solid ${reciénActualizada ? 'rgba(74,222,128,.35)' : 'rgba(56,189,248,.3)'}`,
       boxShadow: '0 12px 34px rgba(0,6,28,.55)',
       backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-      animation: 'ksaSube .35s cubic-bezier(.16,1,.3,1)',
+      animation: 'ksaSube .3s cubic-bezier(.16,1,.3,1)',
     }}>
       <style>{`
         @keyframes ksaSube{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @media(prefers-reduced-motion:reduce){@keyframes ksaSube{from{opacity:0}to{opacity:1}}}
+        @keyframes ksaGira{to{transform:rotate(360deg)}}
+        @media(prefers-reduced-motion:reduce){
+          @keyframes ksaSube{from{opacity:0}to{opacity:1}}
+        }
       `}</style>
 
       {reciénActualizada ? (
@@ -153,10 +184,10 @@ export default function AvisoActualizacion() {
           <span style={{
             width: 13, height: 13, borderRadius: '50%', flexShrink: 0,
             border: '2px solid rgba(56,189,248,.35)', borderTopColor: '#38bdf8',
-            animation: 'spin .8s linear infinite',
+            animation: 'ksaGira .8s linear infinite',
           }} />
           <span style={{ fontSize: 12.5, color: '#c3d2ee' }}>
-            Versión nueva lista — se aplica al terminar esto
+            Actualizando{quedan > 0 ? `… ${quedan}` : '…'}
           </span>
         </>
       )}
