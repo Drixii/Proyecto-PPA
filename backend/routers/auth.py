@@ -316,20 +316,12 @@ def force_change_password(
     }
 
 
-class CheckEmailPayload(PydanticBase):
-    email: str
-
-@router.post("/check-email", response_model=dict)
-def check_email_invite(data: CheckEmailPayload, db: Session = Depends(get_db)):
-    from models.invite_code import InviteCode
-    from sqlalchemy import func
-    code_row = db.query(InviteCode).filter(
-        func.lower(InviteCode.email) == data.email.strip().lower(),
-        InviteCode.is_used == False,
-    ).first()
-    if not code_row:
-        raise HTTPException(status_code=400, detail="El correo no es el correcto")
-    return {"success": True, "message": ""}
+# Aquí vivía /check-email, que buscaba una invitación emitida para ESE correo y
+# respondía "El correo no es el correcto" si no la había. Se quedó vivo cuando
+# los códigos dejaron de ir atados a un correo, así que no encontraba nada
+# nunca: cualquiera que intentara registrarse veía ese mensaje y no podía
+# pasar de la primera pantalla. El código es lo único que da acceso, y se
+# comprueba al registrarse.
 
 
 @router.get("/check-invite-code/{code}", response_model=dict)

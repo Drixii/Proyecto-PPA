@@ -165,6 +165,9 @@ export default function Login() {
     'Per\u00fa': [['DNI', 'DNI']],
     'Bolivia': [['CED_CIU', 'C\u00e9dula de identidad']],
   }
+  const [verClave, setVerClave] = useState(false)
+  const [verClave2, setVerClave2] = useState(false)
+  const [verClaveLogin, setVerClaveLogin] = useState(false)
   const [regForm, setRegForm] = useState({ email: urlEmail, full_name: '', password: '', confirmPassword: '', phone: '', country: 'Chile', document_type: 'RUT', document_number: '' })
   const docsDisponibles = [...(DOCS_POR_PAIS[regForm.country] || []), ['PP', 'Pasaporte']]
   const docEstado = revisaDocumento(regForm.document_type, regForm.document_number)
@@ -216,14 +219,11 @@ export default function Login() {
     if (regForm.password !== regForm.confirmPassword) {
       setRegError('Las contraseñas no coinciden'); return
     }
-    setRegLoading(true); setRegError('')
-    try {
-      await api.post('/auth/check-email', { email: regForm.email })
-      setInviteCode(urlCode); setCodeError('')
-      setShowCodeModal(true)
-    } catch (err) {
-      setRegError(err.response?.data?.detail || 'El correo no es el correcto')
-    } finally { setRegLoading(false) }
+    // Ya no se comprueba el correo contra nada: el código de invitación es lo
+    // único que da acceso, y ese se valida al registrarse.
+    setRegError('')
+    setInviteCode(urlCode); setCodeError('')
+    setShowCodeModal(true)
   }
 
   // El tipo de documento cambia con el país: si el elegido no existe en el
@@ -413,7 +413,8 @@ export default function Login() {
                 <input className="login-input" type="email" value={loginForm.email} onChange={e => setLoginForm({ ...loginForm, email: e.target.value })} required placeholder="tu@email.com" style={inputStyle} />
               </div>
               <div><label style={labelStyle}>Contraseña</label>
-                <input className="login-input" type="password" value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} required placeholder="••••••••" style={inputStyle} />
+                <CampoClave value={loginForm.password} onChange={v => setLoginForm({ ...loginForm, password: v })}
+                  visible={verClaveLogin} onVer={() => setVerClaveLogin(v => !v)} style={inputStyle} />
               </div>
               {loginError && <div style={{ padding: '11px 14px', borderRadius: 12, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.3)' }}><p style={{ margin: 0, fontSize: 13, color: '#fca5a5' }}>{loginError}</p></div>}
               <button type="submit" disabled={loginLoading} style={{ width: '100%', padding: 15, fontSize: 15.5, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 14, cursor: 'pointer', boxShadow: '0 10px 30px rgba(56,189,248,.35)', opacity: loginLoading ? 0.65 : 1 }}>
@@ -435,10 +436,13 @@ export default function Login() {
                 )}
               </div>
               <div><label style={labelStyle}>Contraseña</label>
-                <input className="login-input" type="password" value={regForm.password} onChange={e => setRegForm({ ...regForm, password: e.target.value })} required placeholder="••••••••" style={inputStyle} />
+                <CampoClave value={regForm.password} onChange={v => setRegForm({ ...regForm, password: v })}
+                  visible={verClave} onVer={() => setVerClave(v => !v)} style={inputStyle} />
               </div>
               <div><label style={labelStyle}>Confirmar contraseña</label>
-                <input className="login-input" type="password" value={regForm.confirmPassword} onChange={e => setRegForm({ ...regForm, confirmPassword: e.target.value })} required placeholder="••••••••" style={{ ...inputStyle, borderColor: regForm.confirmPassword && regForm.password !== regForm.confirmPassword ? 'rgba(239,68,68,.5)' : undefined }} />
+                <CampoClave value={regForm.confirmPassword} onChange={v => setRegForm({ ...regForm, confirmPassword: v })}
+                  visible={verClave2} onVer={() => setVerClave2(v => !v)}
+                  style={{ ...inputStyle, borderColor: regForm.confirmPassword && regForm.password !== regForm.confirmPassword ? 'rgba(239,68,68,.5)' : undefined }} />
                 {regForm.confirmPassword && regForm.password !== regForm.confirmPassword && (
                   <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>Las contraseñas no coinciden</p>
                 )}
@@ -518,6 +522,53 @@ export default function Login() {
         </div>
       </div>
 
+    </div>
+  )
+}
+
+
+// Casilla de contraseña con el ojo para verla.
+//
+// Escribir a ciegas una contraseña que además hay que repetir es la forma más
+// fácil de quedarse fuera de la propia cuenta recién creada.
+function CampoClave({ value, onChange, visible, onVer, style }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        className="login-input"
+        type={visible ? 'text' : 'password'}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        required
+        placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+        style={{ ...style, paddingRight: 44 }}
+      />
+      <button
+        type="button"
+        onClick={onVer}
+        aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        title={visible ? 'Ocultar' : 'Mostrar'}
+        style={{
+          position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+          width: 32, height: 32, display: 'grid', placeItems: 'center',
+          background: 'transparent', border: 'none', cursor: 'pointer', color: '#8aa0cc', padding: 0,
+        }}
+      >
+        {visible ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3l18 18" />
+            <path d="M10.6 10.6a2 2 0 002.8 2.8" />
+            <path d="M9.4 5.2A9.5 9.5 0 0112 5c5 0 9 4.5 9 7 0 .9-.5 2-1.5 3.1M6.3 6.7C3.9 8.2 3 10.2 3 12c0 2.5 4 7 9 7 1.4 0 2.6-.3 3.7-.8" />
+          </svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z" />
+            <circle cx="12" cy="12" r="2.6" />
+          </svg>
+        )}
+      </button>
     </div>
   )
 }
