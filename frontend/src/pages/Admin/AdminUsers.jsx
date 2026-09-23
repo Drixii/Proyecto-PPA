@@ -758,6 +758,24 @@ export default function AdminUsers() {
                             >
                               Copiar datos
                             </button>
+                            {/* La ventana para cambiar la clave estaba hecha
+                                pero no la abría nada: no había forma de
+                                restablecerle la contraseña a nadie desde el
+                                panel, y quien se quedaba fuera se quedaba
+                                fuera. */}
+                            <button
+                              onClick={() => {
+                                setNewPwd(generatePassword())
+                                setNewPwdMode('generate')
+                                setNewPwdCopied(false)
+                                setPwdError('')
+                                setPwdModal(u)
+                              }}
+                              className="text-xs px-2.5 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
+                              style={{background:'rgba(168,85,247,.12)', color:'#c084fc', border:'1px solid rgba(168,85,247,.2)'}}
+                            >
+                              Cambiar clave
+                            </button>
                             <button
                               onClick={() => setDeleteModal(u)}
                               className="text-xs px-2.5 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
