@@ -826,7 +826,10 @@ def create_user_admin(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    if db.query(User).filter(User.email == data.email).first():
+    # Normalizado: una cuenta creada como PAGOS@… no podía entrar escribiendo
+    # pagos@…, porque el login comparaba el texto tal cual.
+    correo = (data.email or "").strip().lower()
+    if db.query(User).filter(func.lower(User.email) == correo).first():
         raise HTTPException(status_code=400, detail="Email ya registrado")
     if data.role not in ("client", "admin", "sub_admin"):
         raise HTTPException(status_code=400, detail="Rol inválido")
@@ -837,7 +840,7 @@ def create_user_admin(
     else:
         tz = country_to_tz(data.country)
     user = User(
-        email=data.email,
+        email=correo,
         full_name=data.full_name,
         password=hashed,
         role=data.role,

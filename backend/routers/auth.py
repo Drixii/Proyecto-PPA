@@ -2,6 +2,7 @@ import re
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from utils.image import validate_and_convert
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 import shutil, uuid, os
@@ -34,7 +35,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @router.post("/register", response_model=dict)
 def register(data: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == data.email).first():
+    if db.query(User).filter(func.lower(User.email) == (data.email or "").strip().lower()).first():
         raise HTTPException(status_code=400, detail="Email ya registrado")
 
     # Validate invite code
@@ -97,7 +98,7 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
     hashed = pwd_context.hash(data.password)
     user = User(
-        email=data.email,
+        email=(data.email or "").strip().lower(),
         full_name=data.full_name,
         password=hashed,
         phone=telefono,
@@ -195,7 +196,13 @@ def verificar_email(
 
 @router.post("/login", response_model=dict)
 def login(data: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
+    # En minúsculas los dos lados. El correo no distingue mayúsculas —nadie
+    # tiene dos buzones que se diferencien en eso— pero la comparación sí lo
+    # hacía: una cuenta creada como PAGOS@… no podía entrar escribiendo
+    # pagos@…, y como el fallo salía igual que una contraseña mala, cambiarla
+    # no arreglaba nada.
+    correo = (data.email or "").strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == correo).first()
     if not user or not pwd_context.verify(data.password, user.password):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     if user.deleted_at is not None:
