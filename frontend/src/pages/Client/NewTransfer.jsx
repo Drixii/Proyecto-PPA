@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import CampoSelector from '../../components/CampoSelector'
 import MarcaPago, { ProcesadoPor, nombreDeMetodo } from '../../components/MarcaPago'
 import CopiaMontoLink from '../../components/CopiaMontoLink'
+import PegarDatosReceptor from '../../components/PegarDatosReceptor'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -1173,6 +1174,28 @@ export default function NewTransfer() {
               </div>
 
               <div className="space-y-4">
+                {/* Casi nadie escribe estos datos: se los pasan por WhatsApp.
+                    Pegarlos de una vez evita el dedazo en la cuenta, que es el
+                    error que cuesta dinero de verdad. */}
+                <PegarDatosReceptor
+                  pais={calc.toCountry}
+                  bancos={banksData || []}
+                  onUsar={(d) => {
+                    setReceiver(r => ({
+                      ...r,
+                      receiver_name: d.nombre || r.receiver_name,
+                      receiver_phone: d.telefono ? formateaTelefono(d.telefono) : r.receiver_phone,
+                      receiver_account: d.cuenta || r.receiver_account,
+                      receiver_bank_id: d.banco?.id ?? r.receiver_bank_id,
+                      receiver_id_num: d.documento || r.receiver_id_num,
+                      // El tipo solo se toca si el que se dedujo existe para
+                      // este país; si no, se deja el que ya estaba elegido.
+                      receiver_id_type: (COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES)
+                        .includes(d.tipoDocumento) ? d.tipoDocumento : r.receiver_id_type,
+                    }))
+                  }}
+                />
+
                 <div>
                   <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Nombre completo *</label>
                   <input type="text" value={receiver.receiver_name} onChange={e => setReceiver({ ...receiver, receiver_name: e.target.value })}
