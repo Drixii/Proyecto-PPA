@@ -38,12 +38,21 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
   // permiso la primera vez; Firefox directamente no lo permite. Cuando no se
   // puede, queda el recuadro de siempre para pegar a mano — que es lo mismo
   // que había antes, no una vía muerta.
+  const [huboQueDenegar, setHuboQueDenegar] = useState(false)
+
   const abrirLeyendoPortapapeles = async () => {
     setAbierto(true)
+    setHuboQueDenegar(false)
     try {
       const copiado = await navigator.clipboard.readText()
       if (copiado?.trim()) interpretar(copiado)
-    } catch { /* sin permiso o sin soporte: se pega a mano */ }
+      else setHuboQueDenegar(true)
+    } catch {
+      // Firefox no deja leer el portapapeles nunca, y en iPhone hay que
+      // confirmar en un menú del sistema. Cuando no llega nada, se explica qué
+      // hacer en vez de dejar un recuadro vacío sin más.
+      setHuboQueDenegar(true)
+    }
   }
 
   if (!abierto) {
@@ -77,6 +86,13 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
         </p>
         <button type="button" onClick={cerrar} className="text-sm" style={{ color: '#64748b' }}>✕</button>
       </div>
+
+      {!leido && huboQueDenegar && (
+        <p className="text-[11px] leading-relaxed" style={{ color: '#fcd34d' }}>
+          Tu navegador no deja leer lo copiado solo. Mantén pulsado el recuadro
+          y elige <strong>Pegar</strong>.
+        </p>
+      )}
 
       {!leido && (
       <textarea
