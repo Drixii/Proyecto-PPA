@@ -17,12 +17,14 @@ const ETIQUETAS = {
   banco: ['banco', 'bank', 'entidad', 'banco destino', 'institucion', 'institución'],
   cuenta: ['cuenta', 'nro cuenta', 'n° cuenta', 'numero de cuenta', 'número de cuenta',
     'cta', 'account', 'clabe', 'iban', 'cci', 'no. cuenta', 'nro. cuenta'],
-  documento: ['cedula', 'cédula', 'ci', 'c.i', 'rut', 'dni', 'documento', 'cpf', 'curp',
-    'rfc', 'nit', 'cuit', 'cuil', 'identificacion', 'identificación', 'id'],
+  documento: ['cedula', 'cédula', 'ci', 'c.i', 'cc', 'ce', 'rut', 'dni', 'documento',
+    'cpf', 'curp', 'rfc', 'nit', 'cuit', 'cuil', 'identificacion', 'identificación',
+    'id', 'pasaporte', 'passport'],
   nombre: ['nombre', 'titular', 'beneficiario', 'a nombre de', 'destinatario', 'name'],
   telefono: ['telefono', 'teléfono', 'celular', 'movil', 'móvil', 'phone', 'pago movil',
     'pago móvil', 'whatsapp'],
   tipoCuenta: ['tipo de cuenta', 'tipo cuenta', 'tipo'],
+  llave: ['llave', 'llave bre-b', 'bre-b', 'breb', 'key'],
 }
 
 // Los primeros cuatro dígitos de una cuenta venezolana dicen el banco. Sirve
@@ -36,6 +38,30 @@ const BANCOS_VE = {
   '0168': 'Bancrecer', '0169': 'Mi Banco', '0171': 'Banco Activo', '0172': 'Bancamiga',
   '0174': 'Banplus', '0175': 'Banco Bicentenario', '0177': 'Banfanb', '0191': 'BNC Nacional de Crédito',
 }
+
+// Cómo se llama el documento según la etiqueta que usaron. Sin esto, un
+// "Pasaporte: 5001307641" colombiano se guardaba como cédula solo porque tiene
+// diez dígitos.
+const TIPO_POR_ETIQUETA = {
+  pasaporte: 'Pasaporte', passport: 'Pasaporte',
+  cc: 'Cédula de Ciudadanía', ce: 'Cédula de Extranjería',
+  nit: 'NIT', rut: 'RUT', dni: 'DNI', cpf: 'CPF', curp: 'CURP', rfc: 'RFC',
+  ci: 'Cédula', 'c.i': 'Cédula', cedula: 'Cédula', 'cédula': 'Cédula',
+}
+
+// "CA" es caja de ahorro y "CC" cuenta corriente en Bolivia; en Colombia se
+// escribe "Ahorros" o "Corriente" a secas, en una línea suelta.
+const TIPOS_CUENTA = [
+  [/\b(ca|caja de ahorro|ahorros?|savings)\b/i, 'Ahorros'],
+  [/\b(cc|cta cte|cuenta corriente|corriente|checking)\b/i, 'Corriente'],
+  [/\b(vista|cuenta vista)\b/i, 'Vista'],
+]
+
+// Billeteras donde el "número de cuenta" ES el celular: diez dígitos junto a
+// Nequi no son un teléfono de contacto, son la cuenta.
+const CUENTA_ES_CELULAR = ['nequi', 'daviplata', 'movii', 'rappipay', 'yape', 'plin',
+  'tigo money', 'mercado pago', 'uala', 'yappy', 'sinpe', 'pago movil', 'deuna',
+  'tenpo', 'prex']
 
 const limpia = t => String(t || '').replace(/\s+/g, ' ').trim()
 const soloDigitos = t => String(t || '').replace(/\D/g, '')
@@ -59,7 +85,7 @@ function partePorEtiqueta(linea) {
         const etiqueta = sinAcentos(n)
         if (sinSigno.startsWith(etiqueta + ' ')) {
           const valor = limpia(bruto.slice(etiqueta.length))
-          if (valor) return { campo, valor }
+          if (valor) return { campo, valor, etiqueta }
         }
       }
     }
@@ -71,9 +97,8 @@ function partePorEtiqueta(linea) {
   if (!derecha) return null
 
   for (const [campo, nombres] of Object.entries(ETIQUETAS)) {
-    if (nombres.some(n => izquierda === sinAcentos(n) || izquierda.startsWith(sinAcentos(n) + ' ') || izquierda.endsWith(' ' + sinAcentos(n)))) {
-      return { campo, valor: derecha }
-    }
+    const usada = nombres.find(n => izquierda === sinAcentos(n) || izquierda.startsWith(sinAcentos(n) + ' ') || izquierda.endsWith(' ' + sinAcentos(n)))
+    if (usada) return { campo, valor: derecha, etiqueta: sinAcentos(usada) }
   }
   return null
 }
@@ -180,7 +205,10 @@ export function leeDatosBancarios(texto, { pais, bancos = [] } = {}) {
   const lineas = String(texto || '').split(/[\n\r]+/).map(limpia).filter(Boolean)
   if (!lineas.length) return null
 
-  const out = { nombre: '', banco: null, bancoTexto: '', cuenta: '', documento: '', tipoDocumento: '', telefono: '', aviso: '' }
+  const out = {
+    nombre: '', banco: null, bancoTexto: '', cuenta: '', documento: '',
+    tipoDocumento: '', tipoCuenta: '', telefono: '', llave: '', aviso: '',
+  }
   const sueltas = []
 
   for (const linea of lineas) {
@@ -190,16 +218,54 @@ export function leeDatosBancarios(texto, { pais, bancos = [] } = {}) {
     if (p.campo === 'banco' && !out.bancoTexto) out.bancoTexto = p.valor
     else if (p.campo === 'cuenta' && !out.cuenta) out.cuenta = pareceCuenta(p.valor, pais) || soloDigitos(p.valor) || p.valor
     else if (p.campo === 'nombre' && !out.nombre) out.nombre = p.valor
+    else if (p.campo === 'llave' && !out.llave) out.llave = p.valor
+    else if (p.campo === 'tipoCuenta' && !out.tipoCuenta) {
+      const t = TIPOS_CUENTA.find(([re]) => re.test(p.valor))
+      out.tipoCuenta = t ? t[1] : p.valor
+    }
     else if (p.campo === 'telefono' && !out.telefono) out.telefono = pareceTelefono(p.valor) || p.valor
     else if (p.campo === 'documento' && !out.documento) {
       const d = pareceDocumento(p.valor, pais) || pareceDocumento(linea, pais)
       out.documento = d ? d.valor : limpia(p.valor)
-      if (d?.tipo) out.tipoDocumento = d.tipo
+      // El tipo lo dice la etiqueta, no el largo del número: un "Pasaporte:
+      // 5001307641" colombiano tiene diez dígitos igual que una cédula, y
+      // guardarlo como cédula manda el pago con el documento equivocado.
+      out.tipoDocumento = TIPO_POR_ETIQUETA[p.etiqueta] || d?.tipo || ''
     }
   }
 
+  // El banco antes que nada del resto: si es una billetera, un número de diez
+  // dígitos deja de ser un teléfono y pasa a ser la cuenta.
+  if (!out.bancoTexto) {
+    for (const linea of sueltas) {
+      const b = buscaBanco(linea, bancos)
+      if (b) { out.bancoTexto = linea; out.banco = b; break }
+    }
+  }
+  const esBilletera = CUENTA_ES_CELULAR.some(w => sinAcentos(out.banco?.name || out.bancoTexto || '').includes(w))
+
   // Segunda pasada: lo que quedó sin etiqueta, por su forma.
   for (const linea of sueltas) {
+    if (linea === out.bancoTexto) continue
+
+    // Una línea que solo dice "Ahorros" o "CA": es el tipo de cuenta.
+    if (!out.tipoCuenta) {
+      const soloTipo = TIPOS_CUENTA.find(([re]) => re.test(limpia(linea)))
+      if (soloTipo && limpia(linea).replace(/[^a-záéíóúñ ]/gi, '').trim().length <= 20) {
+        out.tipoCuenta = soloTipo[1]
+        // "CA 1311450370" lleva el tipo Y el número en la misma línea.
+        const resto = soloDigitos(linea)
+        if (!out.cuenta && resto.length >= 6) out.cuenta = resto
+        continue
+      }
+    }
+
+    // En Nequi o Daviplata el celular ES la cuenta.
+    if (esBilletera && !out.cuenta) {
+      const d = soloDigitos(linea)
+      if (d.length === 10 && limpia(linea).length <= 14) { out.cuenta = d; continue }
+    }
+
     if (!out.documento) {
       const d = pareceDocumento(linea, pais)
       if (d) { out.documento = d.valor; out.tipoDocumento = d.tipo; continue }

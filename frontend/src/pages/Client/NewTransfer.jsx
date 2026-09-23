@@ -155,6 +155,14 @@ export default function NewTransfer() {
 
   const [receiver, setReceiver] = useState({
     receiver_name: prefillReceiver?.receiver_name || '',
+    // Colombia pide más cosas que el resto: si es persona o empresa, el
+    // apellido aparte, el correo, el tipo de cuenta, y admite cobrar por llave
+    // Bre-B en vez de por número de cuenta.
+    receiver_type: prefillReceiver?.receiver_type || 'persona',
+    receiver_last_name: prefillReceiver?.receiver_last_name || '',
+    receiver_email: prefillReceiver?.receiver_email || '',
+    receiver_account_type: prefillReceiver?.receiver_account_type || 'Ahorros',
+    receiver_key: prefillReceiver?.receiver_key || '',
     receiver_phone: prefillReceiver?.receiver_phone || '',
     receiver_country: prefillReceiver?.receiver_country || prefill.toCountry || 'Colombia',
     receiver_bank_id: prefillReceiver?.receiver_bank_id || '',
@@ -346,6 +354,11 @@ export default function NewTransfer() {
   // Continuar exige nombre y, si se rellenaron, documento y telefono correctos.
   // Antes solo pedia el nombre: el documento se pintaba en rojo y se pasaba de
   // pantalla igual, y el error aparecia al final o directamente en el banco.
+  // Colombia trabaja distinto: persona o empresa, correo, tipo de cuenta, y se
+  // puede cobrar por llave Bre-B en vez de por número de cuenta.
+  const esColombia = calc.toCountry === 'Colombia'
+  const [modoCobroCO, setModoCobroCO] = useState('cuenta')
+
   const receptorOk = !!receiver.receiver_name.trim()
     && docReceptor.estado !== 'invalido'
     && docReceptor.estado !== 'incompleto'
@@ -649,6 +662,11 @@ export default function NewTransfer() {
         sender_id_type: pagador.sender_id_type || undefined,
         sender_id_num: (pagador.sender_id_num || '').trim() || undefined,
         ...receiver,
+        // Fuera de Colombia nada de esto aplica; con llave Bre-B lo que viaja
+        // es la llave y no hay banco ni cuenta.
+        receiver_type: esColombia ? receiver.receiver_type : null,
+        receiver_key: esColombia && modoCobroCO === 'llave' ? receiver.receiver_key : null,
+        receiver_account_type: esColombia && modoCobroCO === 'cuenta' ? receiver.receiver_account_type : null,
         receiver_bank_id: receiver.receiver_bank_id ? parseInt(receiver.receiver_bank_id) : null,
         amount_sent: rawAmount || parseFloat(calc.amount),
         // La tasa que se le mostró al cotizar. El backend la respeta si el
@@ -1192,6 +1210,7 @@ export default function NewTransfer() {
                       // este país; si no, se deja el que ya estaba elegido.
                       receiver_id_type: (COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES)
                         .includes(d.tipoDocumento) ? d.tipoDocumento : r.receiver_id_type,
+                      receiver_account_type: d.tipoCuenta || r.receiver_account_type,
                     }))
                   }}
                 />
@@ -1202,6 +1221,79 @@ export default function NewTransfer() {
                     className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
                 </div>
+
+                {/* Colombia: quien paga allá exige saber si el destinatario es
+                    persona o empresa, y pide apellido y correo aparte. Lo
+                    pedimos aquí y no al final, cuando el envío ya está hecho y
+                    hay que ir a buscar al cliente para preguntarle. */}
+                {esColombia && (
+                  <>
+                    <div>
+                      <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>¿Quién recibe?</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[['persona', 'Una persona'], ['empresa', 'Una empresa']].map(([v, txt]) => (
+                          <button key={v} type="button"
+                            onClick={() => setReceiver({ ...receiver, receiver_type: v })}
+                            className="py-2.5 rounded-xl text-sm font-semibold transition-all"
+                            style={receiver.receiver_type === v
+                              ? { background: 'rgba(56,189,248,.12)', border: '2px solid #38bdf8', color: '#eaf2ff' }
+                              : { background: 'rgba(255,255,255,.04)', border: '2px solid rgba(255,255,255,.08)', color: '#8aa0cc' }}>
+                            {txt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {receiver.receiver_type === 'persona' && (
+                      <div>
+                        <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Apellido</label>
+                        <input type="text" value={receiver.receiver_last_name}
+                          onChange={e => setReceiver({ ...receiver, receiver_last_name: e.target.value })}
+                          className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Correo electrónico</label>
+                      <input type="email" value={receiver.receiver_email}
+                        onChange={e => setReceiver({ ...receiver, receiver_email: e.target.value.trim() })}
+                        placeholder="para el comprobante del pago"
+                        className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                    </div>
+
+                    <div>
+                      <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>¿Cómo recibe el dinero?</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[['cuenta', 'Cuenta bancaria'], ['llave', 'Llave Bre-B']].map(([v, txt]) => (
+                          <button key={v} type="button"
+                            onClick={() => setModoCobroCO(v)}
+                            className="py-2.5 rounded-xl text-sm font-semibold transition-all"
+                            style={modoCobroCO === v
+                              ? { background: 'rgba(56,189,248,.12)', border: '2px solid #38bdf8', color: '#eaf2ff' }
+                              : { background: 'rgba(255,255,255,.04)', border: '2px solid rgba(255,255,255,.08)', color: '#8aa0cc' }}>
+                            {txt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {modoCobroCO === 'llave' && (
+                      <div>
+                        <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Llave Bre-B</label>
+                        <input type="text" value={receiver.receiver_key}
+                          onChange={e => setReceiver({ ...receiver, receiver_key: e.target.value.trim() })}
+                          placeholder="@usuario, celular, cédula o correo"
+                          className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
+                        <p className="text-xs mt-1" style={{color:'#64748b'}}>
+                          Con llave no hace falta banco ni número de cuenta.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <div>
                   <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Teléfono</label>
@@ -1221,7 +1313,9 @@ export default function NewTransfer() {
                   )}
                 </div>
 
-                <div>
+                {/* Con llave Bre-B, el banco y la cuenta sobran: la llave los
+                    sustituye, y pedirlos igual hace dudar de si hacen falta. */}
+                <div style={{ display: esColombia && modoCobroCO === 'llave' ? 'none' : undefined }}>
                   <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>
                     Banco destino
                     {flagUrl(receiver.receiver_country) && (
@@ -1245,7 +1339,25 @@ export default function NewTransfer() {
                   )}
                 </div>
 
-                <div>
+                {esColombia && modoCobroCO === 'cuenta' && (
+                  <div>
+                    <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Tipo de cuenta</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Ahorros', 'Corriente'].map(v => (
+                        <button key={v} type="button"
+                          onClick={() => setReceiver({ ...receiver, receiver_account_type: v })}
+                          className="py-2.5 rounded-xl text-sm font-semibold transition-all"
+                          style={receiver.receiver_account_type === v
+                            ? { background: 'rgba(56,189,248,.12)', border: '2px solid #38bdf8', color: '#eaf2ff' }
+                            : { background: 'rgba(255,255,255,.04)', border: '2px solid rgba(255,255,255,.08)', color: '#8aa0cc' }}>
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: esColombia && modoCobroCO === 'llave' ? 'none' : undefined }}>
                   <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Número de cuenta</label>
                   {COUNTRY_ACCOUNT_HINT[calc.toCountry] && (
                     <p className="text-xs mb-1.5" style={{color:'#475569'}}>📌 {COUNTRY_ACCOUNT_HINT[calc.toCountry]}</p>
