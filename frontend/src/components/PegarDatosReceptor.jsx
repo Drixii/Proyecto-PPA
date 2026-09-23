@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { leeDatosBancarios } from '../utils/leeDatosBancarios'
 
 // Pegar de una vez los datos de quien recibe.
@@ -11,6 +11,32 @@ import { leeDatosBancarios } from '../utils/leeDatosBancarios'
 // se deja en blanco para escribirlo a mano. Nunca se rellena a ciegas: un dato
 // bancario equivocado con pinta de correcto es peor que un campo vacío.
 export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
+  // Si el navegador tiene permiso para leer lo copiado.
+  //
+  // Se mira cada vez que se va a añadir a alguien, no una sola vez: el permiso
+  // se puede revocar, y un cliente que lo tenga denegado necesita saberlo
+  // ANTES de tocar el botón. Si no, el botón parece roto: no pasa nada y no
+  // hay forma de adivinar por qué.
+  const [permiso, setPermiso] = useState('desconocido')
+
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      if (!navigator.clipboard?.readText) { setPermiso('no-soportado'); return }
+      try {
+        const p = await navigator.permissions.query({ name: 'clipboard-read' })
+        if (!vivo) return
+        setPermiso(p.state)                       // granted | prompt | denied
+        p.onchange = () => vivo && setPermiso(p.state)
+      } catch {
+        // Safari y Firefox no responden a esta consulta. No se da por perdido:
+        // se intenta al tocar el botón y allí se ve si sale.
+        if (vivo) setPermiso('desconocido')
+      }
+    })()
+    return () => { vivo = false }
+  }, [])
+
   const [abierto, setAbierto] = useState(false)
   const [texto, setTexto] = useState('')
   const [leido, setLeido] = useState(null)
@@ -65,6 +91,20 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
 
   if (!abierto) {
     return (
+      <div className="space-y-1.5">
+        {permiso === 'denied' && (
+          <p className="text-[11px] leading-relaxed px-1" style={{ color: '#fcd34d' }}>
+            Tienes bloqueado el acceso a lo que copias, así que hay que pegarlo a
+            mano. Para arreglarlo: candado de la barra de direcciones →
+            Portapapeles → Permitir.
+          </p>
+        )}
+        {permiso === 'prompt' && (
+          <p className="text-[11px] leading-relaxed px-1" style={{ color: '#8aa0cc' }}>
+            Al tocar aquí el navegador te pedirá permiso para leer lo que
+            copiaste. Acéptalo y los datos se rellenan solos.
+          </p>
+        )}
       <button type="button" onClick={abrirLeyendoPortapapeles}
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold"
         style={{ background: 'rgba(56,189,248,.08)', border: '1px dashed rgba(56,189,248,.35)', color: '#7dd3fc' }}>
@@ -75,6 +115,7 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
         </svg>
         Pegar los datos que me pasaron
       </button>
+      </div>
     )
   }
 
