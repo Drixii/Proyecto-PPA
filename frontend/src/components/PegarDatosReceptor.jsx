@@ -38,21 +38,29 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
   // permiso la primera vez; Firefox directamente no lo permite. Cuando no se
   // puede, queda el recuadro de siempre para pegar a mano — que es lo mismo
   // que había antes, no una vía muerta.
-  const [huboQueDenegar, setHuboQueDenegar] = useState(false)
+  // Por qué no se pudo leer solo. Cada caso se cuenta distinto: "no tenías
+  // nada copiado" y "tu navegador no me deja" se arreglan de formas distintas,
+  // y antes los dos acababan en el mismo recuadro vacío sin explicación.
+  const [motivo, setMotivo] = useState(null)   // 'vacio' | 'bloqueado'
+
+  const leerPortapapeles = async () => {
+    setMotivo(null)
+    try {
+      const copiado = await navigator.clipboard.readText()
+      if (copiado?.trim()) { interpretar(copiado); return true }
+      setMotivo('vacio')
+    } catch {
+      // Firefox no lo permite nunca; en iPhone hay que confirmar en un menú
+      // del sistema; y en Chrome, si el permiso se denegó una vez, falla
+      // siempre hasta que se vuelva a conceder.
+      setMotivo('bloqueado')
+    }
+    return false
+  }
 
   const abrirLeyendoPortapapeles = async () => {
     setAbierto(true)
-    setHuboQueDenegar(false)
-    try {
-      const copiado = await navigator.clipboard.readText()
-      if (copiado?.trim()) interpretar(copiado)
-      else setHuboQueDenegar(true)
-    } catch {
-      // Firefox no deja leer el portapapeles nunca, y en iPhone hay que
-      // confirmar en un menú del sistema. Cuando no llega nada, se explica qué
-      // hacer en vez de dejar un recuadro vacío sin más.
-      setHuboQueDenegar(true)
-    }
+    await leerPortapapeles()
   }
 
   if (!abierto) {
@@ -87,11 +95,28 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
         <button type="button" onClick={cerrar} className="text-sm" style={{ color: '#64748b' }}>✕</button>
       </div>
 
-      {!leido && huboQueDenegar && (
-        <p className="text-[11px] leading-relaxed" style={{ color: '#fcd34d' }}>
-          Tu navegador no deja leer lo copiado solo. Mantén pulsado el recuadro
-          y elige <strong>Pegar</strong>.
-        </p>
+      {!leido && (
+        <>
+          <button type="button" onClick={leerPortapapeles}
+            className="w-full py-2 rounded-xl text-xs font-bold"
+            style={{ background: 'rgba(56,189,248,.14)', border: '1px solid rgba(56,189,248,.35)', color: '#7dd3fc' }}>
+            Leer lo que tengo copiado
+          </button>
+
+          {motivo === 'vacio' && (
+            <p className="text-[11px] leading-relaxed" style={{ color: '#fcd34d' }}>
+              No encontré nada copiado. Copia el mensaje en WhatsApp y vuelve a
+              tocar el botón de arriba.
+            </p>
+          )}
+          {motivo === 'bloqueado' && (
+            <p className="text-[11px] leading-relaxed" style={{ color: '#fcd34d' }}>
+              El navegador no me deja leerlo solo. Si te preguntó por el
+              portapapeles, acepta y toca otra vez; si no, mantén pulsado el
+              recuadro de abajo y elige <strong>Pegar</strong>.
+            </p>
+          )}
+        </>
       )}
 
       {!leido && (
