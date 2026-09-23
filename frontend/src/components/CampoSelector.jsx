@@ -11,8 +11,10 @@ import SelectorBusqueda from './SelectorBusqueda'
  * una lista sin buscador en Android— y no se puede escribir para filtrar.
  * Con veinte bancos o veinte países eso es recorrer la lista a ciegas.
  *
- * `opciones` es [{ valor, texto, iso2? }]. `onChange` recibe el valor a secas,
- * no un evento, que es lo único que usaban las llamadas de todos modos.
+ * `opciones` es [{ valor, texto, iso2?, icono? }]. `onChange` recibe el valor
+ * a secas, no un evento, que es lo único que usaban las llamadas de todos
+ * modos. `icono` es cualquier cosa que pintar a la izquierda —el logo del
+ * banco, por ejemplo— y sustituye a la bandera.
  */
 export default function CampoSelector({
   value, onChange, opciones = [], placeholder = 'Elige...',
@@ -33,7 +35,8 @@ export default function CampoSelector({
           cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .6 : 1,
           ...style,
         }}>
-        {elegida?.iso2 && (
+        {elegida?.icono}
+        {!elegida?.icono && elegida?.iso2 && (
           <img src={`https://flagcdn.com/40x30/${String(elegida.iso2).toLowerCase()}.png`} alt=""
             style={{ width: 20, height: 15, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }}
             onError={e => { e.target.style.visibility = 'hidden' }} />
@@ -57,7 +60,7 @@ export default function CampoSelector({
           valor={String(value ?? '')}
           opciones={opciones.map(o => ({
             clave: String(o.valor), titulo: o.texto, subtitulo: o.subtexto, iso2: o.iso2,
-            valor: o.valor,
+            icono: o.icono, valor: o.valor,
           }))}
           onElegir={o => onChange?.(o.valor)}
           onCerrar={() => setAbierto(false)} />

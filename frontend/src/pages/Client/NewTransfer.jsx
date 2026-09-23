@@ -3,7 +3,9 @@ import CampoSelector from '../../components/CampoSelector'
 import MarcaPago, { ProcesadoPor, nombreDeMetodo } from '../../components/MarcaPago'
 import CopiaMontoLink from '../../components/CopiaMontoLink'
 import PegarDatosReceptor from '../../components/PegarDatosReceptor'
+import LogoBanco from '../../components/LogoBanco'
 import { leeDatosBancarios } from '../../utils/leeDatosBancarios'
+import { tiposDeCuenta, normalizaTipo } from '../../utils/tiposDeCuenta'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -162,7 +164,10 @@ export default function NewTransfer() {
     receiver_type: prefillReceiver?.receiver_type || 'persona',
     receiver_last_name: prefillReceiver?.receiver_last_name || '',
     receiver_email: prefillReceiver?.receiver_email || '',
-    receiver_account_type: prefillReceiver?.receiver_account_type || 'Ahorros',
+    // Sin valor por defecto: "Ahorros" venía marcado de entrada y en Chile ni
+    // siquiera existe con ese nombre, así que se mandaba un tipo que el banco
+    // de destino no reconoce sin que nadie lo hubiera elegido.
+    receiver_account_type: prefillReceiver?.receiver_account_type || '',
     receiver_key: prefillReceiver?.receiver_key || '',
     receiver_phone: prefillReceiver?.receiver_phone || '',
     receiver_country: prefillReceiver?.receiver_country || prefill.toCountry || 'Colombia',
@@ -360,10 +365,6 @@ export default function NewTransfer() {
   const esColombia = calc.toCountry === 'Colombia'
   const [modoCobroCO, setModoCobroCO] = useState('cuenta')
 
-  const receptorOk = !!receiver.receiver_name.trim()
-    && docReceptor.estado !== 'invalido'
-    && docReceptor.estado !== 'incompleto'
-    && !telReceptorMal
 
   // Aviso de que el pago debe salir de la cuenta del propio titular. Se abre al
   // entrar al paso de pago y una sola vez por sesión: repetirlo en cada envío
@@ -580,6 +581,54 @@ export default function NewTransfer() {
     queryKey: ['banks', receiver.receiver_country],
     queryFn: () => api.get('/admin/banks', { params: { country: receiver.receiver_country } }).then(r => r.data.data).catch(() => []),
   })
+
+  const bancoElegido = (banksData || []).find(b => String(b.id) === String(receiver.receiver_bank_id))
+  // Depende del banco y no solo del país: una billetera como Nequi o Tenpo no
+  // tiene tipo de cuenta que elegir.
+  const tiposCuentaDestino = tiposDeCuenta(calc.toCountry, bancoElegido?.name)
+
+  // Continuar exige el nombre y, si se rellenaron, documento y teléfono
+  // correctos; y el tipo de cuenta donde exista, porque sin él el banco de
+  // destino puede rechazar el abono.
+  const receptorOk = !!receiver.receiver_name.trim()
+    && docReceptor.estado !== 'invalido'
+    && docReceptor.estado !== 'incompleto'
+    && !telReceptorMal
+    && (tiposCuentaDestino.length === 0
+        || (esColombia && modoCobroCO === 'llave')
+        || !!receiver.receiver_account_type)
+
+  // Lo que se entendió de un texto pegado, volcado en el formulario.
+  //
+  // Una sola función porque hay dos formas de pegar —el botón de arriba y
+  // pegar directamente sobre el nombre— y tenían copias distintas del mismo
+  // código, así que lo que se arreglaba en una seguía roto en la otra.
+  //
+  // Nada se sobrescribe con vacío: lo que no se entendió deja en pie lo que ya
+  // hubiera escrito.
+  const aplicaPegado = (d) => {
+    if (!d) return
+    setReceiver(r => {
+      const banco = d.banco?.name || (banksData || []).find(b => String(b.id) === String(r.receiver_bank_id))?.name
+      return {
+        ...r,
+        receiver_name: d.nombre || r.receiver_name,
+        receiver_phone: d.telefono ? formateaTelefono(d.telefono) : r.receiver_phone,
+        receiver_account: d.cuenta || r.receiver_account,
+        receiver_bank_id: d.banco?.id ?? r.receiver_bank_id,
+        receiver_id_num: d.documento || r.receiver_id_num,
+        receiver_email: d.correo || r.receiver_email,
+        receiver_key: d.llave || r.receiver_key,
+        // El tipo genérico que sale del texto ("Corriente") se traduce al
+        // nombre que usa el país ("Cuenta Corriente" en Chile); si ahí no
+        // encaja con ninguno, se deja el que ya estaba elegido.
+        receiver_account_type: normalizaTipo(calc.toCountry, d.tipoCuenta, banco) || r.receiver_account_type,
+        // El tipo de documento solo se toca si existe para este país.
+        receiver_id_type: (COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES)
+          .includes(d.tipoDocumento) ? d.tipoDocumento : r.receiver_id_type,
+      }
+    })
+  }
 
   // Los contactos vienen de su propio endpoint, no del listado de envíos:
   // borrar un envío sin pagar no puede llevarse por delante al destinatario.
@@ -1199,21 +1248,7 @@ export default function NewTransfer() {
                 <PegarDatosReceptor
                   pais={calc.toCountry}
                   bancos={banksData || []}
-                  onUsar={(d) => {
-                    setReceiver(r => ({
-                      ...r,
-                      receiver_name: d.nombre || r.receiver_name,
-                      receiver_phone: d.telefono ? formateaTelefono(d.telefono) : r.receiver_phone,
-                      receiver_account: d.cuenta || r.receiver_account,
-                      receiver_bank_id: d.banco?.id ?? r.receiver_bank_id,
-                      receiver_id_num: d.documento || r.receiver_id_num,
-                      // El tipo solo se toca si el que se dedujo existe para
-                      // este país; si no, se deja el que ya estaba elegido.
-                      receiver_id_type: (COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES)
-                        .includes(d.tipoDocumento) ? d.tipoDocumento : r.receiver_id_type,
-                      receiver_account_type: d.tipoCuenta || r.receiver_account_type,
-                    }))
-                  }}
+                  onUsar={aplicaPegado}
                 />
 
                 <div>
@@ -1228,17 +1263,7 @@ export default function NewTransfer() {
                       const d = leeDatosBancarios(t, { pais: calc.toCountry, bancos: banksData || [] })
                       if (!d) return
                       e.preventDefault()
-                      setReceiver(r => ({
-                        ...r,
-                        receiver_name: d.nombre || r.receiver_name,
-                        receiver_phone: d.telefono ? formateaTelefono(d.telefono) : r.receiver_phone,
-                        receiver_account: d.cuenta || r.receiver_account,
-                        receiver_bank_id: d.banco?.id ?? r.receiver_bank_id,
-                        receiver_id_num: d.documento || r.receiver_id_num,
-                        receiver_account_type: d.tipoCuenta || r.receiver_account_type,
-                        receiver_id_type: (COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES)
-                          .includes(d.tipoDocumento) ? d.tipoDocumento : r.receiver_id_type,
-                      }))
+                      aplicaPegado(d)
                     }}
                     onChange={e => setReceiver({ ...receiver, receiver_name: e.target.value })}
                     className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1351,7 +1376,10 @@ export default function NewTransfer() {
                       onChange={v => setReceiver({ ...receiver, receiver_bank_id: v })}
                       placeholder="Seleccionar banco..."
                       titulo="Banco del destinatario"
-                      opciones={banksData.map(b => ({ valor: b.id, texto: b.name }))}
+                      opciones={banksData.map(b => ({
+                        valor: b.id, texto: b.name,
+                        icono: <LogoBanco nombre={b.name} tam={22} />,
+                      }))}
                       className="w-full rounded-xl px-3 py-2.5"
                       style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
                   ) : (
@@ -1362,11 +1390,16 @@ export default function NewTransfer() {
                   )}
                 </div>
 
-                {esColombia && modoCobroCO === 'cuenta' && (
+                {/* El tipo de cuenta, con los nombres que usa el país de
+                    destino. No es un adorno: mandar "Ahorros" a Chile, donde
+                    existen la cuenta vista y la corriente, es motivo de rechazo
+                    en el banco de allá. En billeteras no sale, porque no
+                    tienen tipo. */}
+                {tiposCuentaDestino.length > 0 && !(esColombia && modoCobroCO === 'llave') && (
                   <div>
                     <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Tipo de cuenta</label>
                     <div className="grid grid-cols-2 gap-2">
-                      {['Ahorros', 'Corriente'].map(v => (
+                      {tiposCuentaDestino.map(v => (
                         <button key={v} type="button"
                           onClick={() => setReceiver({ ...receiver, receiver_account_type: v })}
                           className="py-2.5 rounded-xl text-sm font-semibold transition-all"

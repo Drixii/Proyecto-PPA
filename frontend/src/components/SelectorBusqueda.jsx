@@ -101,7 +101,9 @@ export default function SelectorBusqueda({
             paddingTop: esMovil ? 13 : 10, paddingBottom: esMovil ? 13 : 10,
             background: valor === o.clave ? 'rgba(56,189,248,.12)' : 'transparent',
           }}>
-          <Bandera iso2={o.iso2} />
+          {/* Un icono propio manda sobre la bandera: en la lista de bancos
+              lo que distingue es el logo, no el país —son todos del mismo—. */}
+          {o.icono || <Bandera iso2={o.iso2} />}
           <span className="flex-1 text-sm font-medium truncate" style={{ color: '#eaf2ff' }}>{o.titulo}</span>
           {o.subtitulo && (
             <span className="text-xs font-mono shrink-0" style={{ color: '#8aa0cc' }}>{o.subtitulo}</span>

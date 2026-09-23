@@ -19,6 +19,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (recargando) return   // controllerchange puede dispararse dos veces
     recargando = true
+    // La misma marca que usa AvisoActualizacion, para que al volver se vea
+    // "Web actualizada" y no una recarga salida de la nada.
+    try { sessionStorage.setItem('ksa-recien-actualizada', '1') } catch { /* modo privado */ }
     window.location.reload()
   })
 }

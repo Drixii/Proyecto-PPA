@@ -25,6 +25,7 @@ const ETIQUETAS = {
     'pago móvil', 'whatsapp'],
   tipoCuenta: ['tipo de cuenta', 'tipo cuenta', 'tipo'],
   llave: ['llave', 'llave bre-b', 'bre-b', 'breb', 'key'],
+  correo: ['correo', 'email', 'e-mail', 'mail', 'correo electronico', 'correo electrónico'],
 }
 
 // Los primeros cuatro dígitos de una cuenta venezolana dicen el banco. Sirve
@@ -207,7 +208,7 @@ export function leeDatosBancarios(texto, { pais, bancos = [] } = {}) {
 
   const out = {
     nombre: '', banco: null, bancoTexto: '', cuenta: '', documento: '',
-    tipoDocumento: '', tipoCuenta: '', telefono: '', llave: '', aviso: '',
+    tipoDocumento: '', tipoCuenta: '', telefono: '', llave: '', correo: '', aviso: '',
   }
   const sueltas = []
 
@@ -216,13 +217,26 @@ export function leeDatosBancarios(texto, { pais, bancos = [] } = {}) {
     if (!p) { sueltas.push(linea); continue }
 
     if (p.campo === 'banco' && !out.bancoTexto) out.bancoTexto = p.valor
-    else if (p.campo === 'cuenta' && !out.cuenta) out.cuenta = pareceCuenta(p.valor, pais) || soloDigitos(p.valor) || p.valor
+    else if (p.campo === 'cuenta') {
+      // "Cuenta Corriente" empieza por la palabra "cuenta", pero lo que sigue
+      // no es un número: es el tipo. Se guardaba "Corriente" como número de
+      // cuenta y el número de verdad, que venía en la línea siguiente, ya no
+      // entraba porque el campo estaba ocupado.
+      const tipo = TIPOS_CUENTA.find(([re]) => re.test(p.valor))
+      if (tipo && !out.tipoCuenta) out.tipoCuenta = tipo[1]
+
+      const hayNumero = soloDigitos(p.valor).length >= 6
+      if (!out.cuenta && (hayNumero || !tipo)) {
+        out.cuenta = pareceCuenta(p.valor, pais) || soloDigitos(p.valor) || p.valor
+      }
+    }
     else if (p.campo === 'nombre' && !out.nombre) out.nombre = p.valor
     else if (p.campo === 'llave' && !out.llave) out.llave = p.valor
     else if (p.campo === 'tipoCuenta' && !out.tipoCuenta) {
       const t = TIPOS_CUENTA.find(([re]) => re.test(p.valor))
       out.tipoCuenta = t ? t[1] : p.valor
     }
+    else if (p.campo === 'correo' && !out.correo) out.correo = p.valor.trim()
     else if (p.campo === 'telefono' && !out.telefono) out.telefono = pareceTelefono(p.valor) || p.valor
     else if (p.campo === 'documento' && !out.documento) {
       const d = pareceDocumento(p.valor, pais) || pareceDocumento(linea, pais)
@@ -247,6 +261,11 @@ export function leeDatosBancarios(texto, { pais, bancos = [] } = {}) {
   // Segunda pasada: lo que quedó sin etiqueta, por su forma.
   for (const linea of sueltas) {
     if (linea === out.bancoTexto) continue
+
+    if (!out.correo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(linea)) {
+      out.correo = linea
+      continue
+    }
 
     // Una línea que solo dice "Ahorros" o "CA": es el tipo de cuenta.
     if (!out.tipoCuenta) {

@@ -12,13 +12,21 @@ import { useLocation } from 'react-router-dom'
 // un worker «esperando», y eso no se puede provocar ni comprobar con
 // fiabilidad.
 //
-// Ahora es una cosa sola y verificable: cada build publica `version.json`, la
-// web lo mira cada minuto y, si cambió, es que hay versión nueva. Solo se ve
+// Ahora es una cosa sola y verificable: cada build deja su marca DENTRO del
+// código y también en `version.json`. La web compara las dos: si no coinciden,
+// lo que se está ejecutando no es lo último publicado. Comparar el archivo
+// consigo mismo, que es lo que hacía antes, siempre daba igual aunque el
+// navegador llevara semanas sirviendo una aplicación vieja. Solo se ve
 // el final —una cuenta atrás de cuatro segundos y, al volver, "Web
 // actualizada"—, porque que haya una versión esperando es asunto nuestro, no
 // de quien está usando la web.
 
 const MARCA = 'ksa-recien-actualizada'
+const INTENTOS = 'ksa-intentos-de-actualizar'
+// La versión de ESTE código, escrita por el compilador. Lo importante es que
+// viene del bundle que está corriendo, no de la red: si el service worker
+// está sirviendo una aplicación vieja, esto lo delata.
+const MIA = typeof __BUILD__ === 'string' ? __BUILD__ : null
 const CUENTA_ATRAS = 4          // segundos de aviso antes de recargar
 const CADA = 60_000             // cada cuánto se mira si hay versión nueva
 const ESPERA_MAXIMA = 90_000    // tras esto se actualiza aunque estorbe
@@ -51,6 +59,27 @@ function estorba() {
   }
 }
 
+// Cuántas veces se recargó ya intentando llegar a la versión publicada.
+//
+// Se guarda contra qué versión se estaba intentando: si entretanto se publica
+// otra, el intento empieza de cero.
+function intentosFallidos(objetivo) {
+  try {
+    const [v, n] = (localStorage.getItem(INTENTOS) || '').split('|')
+    return v === objetivo ? Number(n) || 0 : 0
+  } catch { return 0 }
+}
+
+function apuntaIntento(objetivo) {
+  try {
+    localStorage.setItem(INTENTOS, `${objetivo}|${intentosFallidos(objetivo) + 1}`)
+  } catch { /* modo privado */ }
+}
+
+function olvidaIntentos() {
+  try { localStorage.removeItem(INTENTOS) } catch { /* modo privado */ }
+}
+
 async function versionPublicada() {
   try {
     const r = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
@@ -64,7 +93,7 @@ async function versionPublicada() {
 
 export default function AvisoActualizacion() {
   const location = useLocation()
-  const mia = useRef(null)          // la versión con la que arrancó esta pestaña
+  const objetivo = useRef(null)     // la versión publicada a la que hay que llegar
   const hayNueva = useRef(false)
   const lanzado = useRef(false)
   const desde = useRef(0)
@@ -101,14 +130,17 @@ export default function AvisoActualizacion() {
       const publicada = await versionPublicada()
       if (!vivo || !publicada) return
 
-      // La primera lectura solo sirve para saber con qué versión se abrió esta
-      // pestaña; no hay nada que actualizar todavía.
-      if (mia.current === null) { mia.current = publicada; return }
+      // Sin marca propia no hay nada que comparar: pasa solo en desarrollo.
+      if (!MIA) return
 
-      if (publicada !== mia.current) {
+      if (publicada !== MIA) {
+        objetivo.current = publicada
         hayNueva.current = true
         desde.current = Date.now()
         arrancar()
+      } else {
+        // Al día. Si se venía de una recarga a medias, ya se puede olvidar.
+        olvidaIntentos()
       }
     }
 
@@ -141,20 +173,33 @@ export default function AvisoActualizacion() {
     ;(async () => {
       try { sessionStorage.setItem(MARCA, '1') } catch { /* da igual */ }
 
-      // Vaciar las cachés es lo que hace que la recarga sirva de algo: el
-      // service worker guarda la aplicación entera y, sin esto, volvería a
-      // servir exactamente los mismos archivos viejos.
-      try {
-        if (window.caches) {
-          const nombres = await caches.keys()
-          await Promise.all(nombres.map(n => caches.delete(n)))
-        }
-      } catch { /* si no deja borrarlas, se recarga igual */ }
-
+      // Recargar a secas no basta: el service worker sirve la aplicación
+      // entera desde su caché, así que devolvería exactamente los mismos
+      // archivos viejos. Hay que hacerle buscar el worker nuevo y esperar a
+      // que se instale; con `skipWaiting` entra en cuanto está listo.
       try {
         const regs = (await navigator.serviceWorker?.getRegistrations?.()) || []
-        await Promise.all(regs.map(r => r.update().catch(() => {})))
-      } catch { /* idem */ }
+
+        // Si ya se intentó dos veces y la versión sigue siendo la vieja, el
+        // worker está atascado —pasa cuando el instalado quedó de una versión
+        // anterior a esta forma de actualizar— y se echa abajo del todo: se
+        // borran sus cachés y se da de baja. Es el último recurso, no el
+        // camino normal, porque deja la aplicación sin funcionar sin conexión
+        // hasta que se registra otra vez al cargar.
+        apuntaIntento(objetivo.current)
+        if (intentosFallidos(objetivo.current) > 2) {
+          if (window.caches) {
+            const nombres = await caches.keys()
+            await Promise.all(nombres.map(n => caches.delete(n)))
+          }
+          await Promise.all(regs.map(r => r.unregister().catch(() => {})))
+        } else {
+          await Promise.race([
+            Promise.all(regs.map(r => r.update().catch(() => {}))),
+            new Promise(r => setTimeout(r, 6000)),   // sin red, no se espera más
+          ])
+        }
+      } catch { /* sin service worker; la recarga normal ya sirve */ }
 
       if (!cancelado) window.location.reload()
     })()
