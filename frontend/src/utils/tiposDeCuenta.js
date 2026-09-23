@@ -37,6 +37,15 @@ const SIN_TIPO = ['nequi', 'daviplata', 'movii', 'rappipay', 'yape', 'plin', 'lu
 
 const sinAcentos = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
+// El mismo producto, con el nombre de cada sitio. Cada fila es una familia:
+// basta con reconocer una palabra de la fila para encontrar la equivalente en
+// la lista del país de destino.
+const FAMILIAS = [
+  ['vista'],                                             // solo Chile
+  ['ahorro', 'poupanc', 'saving'],
+  ['corriente', 'corrente', 'checking', 'chequing', 'cheque'],
+]
+
 /** Los tipos que hay que ofrecer. Vacío = este destino no tiene tipo de cuenta. */
 export function tiposDeCuenta(pais, nombreBanco) {
   const banco = sinAcentos(nombreBanco)
@@ -60,12 +69,14 @@ export function normalizaTipo(pais, texto, nombreBanco) {
   const exacto = lista.find(o => sinAcentos(o) === t)
   if (exacto) return exacto
 
-  // Por la palabra que distingue: ahorro / corriente / vista / cheque.
-  const raiz = ['ahorro', 'poupanc', 'saving', 'corriente', 'corrente', 'chequing',
-    'checking', 'vista', 'cheque'].find(r => t.includes(r))
-  if (!raiz) return ''
+  // Por familia, no por la palabra exacta: lo que en Colombia es "Ahorros" en
+  // Brasil se llama "Poupança" y en Estados Unidos "Savings". Sin esto, pegar
+  // los datos de un brasileño no marcaba nada.
+  const familia = FAMILIAS.find(f => f.some(r => t.includes(r)))
+  if (!familia) return ''
 
-  // "cheque" es ambiguo: en México es "cuenta de cheques" y en Chile la
-  // "chequera electrónica". Se resuelve dentro de la lista del país, no aquí.
-  return lista.find(o => sinAcentos(o).includes(raiz)) || ''
+  // Dentro de la lista del país y en su orden: "cheque" vale tanto para la
+  // "cuenta de cheques" mexicana como para la "chequera electrónica" chilena,
+  // y en Chile la corriente va primero porque es la que se usa.
+  return lista.find(o => familia.some(r => sinAcentos(o).includes(r))) || ''
 }
