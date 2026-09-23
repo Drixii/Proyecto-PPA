@@ -74,10 +74,21 @@ def list_sub_admin_orders(
                 Order.receiver_country.in_(countries),
             )
     elif status in ("en_proceso", "completado"):
-        query = db.query(Order).filter(
-            Order.status == status,
-            Order.sub_admin_id == current_user.id,
-        )
+        # Las suyas, y además las que están en marcha en sus países sin
+        # encargado asignado. Esas aparecían en ninguna cola: un envío pagado
+        # antes de que existiera el sub-admin del país se quedaba esperando a
+        # que lo viera alguien que nunca lo iba a ver.
+        if status == "en_proceso" and countries:
+            query = db.query(Order).filter(
+                Order.status == status,
+                ((Order.sub_admin_id == current_user.id) |
+                 ((Order.sub_admin_id == None) & (Order.receiver_country.in_(countries)))),
+            )
+        else:
+            query = db.query(Order).filter(
+                Order.status == status,
+                Order.sub_admin_id == current_user.id,
+            )
     else:
         # All statuses for this sub-admin
         if countries:
@@ -86,7 +97,10 @@ def list_sub_admin_orders(
                  (Order.payment_proof.isnot(None)) &
                  (Order.receiver_country.in_(countries))) |
                 ((Order.status.in_(["en_proceso", "completado"])) &
-                 (Order.sub_admin_id == current_user.id))
+                 (Order.sub_admin_id == current_user.id)) |
+                ((Order.status == "en_proceso") &
+                 (Order.sub_admin_id == None) &
+                 (Order.receiver_country.in_(countries)))
             )
         else:
             query = db.query(Order).filter(

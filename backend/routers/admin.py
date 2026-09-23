@@ -859,6 +859,24 @@ def create_user_admin(
             db.add(SubAdminCountry(user_id=user.id, country=c))
         db.commit()
 
+        # Los envíos que ya estaban en marcha en esos países pasan a ser suyos.
+        #
+        # Esto ya se hacía al EDITAR los países de un sub-admin, pero no al
+        # crearlo con ellos, que es el caso normal. Un envío aprobado antes de
+        # que existiera su encargado se quedaba con el hueco vacío para
+        # siempre: no aparecía en la cola de nadie y el cliente esperaba sin
+        # que nadie lo estuviera mirando.
+        huerfanas = db.query(Order).filter(
+            Order.status.in_(["en_aprobacion", "en_proceso"]),
+            Order.sub_admin_id == None,
+            Order.deleted_at == None,
+            Order.receiver_country.in_(data.managed_countries),
+        ).all()
+        for o in huerfanas:
+            o.sub_admin_id = user.id
+        if huerfanas:
+            db.commit()
+
     # Link sub-admin to creating admin
     if data.role == "sub_admin":
         existing = db.query(AdminSubAdmin).filter(

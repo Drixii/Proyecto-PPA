@@ -640,7 +640,11 @@ export default function NewTransfer() {
       const payload = {
         sender_name: (pagador.sender_name || '').trim() || user.full_name,
         sender_phone: (pagador.sender_phone || '').trim() || user.phone || '',
-        sender_country: user.country || 'Chile',
+        // El país DESDE el que se envía, que es el elegido en la calculadora
+        // —no el del perfil—. Mandando el del perfil, un envío desde Estados
+        // Unidos quedaba registrado como salido de Chile: la comisión de la
+        // ruta se cobraba mal y en la cartera aparecía el origen equivocado.
+        sender_country: calc.fromCountry || user.country || 'Chile',
         sender_id_type: pagador.sender_id_type || undefined,
         sender_id_num: (pagador.sender_id_num || '').trim() || undefined,
         ...receiver,
