@@ -22,6 +22,13 @@ class OrderCreate(BaseModel):
     receiver_account: Optional[str] = None
     receiver_id_type: Optional[str] = None
     receiver_id_num: Optional[str] = None
+    # Colombia: persona o empresa, apellido aparte, correo, tipo de cuenta y la
+    # llave Bre-B para quien cobra por ahí en lugar de por número de cuenta.
+    receiver_type: Optional[str] = None
+    receiver_last_name: Optional[str] = None
+    receiver_email: Optional[str] = None
+    receiver_account_type: Optional[str] = None
+    receiver_key: Optional[str] = None
     # Montos
     amount_sent: float
     currency_from: str
@@ -47,6 +54,11 @@ class OrderOut(BaseModel):
     receiver_account: Optional[str]
     receiver_id_type: Optional[str]
     receiver_id_num: Optional[str]
+    receiver_type: Optional[str] = None
+    receiver_last_name: Optional[str] = None
+    receiver_email: Optional[str] = None
+    receiver_account_type: Optional[str] = None
+    receiver_key: Optional[str] = None
     amount_sent: float
     currency_from: str
     currency_to: str

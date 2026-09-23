@@ -26,6 +26,14 @@ class Order(Base):
     receiver_account = Column(String, nullable=True)
     receiver_id_type = Column(String, nullable=True)
     receiver_id_num = Column(String, nullable=True)
+    # Lo que pide Colombia y no cabía antes. `receiver_type` es 'persona' o
+    # 'empresa'; `receiver_key` es la llave Bre-B de quien cobra por ahí en vez
+    # de por número de cuenta (un arroba, un celular, una cédula o un correo).
+    receiver_type = Column(String, nullable=True)
+    receiver_last_name = Column(String, nullable=True)
+    receiver_email = Column(String, nullable=True)
+    receiver_account_type = Column(String, nullable=True)
+    receiver_key = Column(String, nullable=True)
 
     # Montos
     amount_sent = Column(Float, nullable=False)

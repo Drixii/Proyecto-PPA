@@ -125,6 +125,15 @@ def _run_migrations():
         "ALTER TABLE orders ADD COLUMN hold_reason VARCHAR",
         "ALTER TABLE orders ADD COLUMN released_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE orders ADD COLUMN released_by_id INTEGER",
+        # Datos del destinatario que pide Colombia y que antes no cabían en el
+        # formulario: si es persona o empresa, el apellido aparte del nombre,
+        # el correo, el tipo de cuenta y la llave Bre-B para quien cobra por
+        # ahí en vez de por número de cuenta.
+        "ALTER TABLE orders ADD COLUMN receiver_type VARCHAR",
+        "ALTER TABLE orders ADD COLUMN receiver_last_name VARCHAR",
+        "ALTER TABLE orders ADD COLUMN receiver_email VARCHAR",
+        "ALTER TABLE orders ADD COLUMN receiver_account_type VARCHAR",
+        "ALTER TABLE orders ADD COLUMN receiver_key VARCHAR",
         "ALTER TABLE invite_codes ADD COLUMN trusted BOOLEAN DEFAULT FALSE",
         "ALTER TABLE commission_rules ADD COLUMN from_country VARCHAR",
         "ALTER TABLE commission_rules ADD COLUMN to_country VARCHAR",
@@ -178,6 +187,11 @@ async def lifespan(app: FastAPI):
         creados = seed_countries_if_empty(db)
         if creados:
             log.info("Países sembrados: %s", creados)
+
+        # Bancos del destinatario. Sin catálogo, el banco se escribía a mano y
+        # cada cliente lo ponía a su manera; quien paga tenía que interpretarlo.
+        from services.bancos_seed import sembrar_si_falta
+        sembrar_si_falta(db)
 
         # Las claves de Stripe pasaron a guardarse por modo (prueba/real). Las
         # que ya estaban puestas son las reales: se mueven a su sitio para que
