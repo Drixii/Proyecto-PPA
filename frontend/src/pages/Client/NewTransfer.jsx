@@ -3,6 +3,7 @@ import CampoSelector from '../../components/CampoSelector'
 import MarcaPago, { ProcesadoPor, nombreDeMetodo } from '../../components/MarcaPago'
 import CopiaMontoLink from '../../components/CopiaMontoLink'
 import PegarDatosReceptor from '../../components/PegarDatosReceptor'
+import { leeDatosBancarios } from '../../utils/leeDatosBancarios'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -1217,7 +1218,29 @@ export default function NewTransfer() {
 
                 <div>
                   <label className="text-sm block mb-1.5" style={{color:'#aebfe2'}}>Nombre completo *</label>
-                  <input type="text" value={receiver.receiver_name} onChange={e => setReceiver({ ...receiver, receiver_name: e.target.value })}
+                  {/* Pegar el mensaje entero aquí también reparte: mucha gente
+                      va directo a la primera casilla y pega, sin mirar el botón
+                      de arriba. */}
+                  <input type="text" value={receiver.receiver_name}
+                    onPaste={e => {
+                      const t = e.clipboardData?.getData('text') || ''
+                      if (!t.includes(String.fromCharCode(10))) return
+                      const d = leeDatosBancarios(t, { pais: calc.toCountry, bancos: banksData || [] })
+                      if (!d) return
+                      e.preventDefault()
+                      setReceiver(r => ({
+                        ...r,
+                        receiver_name: d.nombre || r.receiver_name,
+                        receiver_phone: d.telefono ? formateaTelefono(d.telefono) : r.receiver_phone,
+                        receiver_account: d.cuenta || r.receiver_account,
+                        receiver_bank_id: d.banco?.id ?? r.receiver_bank_id,
+                        receiver_id_num: d.documento || r.receiver_id_num,
+                        receiver_account_type: d.tipoCuenta || r.receiver_account_type,
+                        receiver_id_type: (COUNTRY_ID_TYPES[calc.toCountry] || DEFAULT_ID_TYPES)
+                          .includes(d.tipoDocumento) ? d.tipoDocumento : r.receiver_id_type,
+                      }))
+                    }}
+                    onChange={e => setReceiver({ ...receiver, receiver_name: e.target.value })}
                     className="w-full rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{background:'rgba(6,13,40,.8)', border:'1px solid rgba(255,255,255,.1)', color:'#eaf2ff'}} />
                 </div>

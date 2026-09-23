@@ -32,9 +32,23 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
     cerrar()
   }
 
+  // Un solo toque: se lee lo que el cliente ya tiene copiado y se interpreta.
+  //
+  // El navegador solo deja leer el portapapeles a raíz de un clic y pidiendo
+  // permiso la primera vez; Firefox directamente no lo permite. Cuando no se
+  // puede, queda el recuadro de siempre para pegar a mano — que es lo mismo
+  // que había antes, no una vía muerta.
+  const abrirLeyendoPortapapeles = async () => {
+    setAbierto(true)
+    try {
+      const copiado = await navigator.clipboard.readText()
+      if (copiado?.trim()) interpretar(copiado)
+    } catch { /* sin permiso o sin soporte: se pega a mano */ }
+  }
+
   if (!abierto) {
     return (
-      <button type="button" onClick={() => setAbierto(true)}
+      <button type="button" onClick={abrirLeyendoPortapapeles}
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold"
         style={{ background: 'rgba(56,189,248,.08)', border: '1px dashed rgba(56,189,248,.35)', color: '#7dd3fc' }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -59,11 +73,12 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
       style={{ background: 'rgba(6,13,40,.6)', border: '1px solid rgba(56,189,248,.25)' }}>
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold" style={{ color: '#7dd3fc' }}>
-          Pega aquí el mensaje con los datos
+          {leido ? 'Esto es lo que tenías copiado' : 'Pega aquí el mensaje con los datos'}
         </p>
         <button type="button" onClick={cerrar} className="text-sm" style={{ color: '#64748b' }}>✕</button>
       </div>
 
+      {!leido && (
       <textarea
         autoFocus
         value={texto}
@@ -73,6 +88,7 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
         className="w-full rounded-xl px-3 py-2.5 text-xs focus:outline-none"
         style={{ background: 'rgba(6,13,40,.9)', border: '1px solid rgba(255,255,255,.1)', color: '#eaf2ff', resize: 'vertical' }}
       />
+      )}
 
       {nada && (
         <p className="text-xs" style={{ color: '#fcd34d' }}>
@@ -110,10 +126,15 @@ export default function PegarDatosReceptor({ pais, bancos = [], onUsar }) {
               style={{ background: 'linear-gradient(135deg,#22c55e,#15803d)', border: 'none', color: '#fff' }}>
               Usar estos datos
             </button>
-            <button type="button" onClick={cerrar}
+            <button type="button" onClick={() => { setLeido(null); setTexto('') }}
               className="text-xs font-semibold py-2 px-3 rounded-lg"
               style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', color: '#aebfe2' }}>
-              Descartar
+              Otro texto
+            </button>
+            <button type="button" onClick={cerrar}
+              className="text-xs font-semibold py-2 px-3 rounded-lg"
+              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.1)', color: '#64748b' }}>
+              ✕
             </button>
           </div>
         </div>
