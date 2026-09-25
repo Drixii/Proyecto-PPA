@@ -371,6 +371,7 @@ export default function Finanzas() {
                         key={`${d.id}:${origen}`}
                         pais={d}
                         pct={pctDe(d.name)}
+                        moneda={paisOrigen?.currency}
                         columnas={columnas}
                         porColumna={porColumna}
                         borrador={borrador}
@@ -396,7 +397,7 @@ export default function Finanzas() {
                         </td>
                       ))}
                       <td style={{ ...pieCelda, ...separa, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
-                        {miles(totalMovido)}
+                        {miles(totalMovido)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>{paisOrigen?.currency}</span>
                       </td>
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14, borderRight: 'none' }}>
                         {miles(totalGanado)}
@@ -467,15 +468,19 @@ const ANCHO_BADGE = 44
  * No cuenta para el ancho de la columna: el texto es más largo que el propio
  * monto, y era eso —no las cifras— lo que estaba abriendo las columnas.
  */
-function Comision({ monto, pct }) {
-  if (!monto || !pct) return null
+function Comision({ monto, pct, moneda }) {
+  if (!monto) return null
   return (
-    <p title={`Comisión del ${miles(pct)}%`}
+    <p title={pct ? `Comisión del ${miles(pct)}%` : undefined}
       style={{
-        fontSize: 10, color: '#4ade80', textAlign: 'right', lineHeight: 1.2,
+        fontSize: 10, textAlign: 'right', lineHeight: 1.2,
         padding: '0 7px 3px', width: 0, minWidth: '100%', whiteSpace: 'nowrap',
       }}>
-      comisión: {miles(monto * pct / 100)}
+      {/* La moneda va aquí abajo y no pegada a la cifra: así se sabe en qué
+          está anotado el monto sin que el texto abra la columna. */}
+      {moneda && <span style={{ color: '#64748b' }}>{moneda}</span>}
+      {moneda && pct ? <span style={{ color: '#334155' }}> · </span> : null}
+      {pct ? <span style={{ color: '#4ade80' }}>comisión: {miles(monto * pct / 100)}</span> : null}
     </p>
   )
 }
@@ -539,7 +544,7 @@ function BadgePorcentaje({ valor, onGuardar }) {
  * tocarla el movimiento se pasa a este país, que es como se corrige haberse
  * equivocado de fila sin tener que borrar nada.
  */
-function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorrador, onEditar, onBorrar }) {
+function Casilla({ pais, col, apunte, pct, moneda, borrador, setBorrador, onGuardarBorrador, onEditar, onBorrar }) {
   const suya = apunte && apunte.destino === pais.name
   const trancada = apunte && !suya
   const enBorrador = !apunte && borrador.col === col && borrador.destino === pais.name
@@ -571,7 +576,7 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
           title="Quitar este movimiento">
           ✕
         </button>
-        <Comision monto={apunte.monto} pct={pct} />
+        <Comision monto={apunte.monto} pct={pct} moneda={moneda} />
       </td>
     )
   }
@@ -587,14 +592,14 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
           texto: conPuntos(e.target.value),
         })}
         onBlur={onGuardarBorrador} />
-      {enBorrador && <Comision monto={aNumero(borrador.texto)} pct={pct} />}
+      {enBorrador && <Comision monto={aNumero(borrador.texto)} pct={pct} moneda={moneda} />}
     </td>
   )
 }
 
 /** Un país: su porcentaje, sus casillas y lo que deja. */
 function FilaPais({
-  pais, pct, columnas, porColumna, borrador, setBorrador, onGuardarBorrador,
+  pais, pct, moneda, columnas, porColumna, borrador, setBorrador, onGuardarBorrador,
   onPorcentaje, onEditar, onBorrar, movido, ganado,
 }) {
   return (
@@ -616,6 +621,7 @@ function FilaPais({
             col={c}
             apunte={apunte}
             pct={pct}
+            moneda={moneda}
             borrador={borrador}
             setBorrador={setBorrador}
             onGuardarBorrador={onGuardarBorrador}
@@ -626,7 +632,7 @@ function FilaPais({
       })}
 
       <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', color: '#aebfe2', fontSize: 13 }}>
-        {movido ? miles(movido) : ''}
+        {movido ? <>{miles(movido)} <span style={{ fontSize: 10.5, color: '#64748b' }}>{moneda}</span></> : ''}
       </td>
       <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
         {ganado ? miles(ganado) : ''}
