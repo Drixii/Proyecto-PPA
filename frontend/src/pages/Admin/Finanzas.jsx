@@ -258,13 +258,12 @@ export default function Finanzas() {
               </div>
 
               <div style={{ ...GLASS, overflow: 'auto' }}>
-                {/* `width: auto`, no 100%.
-                    Con la tabla estirada hasta el borde, el navegador reparte
-                    el ancho sobrante entre TODAS las columnas —`width: 1%` es
-                    una pista, no una orden— y por eso seguían an­chas por mucho
-                    que se les pidiera lo contrario. Suelta, cada columna mide
-                    lo que ocupa su contenido y ya está. */}
-                <table style={{ borderCollapse: 'collapse', width: 'auto' }}>
+                {/* `max-content`: la tabla mide exactamente lo que ocupa su
+                    contenido y ni un píxel más. Con `100%` se estiraba hasta el
+                    borde repartiendo el sobrante entre todas las columnas, y
+                    con `auto` pasaba lo mismo porque las celdas pedían su ancho
+                    en porcentaje. */}
+                <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
                   <thead>
                     <tr>
                       <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 8px 9px 5px' }}>
@@ -361,10 +360,12 @@ export default function Finanzas() {
 // cifras de dos movimientos seguidos parecían la misma columna.
 const RAYA = '1px solid rgba(255,255,255,.09)'
 
-// `width: 1%` con el texto sin partir es cómo se le pide a una tabla que una
-// columna ocupe lo justo: el navegador reparte el ancho sobrante entre las que
-// no lo piden, y aquí la única que lo pide es la separadora.
-const ajustada = { width: '1%', whiteSpace: 'nowrap' }
+// Solo "no partas el texto". El `width: 1%` que había aquí hacía lo contrario
+// de lo que parece: un ancho en porcentaje obliga al navegador a calcular la
+// tabla contra el ancho del contenedor, o sea a estirarla. Medido en la web:
+// la columna del país salía a 363 px y cada movimiento a 210. Lo que encoge de
+// verdad es el `max-content` de la tabla.
+const ajustada = { whiteSpace: 'nowrap' }
 
 const cabecera = {
   ...ajustada,
