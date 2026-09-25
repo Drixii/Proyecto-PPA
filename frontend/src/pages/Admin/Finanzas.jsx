@@ -15,6 +15,15 @@ const miles = n => (Number(n) || 0).toLocaleString('es-CL', { maximumFractionDig
 // El peso chileno no tiene céntimos: "119.732,23" no es una cifra que exista.
 const pesos = n => Math.round(Number(n) || 0).toLocaleString('es-CL')
 
+// "septiembre", a partir del primer día que manda el servidor. Se toma de ahí
+// y no del reloj de quien mira: el mes lo decide el calendario chileno, que es
+// donde está la caja.
+function nombreDelMes(iso) {
+  if (!iso) return 'este mes'
+  const [a, m] = String(iso).split('-').map(Number)
+  return new Date(a, m - 1, 1).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+}
+
 // Lo escrito a mano, a número. Se acepta como lo escribe la gente: "20.000",
 // "20000", "20.000,50". El punto es separador de miles y la coma decimal, que
 // es como se escribe en toda la región.
@@ -297,7 +306,7 @@ export default function Finanzas() {
                 paises={origenes} porOrigen={porOrigen} totales={totales}
                 sinTasa={respuesta?.sin_tasa || 0} />
               <Resumen titulo="Acumulable diario"
-                nota="todo lo anotado, en pesos chilenos"
+                nota={`lo que va de ${nombreDelMes(acumulado.desde)}, en pesos chilenos`}
                 paises={origenes} porOrigen={acumulado.por_origen} totales={acumulado.totales}
                 sinTasa={acumulado.sin_tasa || 0} />
             </div>

@@ -8,7 +8,8 @@ Cada super-admin ve solo lo suyo, y eso se comprueba en cada operación contra
 el dueño guardado en la fila, nunca contra lo que venga en la petición.
 """
 import logging
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -217,11 +218,17 @@ def listar(
 
     por_origen, total_dia, sin_tasa_dia = _suma_en_caja(filas)
 
-    # Y lo mismo sin mirar las fechas: el acumulado de todo lo anotado, que es
-    # lo que va sumando día tras día. Se calcula aquí y no en otra llamada
-    # porque siempre se piden juntos —el día al lado del acumulado— y son dos
-    # sumas sobre la misma tabla.
-    acum_origen, total_acum, sin_tasa_acum = _suma_en_caja(todo)
+    # Y el acumulado del mes en curso, que es lo que va sumando día tras día.
+    #
+    # No mira el filtro de fechas a propósito: al lado tiene la suma del día
+    # que se esté viendo, y si los dos cambiaran a la vez serían el mismo dato
+    # dos veces. El mes se toma del calendario chileno, no del reloj del
+    # servidor, que va en UTC y el primer día del mes cambiaría de mes a las
+    # nueve de la noche.
+    hoy_chile = datetime.now(ZoneInfo("America/Santiago")).date()
+    primero = hoy_chile.replace(day=1)
+    del_mes = [a for a in todo if primero <= a.fecha <= hoy_chile]
+    acum_origen, total_acum, sin_tasa_acum = _suma_en_caja(del_mes)
 
     return {
         "data": apuntes,
@@ -233,6 +240,8 @@ def listar(
             "por_origen": acum_origen,
             "totales": [total_acum],
             "sin_tasa": sin_tasa_acum,
+            "desde": primero.isoformat(),
+            "hasta": hoy_chile.isoformat(),
         },
         # Todas las rutas con porcentaje puesto, no solo las que tienen apuntes
         # en este rango: el badge del país tiene que verse aunque ese día no se
