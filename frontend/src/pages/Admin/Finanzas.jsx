@@ -824,14 +824,20 @@ function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa
   // vez de quedar espachurrados.
   return (
     <div style={{ flex: '1 1 380px', minWidth: 300 }}>
-      <p style={{ marginBottom: 9, fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
-        {titulo}
-        {nota && (
-          <span style={{ fontWeight: 500, fontSize: 12, color: '#64748b', marginLeft: 7 }}>{nota}</span>
-        )}
-      </p>
+      {/* Los títulos ocupan lo mismo lleven selector de mes o no, para que las
+          dos tablas arranquen a la misma altura. Sin esto, la de la derecha
+          bajaba lo que mide el selector y las filas de una no coincidían con
+          las de la otra, que es justo lo que se quiere comparar. */}
+      <div style={{ minHeight: 64, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+        <p style={{ marginBottom: encabezado ? 8 : 9, fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
+          {titulo}
+          {nota && (
+            <span style={{ fontWeight: 500, fontSize: 12, color: '#64748b', marginLeft: 7 }}>{nota}</span>
+          )}
+        </p>
 
-      {encabezado && <div style={{ marginBottom: 9 }}>{encabezado}</div>}
+        {encabezado && <div style={{ marginBottom: 9 }}>{encabezado}</div>}
+      </div>
 
       {/* Lo que no se pudo pasar a pesos se dice, en vez de dar el total por
           bueno: un total al que le falta dinero es peor que un total con una
