@@ -163,6 +163,13 @@ export default function Finanzas() {
         .fin-cel:hover:not(:disabled){border-color:rgba(255,255,255,.12)}
         .fin-cel:focus{outline:none;border-color:#38bdf8;background:rgba(56,189,248,.07)}
         .fin-cel.trancada{color:#2b3a55;cursor:pointer}
+        /* La aspa de quitar iba dentro de la fila y le sumaba su ancho a la
+           columna entera. Ahora se superpone sobre la cifra y solo asoma al
+           pasar por encima. */
+        .fin-x{position:absolute;left:0;top:3px;opacity:0;color:#64748b;font-size:12px;
+          line-height:1;padding:3px;transition:opacity .12s}
+        .fin-casilla:hover .fin-x{opacity:1}
+        .fin-x:hover{color:#f87171}
         .fin-nav{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;
           font-size:13px;font-weight:600;transition:background .15s,color .15s}
       `}</style>
@@ -257,7 +264,7 @@ export default function Finanzas() {
                 )}
               </div>
 
-              <div style={{ ...GLASS, overflow: 'auto' }}>
+              <div style={{ ...GLASS, overflow: 'auto', width: 'max-content', maxWidth: '100%' }}>
                 {/* `max-content`: la tabla mide exactamente lo que ocupa su
                     contenido y ni un píxel más. Con `100%` se estiraba hasta el
                     borde repartiendo el sobrante entre todas las columnas, y
@@ -396,12 +403,22 @@ const pegadaPais = {
 // quede alineado de fila a fila.
 const ANCHO_BADGE = 44
 
-/** Lo que se lleva la casa de ese monto, bajo la propia cifra. */
+/**
+ * Lo que se lleva la casa de ese monto, bajo la propia cifra.
+ *
+ * Se escribe corto y no cuenta para el ancho de la columna: "comisión:
+ * 1.250.000" es más largo que el propio monto, y era eso —no las cifras— lo
+ * que estaba abriendo las columnas.
+ */
 function Comision({ monto, pct }) {
   if (!monto || !pct) return null
   return (
-    <p style={{ fontSize: 10.5, color: '#4ade80', textAlign: 'right', padding: '0 9px 4px', lineHeight: 1.2 }}>
-      comisión: {miles(monto * pct / 100)}
+    <p title={`Comisión del ${miles(pct)}%`}
+      style={{
+        fontSize: 10, color: '#4ade80', textAlign: 'right', lineHeight: 1.2,
+        padding: '0 7px 3px', width: 0, minWidth: '100%', whiteSpace: 'nowrap',
+      }}>
+      com. {miles(monto * pct / 100)}
     </p>
   )
 }
@@ -484,19 +501,17 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
 
   if (suya) {
     return (
-      <td style={{ ...celda, background: 'rgba(56,189,248,.04)' }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
-            onChange={e => setTexto(conPuntos(e.target.value))}
-            onBlur={() => {
-              const n = aNumero(texto)
-              if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
-            }} />
-          <button type="button" onClick={() => onBorrar(apunte.id)} title="Quitar este movimiento"
-            style={{ color: '#475569', padding: '0 5px', fontSize: 12, lineHeight: 1 }}>
-            ✕
-          </button>
-        </div>
+      <td className="fin-casilla" style={{ ...celda, background: 'rgba(56,189,248,.04)', position: 'relative' }}>
+        <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
+          onChange={e => setTexto(conPuntos(e.target.value))}
+          onBlur={() => {
+            const n = aNumero(texto)
+            if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
+          }} />
+        <button type="button" className="fin-x" onClick={() => onBorrar(apunte.id)}
+          title="Quitar este movimiento">
+          ✕
+        </button>
         <Comision monto={apunte.monto} pct={pct} />
       </td>
     )
