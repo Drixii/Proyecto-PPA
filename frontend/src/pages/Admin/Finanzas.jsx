@@ -97,6 +97,9 @@ export default function Finanzas() {
   const apuntes = respuesta?.data || []
   const totales = respuesta?.totales || []
   const porOrigen = respuesta?.por_origen || []
+  // Todo lo anotado desde siempre, sin mirar las fechas: es lo que va
+  // sumando día tras día.
+  const acumulado = respuesta?.acumulado || { por_origen: [], totales: [] }
   // El porcentaje es de la ruta, no de la línea: el badge de cada país.
   const pctDe = (destino) => (respuesta?.porcentajes || [])
     .find(p => p.origen === origen && p.destino === destino)?.porcentaje ?? 0
@@ -126,6 +129,9 @@ export default function Finanzas() {
   // hasta que tenga monto: guardar columnas en blanco llenaría el cuaderno de
   // apuntes en cero.
   const [borrador, setBorrador] = useState({ col: null, destino: null, texto: '' })
+
+  // Qué se está mirando: lo que se anota, o lo que suma.
+  const [vista, setVista] = useState('diarios')   // 'diarios' | 'total'
 
   const guardarBorrador = async () => {
     const monto = aNumero(borrador.texto)
@@ -263,8 +269,50 @@ export default function Finanzas() {
           )}
         </div>
 
+        {/* Qué se mira de ese país: los montos que se anotan día a día, o lo
+            que suman. Van en pestañas y no uno debajo del otro porque no se
+            usan a la vez: se anota, o se mira el total. */}
+        <div style={{
+          display: 'flex', gap: 4, padding: '0 22px',
+          borderBottom: '1px solid rgba(255,255,255,.07)',
+        }}>
+          {[['diarios', 'Montos diarios'], ['total', 'Total']].map(([id, txt]) => {
+            const activa = vista === id
+            return (
+              <button key={id} type="button" onClick={() => setVista(id)}
+                style={{
+                  padding: '10px 16px', fontSize: 13, fontWeight: 600,
+                  color: activa ? '#7dd3fc' : '#64748b',
+                  borderBottom: `2px solid ${activa ? '#38bdf8' : 'transparent'}`,
+                  marginBottom: -1, transition: 'color .15s',
+                }}>
+                {txt}
+              </button>
+            )
+          })}
+        </div>
+
         <div style={{ flex: 1, padding: '18px 22px', overflow: 'auto' }}>
-          {origen && (
+          {vista === 'total' && (
+            <>
+              {/* El mismo filtro que arriba: la suma del día depende de qué
+                  día, y sin él aquí habría que volver a la otra pestaña para
+                  cambiarlo. El acumulado no lo mira: es todo. */}
+              <div style={{ marginBottom: 16 }}>
+                <DateRangePicker value={rango} onChange={setRango} />
+              </div>
+
+            <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <Resumen titulo={variosDias ? 'Suma total del rango' : 'Suma total del día'}
+                paises={origenes} porOrigen={porOrigen} totales={totales} />
+              <Resumen titulo="Acumulable diario"
+                nota="todo lo anotado hasta hoy"
+                paises={origenes} porOrigen={acumulado.por_origen} totales={acumulado.totales} />
+            </div>
+            </>
+          )}
+
+          {vista === 'diarios' && origen && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
                 <h2 style={{ fontSize: 22, fontWeight: 800, color: '#eaf2ff', letterSpacing: '-.01em' }}>
@@ -297,13 +345,13 @@ export default function Finanzas() {
                 <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
                   <thead>
                     <tr>
-                      <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 8px 9px 5px' }}>
+                      <th style={{ ...cabecera, ...pegadaPais, padding: '9px 8px' }}>
                         % · PAÍS
                       </th>
 
                       {/* Una columna por cliente, numeradas como se anotan. */}
                       {columnas.map(c => (
-                        <th key={c} style={{ ...cabecera, color: '#64748b', textAlign: 'right' }}>
+                        <th key={c} style={{ ...cabecera, color: '#64748b' }}>
                           Cliente {c + 1}
                         </th>
                       ))}
@@ -312,8 +360,8 @@ export default function Finanzas() {
                           título entre medias que no se entendía; ahora lo que
                           los separa de los movimientos es una raya más marcada
                           y su propio nombre. */}
-                      <th style={{ ...cabecera, ...separa, textAlign: 'right', color: '#aebfe2' }}>TOTAL</th>
-                      <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>COMISIÓN</th>
+                      <th style={{ ...cabecera, ...separa, color: '#aebfe2' }}>TOTAL</th>
+                      <th style={{ ...cabecera, color: '#4ade80', borderRight: 'none' }}>COMISIÓN</th>
                     </tr>
                   </thead>
 
@@ -360,13 +408,6 @@ export default function Finanzas() {
             </>
           )}
 
-          {/* El cuadro de abajo no cambia al moverse de país: es el resumen
-              de todos, con lo que movió cada uno y lo que dejó.
-
-              Los totales van por moneda y sin convertir nada. Mezclar pesos
-              chilenos con argentinos a la tasa de hoy daría una cifra que
-              mañana es otra, y esto es un registro de lo que pasó. */}
-          <Resumen paises={origenes} porOrigen={porOrigen} totales={totales} unDia={!variosDias} />
         </div>
       </main>
     </div>
@@ -389,6 +430,9 @@ const cabecera = {
   position: 'sticky', top: 0, zIndex: 2, background: '#071331',
   padding: '9px 6px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
   borderBottom: '1px solid rgba(255,255,255,.08)', borderRight: RAYA, color: '#7dd3fc',
+  // Centradas todas: media fila alineada a un lado y media al otro se leía
+  // como dos tablas distintas.
+  textAlign: 'center',
 }
 const celda = {
   ...ajustada,
@@ -654,15 +698,16 @@ function PorcentajeGeneral({ onPoner }) {
 }
 
 /** Lo que movió y lo que dejó cada país, y el total. */
-function Resumen({ paises, porOrigen, totales, unDia }) {
+function Resumen({ titulo, nota, paises, porOrigen, totales }) {
   const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
   return (
-    <>
-      {/* Dice "del día" solo cuando se está mirando un día: con un rango de
-          fechas elegido, ese título estaría mintiendo sobre lo que suma. */}
-      <p style={{ marginTop: 24, marginBottom: 9, fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
-        Suma total {unDia ? 'del día' : 'del rango'}
+    <div>
+      <p style={{ marginBottom: 9, fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
+        {titulo}
+        {nota && (
+          <span style={{ fontWeight: 500, fontSize: 12, color: '#64748b', marginLeft: 7 }}>{nota}</span>
+        )}
       </p>
     <div style={{ ...GLASS, width: 'max-content', maxWidth: '100%', overflow: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
@@ -720,6 +765,6 @@ function Resumen({ paises, porOrigen, totales, unDia }) {
         </tfoot>
       </table>
     </div>
-    </>
+    </div>
   )
 }

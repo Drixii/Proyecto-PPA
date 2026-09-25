@@ -143,10 +143,36 @@ def listar(
         o["movido"] = round(o["movido"], 2)
         o["ganado"] = round(o["ganado"], 2)
 
+    # Y lo mismo sin mirar las fechas: el acumulado de todo lo anotado, que es
+    # lo que va sumando día tras día. Se calcula aquí y no en otra llamada
+    # porque siempre se piden juntos —el día al lado del acumulado— y son dos
+    # sumas sobre la misma tabla.
+    acum_origen: dict[str, dict] = {}
+    acum_moneda: dict[str, dict] = {}
+    for a in db.query(FinanceEntry).filter(FinanceEntry.super_admin_id == admin.id).all():
+        ganancia = a.monto * a.porcentaje / 100
+        o = acum_origen.setdefault(a.origen, {
+            "origen": a.origen, "moneda": a.moneda, "movido": 0.0, "ganado": 0.0,
+        })
+        o["movido"] += a.monto
+        o["ganado"] += ganancia
+        m = acum_moneda.setdefault(a.moneda or "—", {
+            "moneda": a.moneda or "—", "movido": 0.0, "ganado": 0.0,
+        })
+        m["movido"] += a.monto
+        m["ganado"] += ganancia
+    for d in list(acum_origen.values()) + list(acum_moneda.values()):
+        d["movido"] = round(d["movido"], 2)
+        d["ganado"] = round(d["ganado"], 2)
+
     return {
         "data": apuntes,
         "totales": sorted(por_moneda.values(), key=lambda m: m["moneda"]),
         "por_origen": sorted(por_origen.values(), key=lambda o: o["origen"]),
+        "acumulado": {
+            "por_origen": sorted(acum_origen.values(), key=lambda o: o["origen"]),
+            "totales": sorted(acum_moneda.values(), key=lambda m: m["moneda"]),
+        },
         # Todas las rutas con porcentaje puesto, no solo las que tienen apuntes
         # en este rango: el badge de la columna tiene que verse aunque ese día
         # no se haya movido nada por ahí.
