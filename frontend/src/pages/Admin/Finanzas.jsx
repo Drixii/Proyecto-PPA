@@ -12,6 +12,9 @@ const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')
 
 const miles = n => (Number(n) || 0).toLocaleString('es-CL', { maximumFractionDigits: 2 })
 
+// El peso chileno no tiene céntimos: "119.732,23" no es una cifra que exista.
+const pesos = n => Math.round(Number(n) || 0).toLocaleString('es-CL')
+
 // Lo escrito a mano, a número. Se acepta como lo escribe la gente: "20.000",
 // "20000", "20.000,50". El punto es separador de miles y la coma decimal, que
 // es como se escribe en toda la región.
@@ -416,7 +419,7 @@ export default function Finanzas() {
                             se movió allá, este dice lo que vale aquí. */}
                         {enPesos && (
                           <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
-                            {miles(enPesos.movido)} CLP
+                            {pesos(enPesos.movido)} CLP
                           </span>
                         )}
                       </td>
@@ -424,7 +427,7 @@ export default function Finanzas() {
                         {miles(totalGanado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{paisOrigen?.currency}</span>
                         {enPesos && (
                           <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
-                            {miles(enPesos.ganado)} CLP
+                            {pesos(enPesos.ganado)} CLP
                           </span>
                         )}
                       </td>
@@ -495,7 +498,20 @@ const ANCHO_BADGE = 44
  * monto, y era eso —no las cifras— lo que estaba abriendo las columnas.
  */
 function Comision({ monto, pct, moneda, montoClp }) {
-  if (!monto || !pct) return null
+  if (!monto) return null
+
+  // Sin porcentaje puesto no hay comisión que enseñar, pero la casilla no
+  // puede quedarse muda: se enseña lo que vale ese monto en pesos y se dice
+  // que falta el porcentaje, que es justo lo que hay que arreglar.
+  if (!pct) {
+    return (
+      <div style={{ fontSize: 10, textAlign: 'right', lineHeight: 1.3, padding: '0 7px 3px', whiteSpace: 'nowrap' }}>
+        {montoClp > 0 && <p style={{ color: '#64748b' }}>{pesos(montoClp)} CLP</p>}
+        <p style={{ color: '#fcd34d' }}>sin %</p>
+      </div>
+    )
+  }
+
   const enPesos = montoClp ? montoClp * pct / 100 : 0
   return (
     <div title={`Comisión del ${miles(pct)}%`}
@@ -506,7 +522,7 @@ function Comision({ monto, pct, moneda, montoClp }) {
       {/* Y lo mismo en pesos chilenos, que es la moneda en la que se lleva la
           caja: arriba lo que cobró el cliente allá, aquí lo que entra aquí. */}
       {enPesos > 0 && (
-        <p style={{ color: '#3f8f5c' }}>{miles(enPesos)} CLP</p>
+        <p style={{ color: '#3f8f5c' }}>{pesos(enPesos)} CLP</p>
       )}
     </div>
   )
@@ -672,7 +688,7 @@ function FilaPais({
             {miles(movido)} <span style={{ fontSize: 10.5, color: '#64748b' }}>{moneda}</span>
             {movidoClp > 0 && (
               <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
-                {miles(movidoClp)} CLP
+                {pesos(movidoClp)} CLP
               </span>
             )}
           </>
@@ -684,7 +700,7 @@ function FilaPais({
             {miles(ganado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{moneda}</span>
             {ganadoClp > 0 && (
               <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#4ade80' }}>
-                {miles(ganadoClp)} CLP
+                {pesos(ganadoClp)} CLP
               </span>
             )}
           </>
@@ -804,10 +820,10 @@ function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
                   </span>
                 </td>
                 <td style={{ ...celda, textAlign: 'right', padding: '5px 10px', fontSize: 12.5, color: '#aebfe2' }}>
-                  {d ? `${miles(d.movido)} ${d.moneda}` : ''}
+                  {d ? `${pesos(d.movido)} ${d.moneda}` : ''}
                 </td>
                 <td style={{ ...celda, textAlign: 'right', padding: '5px 10px', fontSize: 12.5, fontWeight: 700, color: '#4ade80', borderRight: 'none' }}>
-                  {d ? <>{miles(d.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{d.moneda}</span></> : ''}
+                  {d ? <>{pesos(d.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{d.moneda}</span></> : ''}
                 </td>
               </tr>
             )
@@ -821,10 +837,10 @@ function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
                 TOTAL {t.moneda}
               </td>
               <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
-                {miles(t.movido)} <span style={{ fontWeight: 500, fontSize: 11, color: '#64748b' }}>{t.moneda}</span>
+                {pesos(t.movido)} <span style={{ fontWeight: 500, fontSize: 11, color: '#64748b' }}>{t.moneda}</span>
               </td>
               <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13.5, fontWeight: 800, color: '#4ade80', borderRight: 'none' }}>
-                {miles(t.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{t.moneda}</span>
+                {pesos(t.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{t.moneda}</span>
               </td>
             </tr>
           ))}
