@@ -84,6 +84,9 @@ export default function Finanzas() {
   const qc = useQueryClient()
   const [rango, setRango] = useState({ from: hoy(), to: finDe(hoy()) })
   const [elegido, setElegido] = useState(null)
+  // El mes del acumulable va por su cuenta: null es el mes en curso, que es lo
+  // que se quiere ver casi siempre.
+  const [mesAcum, setMesAcum] = useState(null)
 
   const { data: paises = [] } = useQuery({
     queryKey: ['finanzas-paises'],
@@ -102,8 +105,10 @@ export default function Finanzas() {
   const hasta = iso(rango.to || rango.from)
 
   const { data: respuesta } = useQuery({
-    queryKey: ['finanzas', desde, hasta],
-    queryFn: () => api.get('/finanzas', { params: { desde, hasta } }).then(r => r.data),
+    queryKey: ['finanzas', desde, hasta, mesAcum],
+    queryFn: () => api.get('/finanzas', {
+      params: { desde, hasta, ...(mesAcum ? { mes: mesAcum } : {}) },
+    }).then(r => r.data),
   })
 
   const apuntes = respuesta?.data || []
@@ -305,8 +310,14 @@ export default function Finanzas() {
                 nota="en pesos chilenos"
                 paises={origenes} porOrigen={porOrigen} totales={totales}
                 sinTasa={respuesta?.sin_tasa || 0} />
-              <Resumen titulo="Acumulable diario"
-                nota={`lo que va de ${nombreDelMes(acumulado.desde)}, en pesos chilenos`}
+              <Resumen titulo="Acumulable del mes"
+                nota="en pesos chilenos"
+                encabezado={
+                  <SelectorDeMes
+                    mes={acumulado.desde?.slice(0, 7)}
+                    tope={acumulado.mes_actual}
+                    onCambiar={setMesAcum} />
+                }
                 paises={origenes} porOrigen={acumulado.por_origen} totales={acumulado.totales}
                 sinTasa={acumulado.sin_tasa || 0} />
             </div>
@@ -790,7 +801,7 @@ function PorcentajeGeneral({ onPoner }) {
 }
 
 /** Lo que movió y lo que dejó cada país, y el total. */
-function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
+function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa = 0 }) {
   const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
   // A diferencia de la tabla de captura, estos dos cuadros sí se estiran: son
@@ -805,6 +816,8 @@ function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
           <span style={{ fontWeight: 500, fontSize: 12, color: '#64748b', marginLeft: 7 }}>{nota}</span>
         )}
       </p>
+
+      {encabezado && <div style={{ marginBottom: 9 }}>{encabezado}</div>}
 
       {/* Lo que no se pudo pasar a pesos se dice, en vez de dar el total por
           bueno: un total al que le falta dinero es peor que un total con una
@@ -872,5 +885,49 @@ function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
       </table>
     </div>
     </div>
+  )
+}
+
+/**
+ * Qué mes enseña el acumulable.
+ *
+ * Con flechas y no con un calendario de dos fechas: lo que se quiere ver aquí
+ * es un mes entero, y elegir "del 1 al 30" a mano para eso es dar un rodeo.
+ * No deja pasar del mes en curso, porque ahí no hay nada anotado todavía.
+ */
+function SelectorDeMes({ mes, tope, onCambiar }) {
+  if (!mes) return null
+
+  const mueve = (pasos) => {
+    const [a, m] = mes.split('-').map(Number)
+    const d = new Date(a, m - 1 + pasos, 1)
+    const siguiente = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    onCambiar(siguiente === tope ? null : siguiente)
+  }
+
+  const esElActual = mes === tope
+  const flecha = {
+    padding: '4px 9px', borderRadius: 8, fontSize: 13, lineHeight: 1,
+    background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: '#aebfe2',
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+      <button type="button" onClick={() => mueve(-1)} title="Mes anterior" style={flecha}>‹</button>
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: '#eaf2ff', minWidth: 132, textAlign: 'center' }}>
+        {nombreDelMes(`${mes}-01`)}
+      </span>
+      <button type="button" onClick={() => mueve(1)} disabled={esElActual}
+        title={esElActual ? 'No hay meses por delante' : 'Mes siguiente'}
+        style={{ ...flecha, opacity: esElActual ? .35 : 1, cursor: esElActual ? 'not-allowed' : 'pointer' }}>
+        ›
+      </button>
+      {!esElActual && (
+        <button type="button" onClick={() => onCambiar(null)}
+          style={{ fontSize: 11.5, color: '#7dd3fc', padding: '4px 8px' }}>
+          volver a este mes
+        </button>
+      )}
+    </span>
   )
 }

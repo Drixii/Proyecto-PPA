@@ -8,7 +8,7 @@ Cada super-admin ve solo lo suyo, y eso se comprueba en cada operación contra
 el dueño guardado en la fila, nunca contra lo que venga en la petición.
 """
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Optional
 
@@ -193,6 +193,7 @@ def _mio(db: Session, apunte_id: int, dueno: User) -> FinanceEntry:
 def listar(
     desde: date = Query(...),
     hasta: date = Query(...),
+    mes: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}$"),
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
@@ -226,8 +227,19 @@ def listar(
     # servidor, que va en UTC y el primer día del mes cambiaría de mes a las
     # nueve de la noche.
     hoy_chile = datetime.now(ZoneInfo("America/Santiago")).date()
-    primero = hoy_chile.replace(day=1)
-    del_mes = [a for a in todo if primero <= a.fecha <= hoy_chile]
+    if mes:
+        anio, num = (int(x) for x in mes.split("-"))
+        primero = date(anio, num, 1)
+    else:
+        primero = hoy_chile.replace(day=1)
+
+    # Hasta el final del mes, o hasta hoy si es el mes en curso: un mes ya
+    # cerrado se enseña entero, y del actual no hay nada más allá de hoy.
+    ultimo = date(primero.year + (primero.month == 12), primero.month % 12 + 1, 1) - timedelta(days=1)
+    if primero <= hoy_chile <= ultimo:
+        ultimo = hoy_chile
+
+    del_mes = [a for a in todo if primero <= a.fecha <= ultimo]
     acum_origen, total_acum, sin_tasa_acum = _suma_en_caja(del_mes)
 
     return {
@@ -241,7 +253,8 @@ def listar(
             "totales": [total_acum],
             "sin_tasa": sin_tasa_acum,
             "desde": primero.isoformat(),
-            "hasta": hoy_chile.isoformat(),
+            "hasta": ultimo.isoformat(),
+            "mes_actual": hoy_chile.strftime("%Y-%m"),
         },
         # Todas las rutas con porcentaje puesto, no solo las que tienen apuntes
         # en este rango: el badge del país tiene que verse aunque ese día no se
