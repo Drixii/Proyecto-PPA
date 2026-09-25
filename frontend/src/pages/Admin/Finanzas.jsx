@@ -94,7 +94,20 @@ export default function Finanzas() {
   })
 
   const origenes = useMemo(() => paises.filter(p => p.can_send && p.active), [paises])
-  const destinos = useMemo(() => paises.filter(p => p.can_receive && p.active), [paises])
+  // Entregar efectivo en Venezuela es otra cosa que transferir allí: se cobra
+  // distinto, así que necesita su propia fila y su propio porcentaje.
+  //
+  // Vive solo en esta pantalla y no en el catálogo de países de la web: no es
+  // un país, y añadirlo allí lo sacaría en la calculadora del inicio y en el
+  // formulario de envío, donde no tiene sentido. El cuaderno guarda el destino
+  // como texto, así que aquí es una fila más.
+  const destinos = useMemo(() => {
+    const lista = paises.filter(p => p.can_receive && p.active)
+    const ve = lista.findIndex(p => p.name === 'Venezuela')
+    if (ve === -1) return lista
+    const cash = { id: 've-cash', name: 'Venezuela Cash', iso2: lista[ve].iso2, currency: lista[ve].currency }
+    return [...lista.slice(0, ve + 1), cash, ...lista.slice(ve + 1)]
+  }, [paises])
 
   // Mientras no se haya tocado nada, el primero de la lista. Derivado y no
   // guardado con un efecto: así no hay un primer dibujado sin país y otro con
