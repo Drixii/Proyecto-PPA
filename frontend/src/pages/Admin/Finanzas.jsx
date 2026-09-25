@@ -276,6 +276,16 @@ export default function Finanzas() {
           </div>
         </header>
 
+        {/* Las cuatro cifras que se miran de un vistazo, antes de entrar en
+            ninguna tabla: lo del día a un lado y lo del mes al otro. Va arriba
+            del todo y fuera de las pestañas porque es la respuesta a "¿cómo
+            vamos?", que no depende de lo que se esté haciendo debajo. */}
+        <GananciasDiarias
+          dia={totales[0]}
+          mes={acumulado.totales?.[0]}
+          nombreMes={nombreDelMes(acumulado.desde)}
+          unDia={!variosDias} />
+
         {/* Qué se mira de ese país: los montos que se anotan día a día, o lo
             que suman. Van en pestañas y no uno debajo del otro porque no se
             usan a la vez: se anota, o se mira el total. */}
@@ -933,5 +943,63 @@ function SelectorDeMes({ mes, tope, onCambiar }) {
         </button>
       )}
     </span>
+  )
+}
+
+/** Una cifra grande con su rótulo. */
+function Cifra({ rotulo, valor, verde }) {
+  return (
+    <div style={{
+      ...GLASS, flex: '1 1 150px', minWidth: 140, padding: '11px 14px',
+      borderColor: verde ? 'rgba(74,222,128,.2)' : 'rgba(255,255,255,.07)',
+    }}>
+      <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+        {rotulo}
+      </p>
+      <p style={{
+        fontSize: 21, fontWeight: 800, marginTop: 3, letterSpacing: '-.02em',
+        color: verde ? '#4ade80' : '#eaf2ff',
+      }}>
+        {pesos(valor)} <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b' }}>CLP</span>
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Lo del día y lo del mes, de un vistazo.
+ *
+ * Las mismas cifras que cierran los dos cuadros de la pestaña "Total", pero
+ * arriba del todo: son la respuesta a "¿cómo vamos?" y no tenían por qué estar
+ * al final de una tabla de diecisiete filas.
+ */
+function GananciasDiarias({ dia, mes, nombreMes, unDia }) {
+  const bloque = { flex: '1 1 320px', minWidth: 290 }
+  const rotulo = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#7dd3fc', marginBottom: 7 }
+
+  return (
+    <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+      <p style={{ fontSize: 14, fontWeight: 700, color: '#eaf2ff', marginBottom: 11 }}>
+        Ganancias diarias
+      </p>
+
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+        <div style={bloque}>
+          <p style={rotulo}>ENTRADA · {unDia ? 'HOY' : 'RANGO ELEGIDO'}</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Cifra rotulo="TOTAL" valor={dia?.movido} />
+            <Cifra rotulo="COMISIÓN" valor={dia?.ganado} verde />
+          </div>
+        </div>
+
+        <div style={bloque}>
+          <p style={rotulo}>ACUMULABLE · {String(nombreMes || '').toUpperCase()}</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Cifra rotulo="TOTAL" valor={mes?.movido} />
+            <Cifra rotulo="GANANCIA" valor={mes?.ganado} verde />
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
