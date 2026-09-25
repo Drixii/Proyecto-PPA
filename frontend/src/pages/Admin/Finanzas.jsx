@@ -701,19 +701,23 @@ function PorcentajeGeneral({ onPoner }) {
 function Resumen({ titulo, nota, paises, porOrigen, totales }) {
   const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
+  // A diferencia de la tabla de captura, estos dos cuadros sí se estiran: son
+  // dos y tienen que repartirse el ancho de la pantalla a partes iguales. El
+  // mínimo es para que en una ventana estrecha caigan uno debajo del otro en
+  // vez de quedar espachurrados.
   return (
-    <div>
+    <div style={{ flex: '1 1 380px', minWidth: 300 }}>
       <p style={{ marginBottom: 9, fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
         {titulo}
         {nota && (
           <span style={{ fontWeight: 500, fontSize: 12, color: '#64748b', marginLeft: 7 }}>{nota}</span>
         )}
       </p>
-    <div style={{ ...GLASS, width: 'max-content', maxWidth: '100%', overflow: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
+    <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
           <tr>
-            <th style={{ ...cabecera, textAlign: 'left' }}>PAÍS</th>
+            <th style={{ ...cabecera, textAlign: 'left', width: 'auto' }}>PAÍS</th>
             <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>TOTAL COMPLETO</th>
             <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>TOTAL COMISIÓN</th>
           </tr>
