@@ -126,6 +126,16 @@ export default function Finanzas() {
   }, [porColumna])
 
   const paisOrigen = origenes.find(p => p.name === origen)
+
+  // Un país no se envía a sí mismo, así que el que está elegido no es un
+  // destino y su fila solo ocupaba sitio.
+  //
+  // Salvo que ya haya algo anotado ahí: esconder la fila escondería el dinero
+  // —que seguiría sumando en los totales— y no habría forma de corregirlo.
+  const destinosDelOrigen = useMemo(
+    () => destinos.filter(d => d.name !== origen || delOrigen.some(a => a.destino === d.name)),
+    [destinos, origen, delOrigen],
+  )
   const refrescar = () => qc.invalidateQueries({ queryKey: ['finanzas'] })
 
   // Lo que se está escribiendo en una casilla todavía vacía. Vive solo aquí
@@ -160,7 +170,7 @@ export default function Finanzas() {
   const ponerPorcentajeGeneral = async (porcentaje) => {
     await api.put('/finanzas/porcentaje-general', {
       origen,
-      destinos: destinos.map(d => d.name),
+      destinos: destinosDelOrigen.map(d => d.name),
       porcentaje,
     })
     refrescar()
@@ -380,7 +390,7 @@ export default function Finanzas() {
                   </thead>
 
                   <tbody>
-                    {destinos.map(d => (
+                    {destinosDelOrigen.map(d => (
                       <FilaPais
                         key={`${d.id}:${origen}`}
                         pais={d}
