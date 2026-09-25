@@ -96,6 +96,7 @@ export default function Finanzas() {
 
   const apuntes = respuesta?.data || []
   const totales = respuesta?.totales || []
+  const porOrigen = respuesta?.por_origen || []
   // El porcentaje es de la ruta, no de la línea: el badge de cada país.
   const pctDe = (destino) => (respuesta?.porcentajes || [])
     .find(p => p.origen === origen && p.destino === destino)?.porcentaje ?? 0
@@ -144,6 +145,15 @@ export default function Finanzas() {
   const borrar = async (id) => { await api.delete(`/finanzas/${id}`); refrescar() }
   const ponerPorcentaje = async (destino, porcentaje) => {
     await api.put('/finanzas/porcentaje', { origen, destino, porcentaje })
+    refrescar()
+  }
+
+  const ponerPorcentajeGeneral = async (porcentaje) => {
+    await api.put('/finanzas/porcentaje-general', {
+      origen,
+      destinos: destinos.map(d => d.name),
+      porcentaje,
+    })
     refrescar()
   }
 
@@ -224,7 +234,6 @@ export default function Finanzas() {
               Lo que se movió y lo que se ganó, anotado a mano.
             </p>
           </div>
-          <DateRangePicker value={rango} onChange={setRango} />
         </header>
 
         {/* Los países desde los que se envía. */}
@@ -257,13 +266,21 @@ export default function Finanzas() {
         <div style={{ flex: 1, padding: '18px 22px', overflow: 'auto' }}>
           {origen && (
             <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
                 <h2 style={{ fontSize: 22, fontWeight: 800, color: '#eaf2ff', letterSpacing: '-.01em' }}>
                   {origen.toUpperCase()}
                 </h2>
                 <span style={{ fontSize: 13, color: '#64748b' }}>
                   montos en {paisOrigen?.currency || '—'}
                 </span>
+
+                {/* El filtro de fechas, junto a lo que filtra. */}
+                <DateRangePicker value={rango} onChange={setRango} />
+
+                {/* El porcentaje de golpe para todo el país. Respeta los que ya
+                    estén puestos a mano: si una ruta cobra distinto es a
+                    propósito, y borrarlos obligaría a rehacerlos uno a uno. */}
+                <PorcentajeGeneral onPoner={ponerPorcentajeGeneral} />
                 {variosDias && (
                   <span style={{ fontSize: 12, color: '#fcd34d' }}>
                     · el rango son varios días; lo que anotes se guarda en el {desde}
@@ -284,10 +301,10 @@ export default function Finanzas() {
                         % · PAÍS
                       </th>
 
-                      {/* Una columna por movimiento, numeradas como se anotan. */}
+                      {/* Una columna por cliente, numeradas como se anotan. */}
                       {columnas.map(c => (
                         <th key={c} style={{ ...cabecera, color: '#64748b', textAlign: 'right' }}>
-                          {c + 1}
+                          Cliente {c + 1}
                         </th>
                       ))}
 
@@ -343,26 +360,13 @@ export default function Finanzas() {
             </>
           )}
 
-          {/* El acumulado de TODOS los países del rango, por moneda y sin
-              convertir: mezclar pesos con soles a la tasa de hoy daría una
-              cifra que mañana es otra, y esto es un registro de lo que pasó. */}
-          <div style={{ marginTop: 20 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', color: '#64748b', marginBottom: 9 }}>
-              GANADO EN TODO EL RANGO
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              {totales.map(t => (
-                <div key={t.moneda} style={{ ...GLASS, padding: '12px 16px', minWidth: 150 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#7dd3fc', letterSpacing: '.06em' }}>{t.moneda}</p>
-                  <p style={{ fontSize: 20, fontWeight: 800, color: '#4ade80', marginTop: 3 }}>{miles(t.ganado)}</p>
-                  <p style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>de {miles(t.movido)} movidos</p>
-                </div>
-              ))}
-              {!totales.length && (
-                <p style={{ fontSize: 13, color: '#64748b' }}>Todavía no hay nada anotado en estas fechas.</p>
-              )}
-            </div>
-          </div>
+          {/* El cuadro de abajo no cambia al moverse de país: es el resumen
+              de todos, con lo que movió cada uno y lo que dejó.
+
+              Los totales van por moneda y sin convertir nada. Mezclar pesos
+              chilenos con argentinos a la tasa de hoy daría una cifra que
+              mañana es otra, y esto es un registro de lo que pasó. */}
+          <Resumen paises={origenes} porOrigen={porOrigen} totales={totales} />
         </div>
       </main>
     </div>
@@ -416,9 +420,8 @@ const ANCHO_BADGE = 44
 /**
  * Lo que se lleva la casa de ese monto, bajo la propia cifra.
  *
- * Se escribe corto y no cuenta para el ancho de la columna: "comisión:
- * 1.250.000" es más largo que el propio monto, y era eso —no las cifras— lo
- * que estaba abriendo las columnas.
+ * No cuenta para el ancho de la columna: el texto es más largo que el propio
+ * monto, y era eso —no las cifras— lo que estaba abriendo las columnas.
  */
 function Comision({ monto, pct }) {
   if (!monto || !pct) return null
@@ -428,7 +431,7 @@ function Comision({ monto, pct }) {
         fontSize: 10, color: '#4ade80', textAlign: 'right', lineHeight: 1.2,
         padding: '0 7px 3px', width: 0, minWidth: '100%', whiteSpace: 'nowrap',
       }}>
-      com. {miles(monto * pct / 100)}
+      comisión: {miles(monto * pct / 100)}
     </p>
   )
 }
@@ -585,5 +588,131 @@ function FilaPais({
         {ganado ? miles(ganado) : ''}
       </td>
     </tr>
+  )
+}
+
+/**
+ * Poner el mismo porcentaje a todos los destinos de un país de una vez.
+ *
+ * Con diecisiete destinos, ir badge por badge para dejarlos todos igual es el
+ * camino largo del caso normal: casi siempre se cobra lo mismo en casi todos.
+ */
+function PorcentajeGeneral({ onPoner }) {
+  const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto] = useState('')
+
+  if (!abierto) {
+    return (
+      <button type="button" onClick={() => setAbierto(true)}
+        title="Poner un mismo porcentaje a todos los países de este origen"
+        style={{
+          padding: '5px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 600,
+          background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)',
+          color: '#8aa0cc',
+        }}>
+        % para todos
+      </button>
+    )
+  }
+
+  const aplicar = () => {
+    const n = aNumero(texto)
+    setAbierto(false)
+    setTexto('')
+    if (n > 0) onPoner(n)
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <input
+        autoFocus
+        value={texto}
+        inputMode="decimal"
+        placeholder="%"
+        onChange={e => setTexto(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') aplicar()
+          if (e.key === 'Escape') { setAbierto(false); setTexto('') }
+        }}
+        style={{
+          width: 62, padding: '5px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 700,
+          textAlign: 'center', color: '#eaf2ff', background: 'rgba(56,189,248,.12)',
+          border: '1px solid #38bdf8', outline: 'none',
+        }} />
+      <button type="button" onClick={aplicar}
+        style={{
+          padding: '5px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 700,
+          background: 'rgba(74,222,128,.14)', border: '1px solid rgba(74,222,128,.4)', color: '#4ade80',
+        }}>
+        Poner a todos
+      </button>
+      <span style={{ fontSize: 11, color: '#64748b' }}>
+        respeta los que ya tienen el suyo
+      </span>
+    </span>
+  )
+}
+
+/** Lo que movió y lo que dejó cada país, y el total. */
+function Resumen({ paises, porOrigen, totales }) {
+  const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
+
+  return (
+    <div style={{ marginTop: 22, ...GLASS, width: 'max-content', maxWidth: '100%', overflow: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
+        <thead>
+          <tr>
+            <th style={{ ...cabecera, textAlign: 'left' }}>RESUMEN</th>
+            <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>TOTAL</th>
+            <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>COMISIÓN</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {paises.map(p => {
+            const d = datoDe(p.name)
+            return (
+              <tr key={p.id}>
+                <td style={{ ...celda, padding: '5px 14px 5px 10px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#eaf2ff' }}>
+                    <Bandera iso2={p.iso2} tam={15} />
+                    {p.name}
+                  </span>
+                </td>
+                <td style={{ ...celda, textAlign: 'right', padding: '5px 10px', fontSize: 12.5, color: '#aebfe2' }}>
+                  {d ? `${miles(d.movido)} ${d.moneda}` : ''}
+                </td>
+                <td style={{ ...celda, textAlign: 'right', padding: '5px 10px', fontSize: 12.5, fontWeight: 700, color: '#4ade80', borderRight: 'none' }}>
+                  {d ? miles(d.ganado) : ''}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+
+        <tfoot>
+          {totales.map(t => (
+            <tr key={t.moneda}>
+              <td style={{ ...pieCelda, fontSize: 11, fontWeight: 700, color: '#64748b', padding: '8px 14px 8px 10px' }}>
+                TOTAL {t.moneda}
+              </td>
+              <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
+                {miles(t.movido)}
+              </td>
+              <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13.5, fontWeight: 800, color: '#4ade80', borderRight: 'none' }}>
+                {miles(t.ganado)}
+              </td>
+            </tr>
+          ))}
+          {!totales.length && (
+            <tr>
+              <td colSpan={3} style={{ ...pieCelda, fontSize: 12.5, color: '#64748b', borderRight: 'none' }}>
+                Todavía no hay nada anotado en estas fechas.
+              </td>
+            </tr>
+          )}
+        </tfoot>
+      </table>
+    </div>
   )
 }

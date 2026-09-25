@@ -129,9 +129,24 @@ def listar(
         m["movido"] = round(m["movido"], 2)
         m["ganado"] = round(m["ganado"], 2)
 
+    # Lo de cada país que envía, para el cuadro de abajo. Va aparte de los
+    # apuntes porque ese cuadro no cambia al moverse de país: es el resumen de
+    # todos.
+    por_origen: dict[str, dict] = {}
+    for a in apuntes:
+        o = por_origen.setdefault(a["origen"], {
+            "origen": a["origen"], "moneda": a["moneda"], "movido": 0.0, "ganado": 0.0,
+        })
+        o["movido"] += a["monto"]
+        o["ganado"] += a["ganancia"]
+    for o in por_origen.values():
+        o["movido"] = round(o["movido"], 2)
+        o["ganado"] = round(o["ganado"], 2)
+
     return {
         "data": apuntes,
         "totales": sorted(por_moneda.values(), key=lambda m: m["moneda"]),
+        "por_origen": sorted(por_origen.values(), key=lambda o: o["origen"]),
         # Todas las rutas con porcentaje puesto, no solo las que tienen apuntes
         # en este rango: el badge de la columna tiene que verse aunque ese día
         # no se haya movido nada por ahí.
@@ -221,6 +236,61 @@ def poner_porcentaje(
 
     db.commit()
     return {"ok": True, "apuntes_recalculados": tocados}
+
+
+class PorcentajeGeneralIn(BaseModel):
+    origen: str
+    destinos: list[str]
+    porcentaje: float = Field(ge=0, le=100)
+
+
+@router.put("/porcentaje-general", response_model=dict)
+def porcentaje_general(
+    datos: PorcentajeGeneralIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """El mismo porcentaje para todos los destinos de un país, de una vez.
+
+    Solo toca los que no tengan uno puesto. Lo que se ajustó a mano en una ruta
+    concreta se respeta: se pone a mano justamente porque ahí se cobra distinto,
+    y un "para todos" que lo borrara obligaría a volver a ponerlos todos.
+    """
+    ya = {
+        f.destino for f in db.query(FinanceRate).filter(
+            FinanceRate.super_admin_id == admin.id,
+            FinanceRate.origen == datos.origen,
+            FinanceRate.porcentaje > 0,
+        ).all()
+    }
+
+    puestos = 0
+    for destino in datos.destinos:
+        if destino in ya:
+            continue
+        fila = db.query(FinanceRate).filter(
+            FinanceRate.super_admin_id == admin.id,
+            FinanceRate.origen == datos.origen,
+            FinanceRate.destino == destino,
+        ).first()
+        if fila:
+            fila.porcentaje = datos.porcentaje
+        else:
+            db.add(FinanceRate(
+                super_admin_id=admin.id,
+                origen=datos.origen,
+                destino=destino,
+                porcentaje=datos.porcentaje,
+            ))
+        db.query(FinanceEntry).filter(
+            FinanceEntry.super_admin_id == admin.id,
+            FinanceEntry.origen == datos.origen,
+            FinanceEntry.destino == destino,
+        ).update({"porcentaje": datos.porcentaje}, synchronize_session=False)
+        puestos += 1
+
+    db.commit()
+    return {"ok": True, "puestos": puestos, "respetados": len(ya)}
 
 
 @router.delete("/{apunte_id}", response_model=dict)
