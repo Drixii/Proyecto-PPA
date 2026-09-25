@@ -274,13 +274,13 @@ export default function Finanzas() {
                   montos en {paisOrigen?.currency || '—'}
                 </span>
 
-                {/* El filtro de fechas, junto a lo que filtra. */}
-                <DateRangePicker value={rango} onChange={setRango} />
-
                 {/* El porcentaje de golpe para todo el país. Respeta los que ya
                     estén puestos a mano: si una ruta cobra distinto es a
                     propósito, y borrarlos obligaría a rehacerlos uno a uno. */}
                 <PorcentajeGeneral onPoner={ponerPorcentajeGeneral} />
+
+                {/* El filtro de fechas, junto a lo que filtra. */}
+                <DateRangePicker value={rango} onChange={setRango} />
                 {variosDias && (
                   <span style={{ fontSize: 12, color: '#fcd34d' }}>
                     · el rango son varios días; lo que anotes se guarda en el {desde}
@@ -366,7 +366,7 @@ export default function Finanzas() {
               Los totales van por moneda y sin convertir nada. Mezclar pesos
               chilenos con argentinos a la tasa de hoy daría una cifra que
               mañana es otra, y esto es un registro de lo que pasó. */}
-          <Resumen paises={origenes} porOrigen={porOrigen} totales={totales} />
+          <Resumen paises={origenes} porOrigen={porOrigen} totales={totales} unDia={!variosDias} />
         </div>
       </main>
     </div>
@@ -654,17 +654,23 @@ function PorcentajeGeneral({ onPoner }) {
 }
 
 /** Lo que movió y lo que dejó cada país, y el total. */
-function Resumen({ paises, porOrigen, totales }) {
+function Resumen({ paises, porOrigen, totales, unDia }) {
   const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
   return (
-    <div style={{ marginTop: 22, ...GLASS, width: 'max-content', maxWidth: '100%', overflow: 'auto' }}>
+    <>
+      {/* Dice "del día" solo cuando se está mirando un día: con un rango de
+          fechas elegido, ese título estaría mintiendo sobre lo que suma. */}
+      <p style={{ marginTop: 24, marginBottom: 9, fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
+        Suma total {unDia ? 'del día' : 'del rango'}
+      </p>
+    <div style={{ ...GLASS, width: 'max-content', maxWidth: '100%', overflow: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
         <thead>
           <tr>
-            <th style={{ ...cabecera, textAlign: 'left' }}>RESUMEN</th>
-            <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>TOTAL</th>
-            <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>COMISIÓN</th>
+            <th style={{ ...cabecera, textAlign: 'left' }}>PAÍS</th>
+            <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>TOTAL COMPLETO</th>
+            <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>TOTAL COMISIÓN</th>
           </tr>
         </thead>
 
@@ -714,5 +720,6 @@ function Resumen({ paises, porOrigen, totales }) {
         </tfoot>
       </table>
     </div>
+    </>
   )
 }
