@@ -20,6 +20,11 @@ from database import get_db
 from models.country import Country
 from models.finance_entry import FinanceEntry, FinanceRate
 from models.user import User
+from services.exchange_service import get_rate
+
+# Todo lo que se suma se suma en pesos chilenos. La casa lleva la caja en una
+# moneda: con un total por cada una no hay forma de responder "cuánto llevamos".
+MONEDA_CAJA = "CLP"
 
 router = APIRouter(prefix="/api/finanzas", tags=["finanzas"])
 log = logging.getLogger("ppa")
@@ -51,6 +56,19 @@ def _moneda_de(db: Session, pais: str) -> str:
     return fila.currency if fila else ""
 
 
+def _tasa_a_caja(db: Session, moneda: str) -> float:
+    """Cuántos pesos chilenos vale una unidad de esa moneda, hoy.
+
+    Cero si no hay tasa: se guarda así a propósito y la pantalla lo avisa, en
+    vez de dar por bueno un total al que le falta dinero.
+    """
+    if not moneda:
+        return 0.0
+    if moneda == MONEDA_CAJA:
+        return 1.0
+    return get_rate(db, moneda, MONEDA_CAJA) or 0.0
+
+
 def _porcentajes(db: Session, dueno_id: int) -> dict[tuple[str, str], float]:
     filas = db.query(FinanceRate).filter(FinanceRate.super_admin_id == dueno_id).all()
     return {(f.origen, f.destino): f.porcentaje for f in filas}
@@ -76,9 +94,42 @@ def _sale(a: FinanceEntry) -> dict:
         "monto": a.monto,
         "porcentaje": a.porcentaje,
         "ganancia": ganancia,
+        "monto_clp": round(a.monto_clp or 0, 2),
+        "ganancia_clp": round((a.monto_clp or 0) * a.porcentaje / 100, 2),
+        "tasa_clp": a.tasa_clp or 0,
         "orden": a.orden,
         "nota": a.nota,
     }
+
+
+def _suma_en_caja(filas) -> tuple[list[dict], dict, int]:
+    """Lo movido y lo ganado por país, en pesos chilenos.
+
+    Devuelve también cuántos apuntes no se pudieron convertir, para poder
+    decirlo en pantalla en vez de callarlo.
+    """
+    por_origen: dict[str, dict] = {}
+    total = {"moneda": MONEDA_CAJA, "movido": 0.0, "ganado": 0.0}
+    sin_tasa = 0
+
+    for a in filas:
+        clp = a.monto_clp or 0
+        if not clp and a.monto:
+            sin_tasa += 1
+        ganancia = clp * a.porcentaje / 100
+        o = por_origen.setdefault(a.origen, {
+            "origen": a.origen, "moneda": MONEDA_CAJA, "movido": 0.0, "ganado": 0.0,
+        })
+        o["movido"] += clp
+        o["ganado"] += ganancia
+        total["movido"] += clp
+        total["ganado"] += ganancia
+
+    for d in [*por_origen.values(), total]:
+        d["movido"] = round(d["movido"], 2)
+        d["ganado"] = round(d["ganado"], 2)
+
+    return sorted(por_origen.values(), key=lambda o: o["origen"]), total, sin_tasa
 
 
 def _mio(db: Session, apunte_id: int, dueno: User) -> FinanceEntry:
@@ -120,62 +171,29 @@ def listar(
 
     apuntes = [_sale(a) for a in filas]
 
-    por_moneda: dict[str, dict] = {}
-    for a in apuntes:
-        m = por_moneda.setdefault(a["moneda"] or "—", {"moneda": a["moneda"] or "—", "movido": 0.0, "ganado": 0.0})
-        m["movido"] += a["monto"]
-        m["ganado"] += a["ganancia"]
-    for m in por_moneda.values():
-        m["movido"] = round(m["movido"], 2)
-        m["ganado"] = round(m["ganado"], 2)
-
-    # Lo de cada país que envía, para el cuadro de abajo. Va aparte de los
-    # apuntes porque ese cuadro no cambia al moverse de país: es el resumen de
-    # todos.
-    por_origen: dict[str, dict] = {}
-    for a in apuntes:
-        o = por_origen.setdefault(a["origen"], {
-            "origen": a["origen"], "moneda": a["moneda"], "movido": 0.0, "ganado": 0.0,
-        })
-        o["movido"] += a["monto"]
-        o["ganado"] += a["ganancia"]
-    for o in por_origen.values():
-        o["movido"] = round(o["movido"], 2)
-        o["ganado"] = round(o["ganado"], 2)
+    por_origen, total_dia, sin_tasa_dia = _suma_en_caja(filas)
 
     # Y lo mismo sin mirar las fechas: el acumulado de todo lo anotado, que es
     # lo que va sumando día tras día. Se calcula aquí y no en otra llamada
     # porque siempre se piden juntos —el día al lado del acumulado— y son dos
     # sumas sobre la misma tabla.
-    acum_origen: dict[str, dict] = {}
-    acum_moneda: dict[str, dict] = {}
-    for a in db.query(FinanceEntry).filter(FinanceEntry.super_admin_id == admin.id).all():
-        ganancia = a.monto * a.porcentaje / 100
-        o = acum_origen.setdefault(a.origen, {
-            "origen": a.origen, "moneda": a.moneda, "movido": 0.0, "ganado": 0.0,
-        })
-        o["movido"] += a.monto
-        o["ganado"] += ganancia
-        m = acum_moneda.setdefault(a.moneda or "—", {
-            "moneda": a.moneda or "—", "movido": 0.0, "ganado": 0.0,
-        })
-        m["movido"] += a.monto
-        m["ganado"] += ganancia
-    for d in list(acum_origen.values()) + list(acum_moneda.values()):
-        d["movido"] = round(d["movido"], 2)
-        d["ganado"] = round(d["ganado"], 2)
+    todo = db.query(FinanceEntry).filter(FinanceEntry.super_admin_id == admin.id).all()
+    acum_origen, total_acum, sin_tasa_acum = _suma_en_caja(todo)
 
     return {
         "data": apuntes,
-        "totales": sorted(por_moneda.values(), key=lambda m: m["moneda"]),
-        "por_origen": sorted(por_origen.values(), key=lambda o: o["origen"]),
+        "moneda": MONEDA_CAJA,
+        "totales": [total_dia],
+        "por_origen": por_origen,
+        "sin_tasa": sin_tasa_dia,
         "acumulado": {
-            "por_origen": sorted(acum_origen.values(), key=lambda o: o["origen"]),
-            "totales": sorted(acum_moneda.values(), key=lambda m: m["moneda"]),
+            "por_origen": acum_origen,
+            "totales": [total_acum],
+            "sin_tasa": sin_tasa_acum,
         },
         # Todas las rutas con porcentaje puesto, no solo las que tienen apuntes
-        # en este rango: el badge de la columna tiene que verse aunque ese día
-        # no se haya movido nada por ahí.
+        # en este rango: el badge del país tiene que verse aunque ese día no se
+        # haya movido nada por ahí.
         "porcentajes": [
             {"origen": o, "destino": d, "porcentaje": p}
             for (o, d), p in _porcentajes(db, admin.id).items()
@@ -189,13 +207,17 @@ def crear(
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
+    moneda = _moneda_de(db, datos.origen)
+    tasa = _tasa_a_caja(db, moneda)
     a = FinanceEntry(
         super_admin_id=admin.id,
         fecha=datos.fecha,
         origen=datos.origen,
         destino=datos.destino,
-        moneda=_moneda_de(db, datos.origen),
+        moneda=moneda,
         monto=datos.monto,
+        tasa_clp=tasa,
+        monto_clp=datos.monto * tasa,
         porcentaje=_pct_de_ruta(db, admin.id, datos.origen, datos.destino),
         orden=datos.orden,
         nota=datos.nota,
@@ -220,6 +242,12 @@ def editar(
     # Cambiar de columna es cambiar de ruta, y cada ruta cobra lo suyo.
     if "destino" in cambios:
         a.porcentaje = _pct_de_ruta(db, admin.id, a.origen, a.destino)
+    # Corregir la cifra rehace su valor en pesos con la MISMA tasa del apunte,
+    # no con la de hoy: se está arreglando lo que se anotó ese día.
+    if "monto" in cambios:
+        if not a.tasa_clp:
+            a.tasa_clp = _tasa_a_caja(db, a.moneda)
+        a.monto_clp = a.monto * a.tasa_clp
     db.commit()
     db.refresh(a)
     return {"data": _sale(a)}

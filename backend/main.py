@@ -25,6 +25,8 @@ from database import SessionLocal
 def _run_migrations():
     from sqlalchemy import text
     migrations = [
+        "ALTER TABLE finance_entries ADD COLUMN monto_clp DOUBLE PRECISION DEFAULT 0",
+        "ALTER TABLE finance_entries ADD COLUMN tasa_clp DOUBLE PRECISION DEFAULT 0",
         "ALTER TABLE orders ADD COLUMN sub_admin_id INTEGER REFERENCES users(id)",
         "ALTER TABLE orders ADD COLUMN completion_proof VARCHAR",
         "ALTER TABLE users ADD COLUMN avatar VARCHAR",

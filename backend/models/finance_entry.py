@@ -33,6 +33,18 @@ class FinanceEntry(Base):
     monto = Column(Float, nullable=False, default=0.0)
     porcentaje = Column(Float, nullable=False, default=0.0)
 
+    # El mismo monto en pesos chilenos, con la tasa del día en que se anotó.
+    #
+    # Se congela, no se convierte al leer: si se recalculara con la tasa de hoy,
+    # lo anotado el mes pasado cambiaría de valor cada mañana y el acumulado
+    # dejaría de cuadrar con lo que se vio ese día. `tasa_clp` queda guardada
+    # para poder explicar de dónde sale cada cifra.
+    #
+    # En cero cuando no había tasa para esa moneda; eso se avisa en pantalla en
+    # vez de dar el total por bueno.
+    monto_clp = Column(Float, nullable=False, default=0.0)
+    tasa_clp = Column(Float, nullable=False, default=0.0)
+
     # El orden en que se ven las filas. Se guarda porque el cuaderno se lee de
     # arriba abajo y reordenarlo por id daría un orden distinto al escrito.
     orden = Column(Integer, nullable=False, default=0)

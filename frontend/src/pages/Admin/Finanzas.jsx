@@ -304,10 +304,13 @@ export default function Finanzas() {
 
             <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <Resumen titulo={variosDias ? 'Suma total del rango' : 'Suma total del día'}
-                paises={origenes} porOrigen={porOrigen} totales={totales} />
+                nota="en pesos chilenos"
+                paises={origenes} porOrigen={porOrigen} totales={totales}
+                sinTasa={respuesta?.sin_tasa || 0} />
               <Resumen titulo="Acumulable diario"
-                nota="todo lo anotado hasta hoy"
-                paises={origenes} porOrigen={acumulado.por_origen} totales={acumulado.totales} />
+                nota="todo lo anotado, en pesos chilenos"
+                paises={origenes} porOrigen={acumulado.por_origen} totales={acumulado.totales}
+                sinTasa={acumulado.sin_tasa || 0} />
             </div>
             </>
           )}
@@ -704,7 +707,7 @@ function PorcentajeGeneral({ onPoner }) {
 }
 
 /** Lo que movió y lo que dejó cada país, y el total. */
-function Resumen({ titulo, nota, paises, porOrigen, totales }) {
+function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
   const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
   // A diferencia de la tabla de captura, estos dos cuadros sí se estiran: son
@@ -719,6 +722,16 @@ function Resumen({ titulo, nota, paises, porOrigen, totales }) {
           <span style={{ fontWeight: 500, fontSize: 12, color: '#64748b', marginLeft: 7 }}>{nota}</span>
         )}
       </p>
+
+      {/* Lo que no se pudo pasar a pesos se dice, en vez de dar el total por
+          bueno: un total al que le falta dinero es peor que un total con una
+          advertencia al lado. */}
+      {sinTasa > 0 && (
+        <p style={{ marginBottom: 8, fontSize: 11.5, color: '#fcd34d' }}>
+          ⚠ {sinTasa} {sinTasa === 1 ? 'apunte queda' : 'apuntes quedan'} fuera de esta suma:
+          no hay cambio guardado para su moneda.
+        </p>
+      )}
     <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
