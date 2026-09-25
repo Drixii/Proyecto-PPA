@@ -158,7 +158,8 @@ export default function Finanzas() {
     <div style={{ minHeight: '100vh', background: '#050f25', display: 'flex' }}>
       <style>{`
         .fin-cel{background:transparent;border:1px solid transparent;border-radius:8px;color:#eaf2ff;
-          padding:6px 7px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
+          padding:6px 5px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;
+          box-sizing:content-box}
         .fin-cel:hover:not(:disabled){border-color:rgba(255,255,255,.12)}
         .fin-cel:focus{outline:none;border-color:#38bdf8;background:rgba(56,189,248,.07)}
         .fin-cel.trancada{color:#2b3a55;cursor:pointer}
@@ -257,7 +258,13 @@ export default function Finanzas() {
               </div>
 
               <div style={{ ...GLASS, overflow: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                {/* `width: auto`, no 100%.
+                    Con la tabla estirada hasta el borde, el navegador reparte
+                    el ancho sobrante entre TODAS las columnas —`width: 1%` es
+                    una pista, no una orden— y por eso seguían an­chas por mucho
+                    que se les pidiera lo contrario. Suelta, cada columna mide
+                    lo que ocupa su contenido y ya está. */}
+                <table style={{ borderCollapse: 'collapse', width: 'auto' }}>
                   <thead>
                     <tr>
                       <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 8px 9px 5px' }}>
@@ -271,10 +278,9 @@ export default function Finanzas() {
                         </th>
                       ))}
 
-                      {/* Se queda con el ancho que sobre, para que los totales
-                          no vayan pegados al último movimiento y las columnas
-                          de montos no se estiren sin necesidad. */}
-                      <th style={{ ...cabecera, width: 'auto', borderRight: 'none' }} />
+                      {/* Un hueco para que los totales no vayan pegados al
+                          último movimiento. */}
+                      <th style={{ ...cabecera, width: 26, borderRight: 'none' }} />
 
                       <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>MOVIDO</th>
                       <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>GANANCIA</th>
@@ -311,7 +317,7 @@ export default function Finanzas() {
                           {porColumna.get(c) ? miles(porColumna.get(c).monto) : ''}
                         </td>
                       ))}
-                      <td style={{ ...pieCelda, width: 'auto', borderRight: 'none' }} />
+                      <td style={{ ...pieCelda, width: 26, borderRight: 'none' }} />
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
                         {miles(totalMovido)}
                       </td>
@@ -363,7 +369,7 @@ const ajustada = { width: '1%', whiteSpace: 'nowrap' }
 const cabecera = {
   ...ajustada,
   position: 'sticky', top: 0, zIndex: 2, background: '#071331',
-  padding: '9px 10px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
+  padding: '9px 6px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
   borderBottom: '1px solid rgba(255,255,255,.08)', borderRight: RAYA, color: '#7dd3fc',
 }
 const celda = {
