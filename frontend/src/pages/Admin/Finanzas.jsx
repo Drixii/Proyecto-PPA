@@ -109,6 +109,10 @@ export default function Finanzas() {
     queryFn: () => api.get('/finanzas', {
       params: { desde, hasta, ...(mesAcum ? { mes: mesAcum } : {}) },
     }).then(r => r.data),
+    // Mientras llega el mes nuevo se sigue viendo el anterior. Sin esto, al
+    // cambiar de mes los dos cuadros parpadeaban a "todavía no hay nada
+    // anotado", que es justo lo contrario de lo que está pasando.
+    placeholderData: previo => previo,
   })
 
   const apuntes = respuesta?.data || []
