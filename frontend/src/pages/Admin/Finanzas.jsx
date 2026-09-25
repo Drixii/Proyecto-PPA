@@ -21,6 +21,20 @@ function aNumero(texto) {
   return Number.isFinite(n) ? n : 0
 }
 
+// Los puntos de miles puestos mientras se escribe.
+//
+// Se teclea "20000" y hay que ver "20.000": en Chile un monto sin puntos se
+// lee mal, y en una columna de cifras es donde peor se lee. Se respeta la coma
+// decimal a medio escribir —"20.000," no puede convertirse en "20.000"— o no
+// habría forma de teclear los centavos.
+function conPuntos(texto) {
+  const crudo = String(texto ?? '').replace(/[^\d,]/g, '')
+  if (!crudo) return ''
+  const [entera, ...resto] = crudo.split(',')
+  const agrupada = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return resto.length ? `${agrupada},${resto.join('').slice(0, 2)}` : agrupada
+}
+
 function Bandera({ iso2, tam = 18 }) {
   if (!iso2) return null
   return (
@@ -72,6 +86,9 @@ export default function Finanzas() {
 
   const apuntes = respuesta?.data || []
   const totales = respuesta?.totales || []
+  // El porcentaje es de la ruta, no de la línea: el badge sobre la columna.
+  const pctDe = (destino) => (respuesta?.porcentajes || [])
+    .find(p => p.origen === origen && p.destino === destino)?.porcentaje ?? 0
   const delOrigen = useMemo(
     () => apuntes.filter(a => a.origen === origen),
     [apuntes, origen],
@@ -82,7 +99,7 @@ export default function Finanzas() {
 
   // La fila en blanco del final. Vive solo aquí hasta que tenga monto: guardar
   // filas vacías llenaría el cuaderno de apuntes en cero.
-  const [nueva, setNueva] = useState({ porcentaje: '', destino: null, monto: '' })
+  const [nueva, setNueva] = useState({ destino: null, monto: '' })
 
   const guardarNueva = async () => {
     const monto = aNumero(nueva.monto)
@@ -92,10 +109,14 @@ export default function Finanzas() {
       origen,
       destino: nueva.destino,
       monto,
-      porcentaje: aNumero(nueva.porcentaje),
       orden: delOrigen.length,
     })
-    setNueva({ porcentaje: '', destino: null, monto: '' })
+    setNueva({ destino: null, monto: '' })
+    refrescar()
+  }
+
+  const ponerPorcentaje = async (destino, porcentaje) => {
+    await api.put('/finanzas/porcentaje', { origen, destino, porcentaje })
     refrescar()
   }
 
@@ -218,26 +239,22 @@ export default function Finanzas() {
               </div>
 
               <div style={{ ...GLASS, overflow: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 120 + destinos.length * 130 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: destinos.length * 150 }}>
                   <thead>
                     <tr>
-                      {/* El porcentaje a la izquierda del todo, antes que los países. */}
-                      <th className="fin-th" style={{
-                        textAlign: 'right', padding: '11px 12px', fontSize: 11, fontWeight: 700,
-                        letterSpacing: '.08em', color: '#7dd3fc', width: 92,
-                        borderBottom: '1px solid rgba(255,255,255,.08)',
-                        borderRight: '1px solid rgba(255,255,255,.08)',
-                        position: 'sticky', left: 0, zIndex: 3,
-                      }}>%</th>
-
                       {destinos.map(d => (
                         <th key={d.id} className="fin-th" style={{
-                          padding: '9px 12px', fontSize: 12, fontWeight: 600, color: '#aebfe2',
+                          padding: '9px 12px', verticalAlign: 'bottom',
                           borderBottom: '1px solid rgba(255,255,255,.08)', whiteSpace: 'nowrap',
                         }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#aebfe2' }}>
                             <Bandera iso2={d.iso2} tam={16} />
                             {d.name}
+                            {/* El porcentaje de la columna: vale para todo lo
+                                que se anote debajo, no para una línea suelta. */}
+                            <BadgePorcentaje
+                              valor={pctDe(d.name)}
+                              onGuardar={v => ponerPorcentaje(d.name, v)} />
                           </span>
                         </th>
                       ))}
@@ -253,41 +270,44 @@ export default function Finanzas() {
 
                   <tbody>
                     {delOrigen.map(a => (
-                      <Fila key={`${a.id}:${a.porcentaje}:${a.monto}`}
+                      <Fila key={`${a.id}:${a.porcentaje}:${a.monto}:${a.destino}`}
                         apunte={a}
                         destinos={destinos}
                         onEditar={cambios => editar(a.id, cambios)}
                         onBorrar={() => borrar(a.id)} />
                     ))}
 
-                    {/* La fila en blanco: escribir en una columna la reserva
-                        para ese destino y apaga el resto, porque una fila es un
-                        solo movimiento. */}
+                    {/* La fila en blanco. Escribir en una columna la reserva
+                        para ese destino y apaga el resto —una fila es un solo
+                        movimiento—, pero tocar otra columna la mueve ahí: si se
+                        eligió mal, se corrige de un clic y no hay que borrarla. */}
                     <tr>
-                      <td style={celdaIzq}>
-                        <input className="fin-cel" value={nueva.porcentaje} inputMode="decimal"
-                          placeholder="%"
-                          onChange={e => setNueva(n => ({ ...n, porcentaje: e.target.value }))}
-                          onBlur={guardarNueva} />
-                      </td>
                       {destinos.map(d => {
-                        const bloqueada = nueva.destino && nueva.destino !== d.name
+                        const suya = nueva.destino === d.name
+                        const tomada = nueva.destino && !suya
                         return (
                           <td key={d.id} style={celda}>
                             <input className="fin-cel" inputMode="decimal"
-                              disabled={bloqueada}
-                              value={nueva.destino === d.name ? nueva.monto : ''}
-                              onChange={e => setNueva(n => ({
-                                ...n,
+                              value={suya ? nueva.monto : ''}
+                              title={tomada ? `Mover esta línea a ${d.name}` : undefined}
+                              style={tomada ? { color: '#334155' } : undefined}
+                              onFocus={() => {
+                                // Tocar otra columna con algo ya escrito se
+                                // lleva el monto: es cambiar de destino, no
+                                // empezar otra línea.
+                                if (tomada) setNueva(n => ({ ...n, destino: d.name }))
+                              }}
+                              onChange={e => setNueva({
                                 destino: e.target.value ? d.name : null,
-                                monto: e.target.value,
-                              }))}
+                                monto: conPuntos(e.target.value),
+                              })}
                               onBlur={guardarNueva} />
+                            <Comision monto={aNumero(suya ? nueva.monto : 0)} pct={pctDe(d.name)} />
                           </td>
                         )
                       })}
                       <td style={{ ...celda, textAlign: 'right', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
-                        {miles(aNumero(nueva.monto) * aNumero(nueva.porcentaje) / 100)}
+                        {miles(aNumero(nueva.monto) * pctDe(nueva.destino) / 100)}
                       </td>
                       <td style={celda} />
                     </tr>
@@ -295,10 +315,8 @@ export default function Finanzas() {
 
                   <tfoot>
                     <tr>
-                      <td style={{ ...celdaIzq, textAlign: 'right', fontSize: 11, color: '#64748b', fontWeight: 700 }}>
-                        TOTAL
-                      </td>
-                      <td colSpan={destinos.length} style={{ ...celda, textAlign: 'right', color: '#aebfe2', fontSize: 13 }}>
+                      <td colSpan={destinos.length} style={{ ...celda, textAlign: 'right', color: '#aebfe2', fontSize: 13, padding: '10px 12px' }}>
+                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700, marginRight: 10 }}>TOTAL</span>
                         movido {miles(totalMovido)} {paisOrigen?.currency}
                       </td>
                       <td style={{ ...celda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14 }}>
@@ -339,42 +357,94 @@ export default function Finanzas() {
 }
 
 const celda = { padding: '2px 4px', borderBottom: '1px solid rgba(255,255,255,.04)' }
-const celdaIzq = {
-  ...celda, position: 'sticky', left: 0, background: '#071331', zIndex: 1,
-  borderRight: '1px solid rgba(255,255,255,.08)',
+/** Lo que se lleva la casa de ese monto, bajo la propia cifra. */
+function Comision({ monto, pct }) {
+  if (!monto || !pct) return null
+  return (
+    <p style={{ fontSize: 10.5, color: '#4ade80', textAlign: 'right', padding: '0 9px 4px', lineHeight: 1.2 }}>
+      comisión: {miles(monto * pct / 100)}
+    </p>
+  )
 }
 
-/** Una fila ya guardada. Su destino está decidido, así que el resto se apaga. */
+/**
+ * El porcentaje de una columna.
+ *
+ * Es un badge y no una casilla más porque no se toca casi nunca: se pone una
+ * vez por ruta y vale para todo lo que se anote debajo. Se edita al tocarlo.
+ */
+function BadgePorcentaje({ valor, onGuardar }) {
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState(String(valor ?? ''))
+
+  const cerrar = () => {
+    setEditando(false)
+    const n = aNumero(texto)
+    if (n !== valor) onGuardar(n)
+  }
+
+  if (editando) {
+    return (
+      <input
+        autoFocus
+        value={texto}
+        inputMode="decimal"
+        onChange={e => setTexto(e.target.value)}
+        onBlur={cerrar}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        style={{
+          width: 52, padding: '2px 6px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+          textAlign: 'center', color: '#eaf2ff', background: 'rgba(56,189,248,.14)',
+          border: '1px solid #38bdf8', outline: 'none',
+        }} />
+    )
+  }
+
+  const puesto = Number(valor) > 0
+  return (
+    <button type="button" onClick={() => { setTexto(String(valor ?? '')); setEditando(true) }}
+      title="Porcentaje de esta ruta"
+      style={{
+        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+        background: puesto ? 'rgba(74,222,128,.13)' : 'rgba(255,255,255,.05)',
+        border: `1px solid ${puesto ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.12)'}`,
+        color: puesto ? '#4ade80' : '#64748b',
+      }}>
+      {puesto ? `${miles(valor)}%` : '+ %'}
+    </button>
+  )
+}
+
+/**
+ * Una fila ya guardada.
+ *
+ * Su destino está decidido, así que las demás columnas se ven apagadas — pero
+ * siguen siendo clicables: tocar otra mueve la línea ahí. Sin eso, elegir mal
+ * la columna obligaba a borrar la línea y escribirla otra vez.
+ */
 function Fila({ apunte, destinos, onEditar, onBorrar }) {
-  const [pct, setPct] = useState(String(apunte.porcentaje ?? ''))
-  const [monto, setMonto] = useState(String(apunte.monto ?? ''))
+  const [monto, setMonto] = useState(conPuntos(String(apunte.monto ?? '')))
 
   // Si el apunte cambia por detrás, la fila se monta de nuevo entera: la clave
-  // que le pone la tabla lleva el monto y el porcentaje. Copiarlos aquí con un
-  // efecto obligaba a dibujar dos veces cada cambio.
+  // que le pone la tabla lleva el monto, el destino y el porcentaje.
 
   return (
     <tr>
-      <td style={celdaIzq}>
-        <input className="fin-cel" value={pct} inputMode="decimal"
-          onChange={e => setPct(e.target.value)}
-          onBlur={() => {
-            const n = aNumero(pct)
-            if (n !== apunte.porcentaje) onEditar({ porcentaje: n })
-          }} />
-      </td>
-
       {destinos.map(d => {
         const suya = d.name === apunte.destino
         return (
           <td key={d.id} style={celda}>
-            <input className="fin-cel" inputMode="decimal" disabled={!suya}
+            <input className="fin-cel" inputMode="decimal"
               value={suya ? monto : ''}
-              onChange={e => setMonto(e.target.value)}
+              title={suya ? undefined : `Mover esta línea a ${d.name}`}
+              style={suya ? undefined : { color: '#334155' }}
+              onFocus={() => { if (!suya) onEditar({ destino: d.name }) }}
+              onChange={e => setMonto(conPuntos(e.target.value))}
               onBlur={() => {
                 const n = aNumero(monto)
                 if (suya && n !== apunte.monto) onEditar({ monto: n })
               }} />
+            {suya && <Comision monto={apunte.monto} pct={apunte.porcentaje} />}
           </td>
         )
       })}

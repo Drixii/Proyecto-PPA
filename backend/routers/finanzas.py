@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from auth.dependencies import require_super_admin
 from database import get_db
 from models.country import Country
-from models.finance_entry import FinanceEntry
+from models.finance_entry import FinanceEntry, FinanceRate
 from models.user import User
 
 router = APIRouter(prefix="/api/finanzas", tags=["finanzas"])
@@ -30,7 +30,6 @@ class ApunteIn(BaseModel):
     origen: str
     destino: str
     monto: float = 0.0
-    porcentaje: float = 0.0
     orden: int = 0
     nota: Optional[str] = None
 
@@ -38,13 +37,32 @@ class ApunteIn(BaseModel):
 class ApuntePatch(BaseModel):
     destino: Optional[str] = None
     monto: Optional[float] = None
-    porcentaje: Optional[float] = None
     nota: Optional[str] = None
+
+
+class PorcentajeIn(BaseModel):
+    origen: str
+    destino: str
+    porcentaje: float = Field(ge=0, le=100)
 
 
 def _moneda_de(db: Session, pais: str) -> str:
     fila = db.query(Country).filter(Country.name == pais).first()
     return fila.currency if fila else ""
+
+
+def _porcentajes(db: Session, dueno_id: int) -> dict[tuple[str, str], float]:
+    filas = db.query(FinanceRate).filter(FinanceRate.super_admin_id == dueno_id).all()
+    return {(f.origen, f.destino): f.porcentaje for f in filas}
+
+
+def _pct_de_ruta(db: Session, dueno_id: int, origen: str, destino: str) -> float:
+    f = db.query(FinanceRate).filter(
+        FinanceRate.super_admin_id == dueno_id,
+        FinanceRate.origen == origen,
+        FinanceRate.destino == destino,
+    ).first()
+    return f.porcentaje if f else 0.0
 
 
 def _sale(a: FinanceEntry) -> dict:
@@ -114,6 +132,13 @@ def listar(
     return {
         "data": apuntes,
         "totales": sorted(por_moneda.values(), key=lambda m: m["moneda"]),
+        # Todas las rutas con porcentaje puesto, no solo las que tienen apuntes
+        # en este rango: el badge de la columna tiene que verse aunque ese día
+        # no se haya movido nada por ahí.
+        "porcentajes": [
+            {"origen": o, "destino": d, "porcentaje": p}
+            for (o, d), p in _porcentajes(db, admin.id).items()
+        ],
     }
 
 
@@ -130,7 +155,7 @@ def crear(
         destino=datos.destino,
         moneda=_moneda_de(db, datos.origen),
         monto=datos.monto,
-        porcentaje=datos.porcentaje,
+        porcentaje=_pct_de_ruta(db, admin.id, datos.origen, datos.destino),
         orden=datos.orden,
         nota=datos.nota,
     )
@@ -148,11 +173,54 @@ def editar(
     admin: User = Depends(require_super_admin),
 ):
     a = _mio(db, apunte_id, admin)
-    for campo, valor in datos.model_dump(exclude_unset=True).items():
+    cambios = datos.model_dump(exclude_unset=True)
+    for campo, valor in cambios.items():
         setattr(a, campo, valor)
+    # Cambiar de columna es cambiar de ruta, y cada ruta cobra lo suyo.
+    if "destino" in cambios:
+        a.porcentaje = _pct_de_ruta(db, admin.id, a.origen, a.destino)
     db.commit()
     db.refresh(a)
     return {"data": _sale(a)}
+
+
+@router.put("/porcentaje", response_model=dict)
+def poner_porcentaje(
+    datos: PorcentajeIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """El porcentaje de una ruta, el badge de la columna.
+
+    Recalcula lo ya anotado de esa ruta, incluido lo de fechas que ahora mismo
+    no se estén viendo: es lo que se cobra ahí, no una nota de un día. Si
+    hiciera falta conservar lo viejo con el porcentaje antiguo, habría que
+    guardar desde cuándo rige cada uno, y eso es otra cosa.
+    """
+    fila = db.query(FinanceRate).filter(
+        FinanceRate.super_admin_id == admin.id,
+        FinanceRate.origen == datos.origen,
+        FinanceRate.destino == datos.destino,
+    ).first()
+
+    if fila:
+        fila.porcentaje = datos.porcentaje
+    else:
+        db.add(FinanceRate(
+            super_admin_id=admin.id,
+            origen=datos.origen,
+            destino=datos.destino,
+            porcentaje=datos.porcentaje,
+        ))
+
+    tocados = db.query(FinanceEntry).filter(
+        FinanceEntry.super_admin_id == admin.id,
+        FinanceEntry.origen == datos.origen,
+        FinanceEntry.destino == datos.destino,
+    ).update({"porcentaje": datos.porcentaje}, synchronize_session=False)
+
+    db.commit()
+    return {"ok": True, "apuntes_recalculados": tocados}
 
 
 @router.delete("/{apunte_id}", response_model=dict)

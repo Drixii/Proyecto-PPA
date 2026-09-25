@@ -45,3 +45,28 @@ class FinanceEntry(Base):
 
 # Lo que se pide siempre: el cuaderno de un super-admin en un rango de fechas.
 Index("ix_finance_entries_dueno_fecha", FinanceEntry.super_admin_id, FinanceEntry.fecha)
+
+
+class FinanceRate(Base):
+    """El porcentaje que se gana en una ruta: de un país a otro.
+
+    Vive aparte del apunte porque es del par origen→destino, no de cada línea:
+    en la pantalla es el badge que hay sobre cada columna, y vale para todo lo
+    anotado en esa columna. Tenerlo por fila obligaba a reescribirlo en cada
+    movimiento y a que dos líneas de la misma ruta pudieran contradecirse.
+
+    Cambiarlo recalcula lo ya anotado de esa ruta: es el porcentaje que se
+    cobra ahí, no el de un día suelto.
+    """
+    __tablename__ = "finance_rates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    super_admin_id = Column(Integer, nullable=False, index=True)
+    origen = Column(String, nullable=False)
+    destino = Column(String, nullable=False)
+    porcentaje = Column(Float, nullable=False, default=0.0)
+
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+Index("ix_finance_rates_ruta", FinanceRate.super_admin_id, FinanceRate.origen, FinanceRate.destino, unique=True)
