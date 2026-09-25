@@ -800,6 +800,26 @@ export default function FinexyLayout({ children, fullHeight = false }) {
 
           {/* Right actions */}
           <div className="flex items-center gap-1.5 md:gap-2">
+            {/* Gestión de finanzas. Solo el super-admin, y aparte del menú
+                lateral: no es una pantalla más de la operación, es el capital.
+                La dirección es /admin/finanzas porque /dashboard ya es la
+                portada del cliente. */}
+            {isAdmin && (
+              <Link
+                to="/admin/finanzas"
+                title="Gestión de finanzas"
+                className="flex items-center gap-1.5 rounded-full px-2.5 md:px-3 h-9 text-xs font-semibold transition-colors"
+                style={{ background: 'rgba(56,189,248,.1)', border: '1px solid rgba(56,189,248,.28)', color: '#7dd3fc' }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="M3 3v18h18" />
+                  <path d="M7 15l3.5-4 3 2.5L20 7" />
+                </svg>
+                <span className="hidden md:inline">Dashboard</span>
+              </Link>
+            )}
+
             {/* Volver a la web pública. Desde el panel no había forma de ir a
                 la portada sin escribir la dirección a mano, y es donde están
                 la calculadora, las tasas y lo que se le enseña a un cliente. */}

@@ -20,6 +20,7 @@ const OrderAdmin = lazy(() => import('./pages/Admin/OrderAdmin'))
 const AdminSettings = lazy(() => import('./pages/Admin/AdminSettings'))
 const AdminOrders = lazy(() => import('./pages/Admin/AdminOrders'))
 const Retenciones = lazy(() => import('./pages/Admin/Retenciones'))
+const Finanzas = lazy(() => import('./pages/Admin/Finanzas'))
 const AdminUsers = lazy(() => import('./pages/Admin/AdminUsers'))
 const ClientHistory = lazy(() => import('./pages/Client/ClientHistory'))
 const ClientProfile = lazy(() => import('./pages/Client/ClientProfile'))
@@ -170,6 +171,11 @@ export default function App() {
         <Route path="/admin/settings" element={<RequireAuth role="admin"><AdminSettings /></RequireAuth>} />
         <Route path="/admin/orders" element={<RequireAuth role="admin"><AdminOrders /></RequireAuth>} />
         <Route path="/admin/retenciones" element={<RequireAuth role="admin"><Retenciones /></RequireAuth>} />
+        {/* Finanzas va por su propia dirección y no cuelga del panel: lo que
+            se vea aquí no es la operación del día, es el capital. El botón del
+            encabezado la llama "Dashboard"; /dashboard ya es la portada del
+            cliente, así que la dirección no puede ser esa. */}
+        <Route path="/admin/finanzas" element={<RequireAuth role="admin"><Finanzas /></RequireAuth>} />
         <Route path="/admin/users" element={<RequireAuth role="admin"><AdminUsers /></RequireAuth>} />
 
         {/* Super-Admin Profile */}
