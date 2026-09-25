@@ -775,7 +775,7 @@ function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
                   {d ? `${miles(d.movido)} ${d.moneda}` : ''}
                 </td>
                 <td style={{ ...celda, textAlign: 'right', padding: '5px 10px', fontSize: 12.5, fontWeight: 700, color: '#4ade80', borderRight: 'none' }}>
-                  {d ? miles(d.ganado) : ''}
+                  {d ? <>{miles(d.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{d.moneda}</span></> : ''}
                 </td>
               </tr>
             )
@@ -789,10 +789,10 @@ function Resumen({ titulo, nota, paises, porOrigen, totales, sinTasa = 0 }) {
                 TOTAL {t.moneda}
               </td>
               <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
-                {miles(t.movido)}
+                {miles(t.movido)} <span style={{ fontWeight: 500, fontSize: 11, color: '#64748b' }}>{t.moneda}</span>
               </td>
               <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13.5, fontWeight: 800, color: '#4ade80', borderRight: 'none' }}>
-                {miles(t.ganado)}
+                {miles(t.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{t.moneda}</span>
               </td>
             </tr>
           ))}
