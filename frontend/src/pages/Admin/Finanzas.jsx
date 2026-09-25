@@ -4,6 +4,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import DateRangePicker from '../../components/DateRangePicker'
 import api from '../../services/api'
 
+// Lo que mide la columna del porcentaje. Está aquí y no repetido porque la
+// del país se pega justo a su derecha y las dos medidas tienen que cuadrar.
+const ANCHO_PCT = 54
+
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '18px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }
 
 const hoy = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()) }
@@ -34,6 +38,13 @@ function conPuntos(texto) {
   const agrupada = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   return resto.length ? `${agrupada},${resto.join('').slice(0, 2)}` : agrupada
 }
+
+// El ancho del campo, en caracteres.
+//
+// Antes cada columna medía lo mismo aunque llevara "500" o "1.250.000", y con
+// varios movimientos anotados la tabla se iba de ancho sin necesidad. El
+// mínimo es para que la casilla vacía siga siendo cómoda de tocar.
+const anchoDe = texto => Math.max(6, String(texto ?? '').length + 1)
 
 function Bandera({ iso2, tam = 18 }) {
   if (!iso2) return null
@@ -150,8 +161,8 @@ export default function Finanzas() {
   return (
     <div style={{ minHeight: '100vh', background: '#050f25', display: 'flex' }}>
       <style>{`
-        .fin-cel{background:transparent;border:1px solid transparent;border-radius:9px;color:#eaf2ff;
-          padding:7px 9px;width:100%;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
+        .fin-cel{background:transparent;border:1px solid transparent;border-radius:8px;color:#eaf2ff;
+          padding:6px 7px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
         .fin-cel:hover:not(:disabled){border-color:rgba(255,255,255,.12)}
         .fin-cel:focus{outline:none;border-color:#38bdf8;background:rgba(56,189,248,.07)}
         .fin-cel.trancada{color:#2b3a55;cursor:pointer}
@@ -253,18 +264,23 @@ export default function Finanzas() {
                 <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr>
-                      <th style={{ ...cabecera, ...pegadaPct, width: 76 }}>%</th>
-                      <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left' }}>PAÍS</th>
+                      <th style={{ ...cabecera, ...pegadaPct, width: ANCHO_PCT, padding: '9px 4px' }}>%</th>
+                      <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px 9px 6px' }}>PAÍS</th>
 
                       {/* Una columna por movimiento, numeradas como se anotan. */}
                       {columnas.map(c => (
-                        <th key={c} style={{ ...cabecera, minWidth: 130, color: '#64748b', textAlign: 'right' }}>
+                        <th key={c} style={{ ...cabecera, color: '#64748b', textAlign: 'right' }}>
                           {c + 1}
                         </th>
                       ))}
 
-                      <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2', whiteSpace: 'nowrap' }}>MOVIDO</th>
-                      <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', whiteSpace: 'nowrap' }}>GANANCIA</th>
+                      {/* Se queda con el ancho que sobre, para que los totales
+                          no vayan pegados al último movimiento y las columnas
+                          de montos no se estiren sin necesidad. */}
+                      <th style={{ ...cabecera, width: 'auto', borderRight: 'none' }} />
+
+                      <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>MOVIDO</th>
+                      <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>GANANCIA</th>
                     </tr>
                   </thead>
 
@@ -291,7 +307,7 @@ export default function Finanzas() {
                   <tfoot>
                     <tr>
                       <td style={{ ...pieCelda, ...pegadaPct }} />
-                      <td style={{ ...pieCelda, ...pegadaPais, fontSize: 11, color: '#64748b', fontWeight: 700 }}>
+                      <td style={{ ...pieCelda, ...pegadaPais, fontSize: 11, color: '#64748b', fontWeight: 700, padding: '9px 10px 9px 6px' }}>
                         TOTAL
                       </td>
                       {columnas.map(c => (
@@ -299,10 +315,11 @@ export default function Finanzas() {
                           {porColumna.get(c) ? miles(porColumna.get(c).monto) : ''}
                         </td>
                       ))}
+                      <td style={{ ...pieCelda, width: 'auto', borderRight: 'none' }} />
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
                         {miles(totalMovido)}
                       </td>
-                      <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14 }}>
+                      <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14, borderRight: 'none' }}>
                         {miles(totalGanado)}
                       </td>
                     </tr>
@@ -338,18 +355,34 @@ export default function Finanzas() {
   )
 }
 
+// La raya vertical entre columnas. Antes solo había líneas horizontales y las
+// cifras de dos movimientos seguidos parecían la misma columna.
+const RAYA = '1px solid rgba(255,255,255,.09)'
+
+// `width: 1%` con el texto sin partir es cómo se le pide a una tabla que una
+// columna ocupe lo justo: el navegador reparte el ancho sobrante entre las que
+// no lo piden, y aquí la única que lo pide es la separadora.
+const ajustada = { width: '1%', whiteSpace: 'nowrap' }
+
 const cabecera = {
+  ...ajustada,
   position: 'sticky', top: 0, zIndex: 2, background: '#071331',
-  padding: '10px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
-  borderBottom: '1px solid rgba(255,255,255,.08)', color: '#7dd3fc',
+  padding: '9px 10px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
+  borderBottom: '1px solid rgba(255,255,255,.08)', borderRight: RAYA, color: '#7dd3fc',
 }
-const celda = { padding: '2px 4px', borderBottom: '1px solid rgba(255,255,255,.04)' }
-const pieCelda = { padding: '9px 12px', borderTop: '1px solid rgba(255,255,255,.1)' }
+const celda = {
+  ...ajustada,
+  padding: '2px 3px', borderBottom: '1px solid rgba(255,255,255,.05)', borderRight: RAYA,
+}
+const pieCelda = {
+  ...ajustada,
+  padding: '9px 10px', borderTop: '1px solid rgba(255,255,255,.12)', borderRight: RAYA,
+}
 
 // El porcentaje y el país se quedan a la vista al desplazar a lo ancho: con
 // veinte movimientos anotados, sin esto no se sabe de qué fila es cada cifra.
 const pegadaPct = { position: 'sticky', left: 0, zIndex: 3, background: '#071331', textAlign: 'center' }
-const pegadaPais = { position: 'sticky', left: 76, zIndex: 3, background: '#071331', borderRight: '1px solid rgba(255,255,255,.08)' }
+const pegadaPais = { position: 'sticky', left: ANCHO_PCT, zIndex: 3, background: '#071331', borderRight: '1px solid rgba(255,255,255,.14)' }
 
 /** Lo que se lleva la casa de ese monto, bajo la propia cifra. */
 function Comision({ monto, pct }) {
@@ -399,7 +432,7 @@ function BadgePorcentaje({ valor, onGuardar }) {
     <button type="button" onClick={() => { setTexto(String(valor ?? '')); setEditando(true) }}
       title="Porcentaje de esta ruta"
       style={{
-        padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+        padding: '3px 7px', borderRadius: 999, fontSize: 11, fontWeight: 700,
         background: puesto ? 'rgba(74,222,128,.13)' : 'rgba(255,255,255,.05)',
         border: `1px solid ${puesto ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.12)'}`,
         color: puesto ? '#4ade80' : '#64748b',
@@ -427,7 +460,7 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
   if (trancada) {
     return (
       <td style={celda}>
-        <input className="fin-cel trancada" value="———" readOnly
+        <input className="fin-cel trancada" value="———" readOnly size={4}
           title={`Pasar este movimiento a ${pais.name}`}
           onFocus={() => onEditar(apunte.id, { destino: pais.name })} />
       </td>
@@ -438,7 +471,7 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
     return (
       <td style={{ ...celda, background: 'rgba(56,189,248,.04)' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <input className="fin-cel" inputMode="decimal" value={texto}
+          <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
             onChange={e => setTexto(conPuntos(e.target.value))}
             onBlur={() => {
               const n = aNumero(texto)
@@ -458,6 +491,7 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
     <td style={celda}>
       <input className="fin-cel" inputMode="decimal"
         value={enBorrador ? borrador.texto : ''}
+        size={anchoDe(enBorrador ? borrador.texto : '')}
         onChange={e => setBorrador({
           col,
           destino: e.target.value ? pais.name : null,
@@ -476,12 +510,12 @@ function FilaPais({
 }) {
   return (
     <tr>
-      <td style={{ ...celda, ...pegadaPct, padding: '6px 8px' }}>
+      <td style={{ ...celda, ...pegadaPct, padding: '6px 3px' }}>
         <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />
       </td>
 
-      <td style={{ ...celda, ...pegadaPais, padding: '6px 12px', whiteSpace: 'nowrap' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
+      <td style={{ ...celda, ...pegadaPais, padding: '6px 10px 6px 6px' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
           <Bandera iso2={pais.iso2} tam={17} />
           {pais.name}
         </span>
