@@ -159,6 +159,20 @@ def _suma_en_caja(filas) -> tuple[list[dict], dict, int]:
     return sorted(por_origen.values(), key=lambda o: o["origen"]), total, sin_tasa
 
 
+def _no_a_si_mismo(origen: str, destino: str) -> None:
+    """Nadie se envía dinero a sí mismo.
+
+    Se comprueba aquí y no solo escondiendo la fila: una fila que no se pinta
+    pero cuyo apunte existe sigue sumando en los totales, y no habría forma de
+    verlo ni de corregirlo desde la pantalla.
+    """
+    if origen == destino:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{origen} no puede enviarse a sí mismo",
+        )
+
+
 def _mio(db: Session, apunte_id: int, dueno: User) -> FinanceEntry:
     """El apunte, si es de quien pregunta. Si no, no existe.
 
@@ -236,6 +250,7 @@ def crear(
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
+    _no_a_si_mismo(datos.origen, datos.destino)
     moneda = _moneda_de(db, datos.origen)
     tasa = _tasa_a_caja(db, moneda)
     a = FinanceEntry(
@@ -266,6 +281,8 @@ def editar(
 ):
     a = _mio(db, apunte_id, admin)
     cambios = datos.model_dump(exclude_unset=True)
+    if "destino" in cambios:
+        _no_a_si_mismo(a.origen, cambios["destino"])
     for campo, valor in cambios.items():
         setattr(a, campo, valor)
     # Cambiar de columna es cambiar de ruta, y cada ruta cobra lo suyo.
@@ -295,6 +312,8 @@ def poner_porcentaje(
     hiciera falta conservar lo viejo con el porcentaje antiguo, habría que
     guardar desde cuándo rige cada uno, y eso es otra cosa.
     """
+    _no_a_si_mismo(datos.origen, datos.destino)
+
     fila = db.query(FinanceRate).filter(
         FinanceRate.super_admin_id == admin.id,
         FinanceRate.origen == datos.origen,
@@ -349,7 +368,7 @@ def porcentaje_general(
 
     puestos = 0
     for destino in datos.destinos:
-        if destino in ya:
+        if destino in ya or destino == datos.origen:
             continue
         fila = db.query(FinanceRate).filter(
             FinanceRate.super_admin_id == admin.id,

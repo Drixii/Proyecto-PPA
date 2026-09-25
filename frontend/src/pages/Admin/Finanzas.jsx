@@ -127,14 +127,12 @@ export default function Finanzas() {
 
   const paisOrigen = origenes.find(p => p.name === origen)
 
-  // Un país no se envía a sí mismo, así que el que está elegido no es un
-  // destino y su fila solo ocupaba sitio.
-  //
-  // Salvo que ya haya algo anotado ahí: esconder la fila escondería el dinero
-  // —que seguiría sumando en los totales— y no habría forma de corregirlo.
+  // Un país no se envía a sí mismo: el elegido no es destino de sí mismo y su
+  // fila no sale nunca. El servidor tampoco deja guardar esa ruta, así que no
+  // puede quedarse dinero escondido detrás de la fila que no se pinta.
   const destinosDelOrigen = useMemo(
-    () => destinos.filter(d => d.name !== origen || delOrigen.some(a => a.destino === d.name)),
-    [destinos, origen, delOrigen],
+    () => destinos.filter(d => d.name !== origen),
+    [destinos, origen],
   )
   const refrescar = () => qc.invalidateQueries({ queryKey: ['finanzas'] })
 
