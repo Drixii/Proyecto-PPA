@@ -4,10 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import DateRangePicker from '../../components/DateRangePicker'
 import api from '../../services/api'
 
-// Lo que mide la columna del porcentaje. Está aquí y no repetido porque la
-// del país se pega justo a su derecha y las dos medidas tienen que cuadrar.
-const ANCHO_PCT = 54
-
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '18px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }
 
 const hoy = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()) }
@@ -39,12 +35,12 @@ function conPuntos(texto) {
   return resto.length ? `${agrupada},${resto.join('').slice(0, 2)}` : agrupada
 }
 
-// El ancho del campo, en caracteres.
+// El ancho del campo, en caracteres, creciendo con lo que se teclea.
 //
 // Antes cada columna medía lo mismo aunque llevara "500" o "1.250.000", y con
-// varios movimientos anotados la tabla se iba de ancho sin necesidad. El
-// mínimo es para que la casilla vacía siga siendo cómoda de tocar.
-const anchoDe = texto => Math.max(6, String(texto ?? '').length + 1)
+// varios movimientos anotados la tabla se iba de ancho sin motivo. Arranca en
+// lo mínimo que sigue siendo cómodo de tocar con el dedo.
+const anchoDe = texto => Math.max(3, String(texto ?? '').length + 1)
 
 function Bandera({ iso2, tam = 18 }) {
   if (!iso2) return null
@@ -264,8 +260,9 @@ export default function Finanzas() {
                 <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr>
-                      <th style={{ ...cabecera, ...pegadaPct, width: ANCHO_PCT, padding: '9px 4px' }}>%</th>
-                      <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px 9px 6px' }}>PAÍS</th>
+                      <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 8px 9px 5px' }}>
+                        % · PAÍS
+                      </th>
 
                       {/* Una columna por movimiento, numeradas como se anotan. */}
                       {columnas.map(c => (
@@ -306,8 +303,7 @@ export default function Finanzas() {
 
                   <tfoot>
                     <tr>
-                      <td style={{ ...pieCelda, ...pegadaPct }} />
-                      <td style={{ ...pieCelda, ...pegadaPais, fontSize: 11, color: '#64748b', fontWeight: 700, padding: '9px 10px 9px 6px' }}>
+                      <td style={{ ...pieCelda, ...pegadaPais, fontSize: 11, color: '#64748b', fontWeight: 700, padding: '9px 8px 9px 5px' }}>
                         TOTAL
                       </td>
                       {columnas.map(c => (
@@ -379,10 +375,19 @@ const pieCelda = {
   padding: '9px 10px', borderTop: '1px solid rgba(255,255,255,.12)', borderRight: RAYA,
 }
 
-// El porcentaje y el país se quedan a la vista al desplazar a lo ancho: con
-// veinte movimientos anotados, sin esto no se sabe de qué fila es cada cifra.
-const pegadaPct = { position: 'sticky', left: 0, zIndex: 3, background: '#071331', textAlign: 'center' }
-const pegadaPais = { position: 'sticky', left: ANCHO_PCT, zIndex: 3, background: '#071331', borderRight: '1px solid rgba(255,255,255,.14)' }
+// El porcentaje y el país van juntos en una sola casilla: son la misma cosa
+// —cuánto se cobra ahí— y separarlos gastaba una columna entera con su raya.
+//
+// Se queda a la vista al desplazar a lo ancho: con veinte movimientos
+// anotados, sin esto no se sabe de qué fila es cada cifra.
+const pegadaPais = {
+  position: 'sticky', left: 0, zIndex: 3, background: '#071331',
+  borderRight: '1px solid rgba(255,255,255,.14)',
+}
+
+// El badge del porcentaje mide siempre lo mismo para que lo que va detrás
+// quede alineado de fila a fila.
+const ANCHO_BADGE = 44
 
 /** Lo que se lleva la casa de ese monto, bajo la propia cifra. */
 function Comision({ monto, pct }) {
@@ -420,9 +425,9 @@ function BadgePorcentaje({ valor, onGuardar }) {
         onBlur={cerrar}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
         style={{
-          width: 56, padding: '3px 6px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+          width: ANCHO_BADGE, padding: '2px 4px', borderRadius: 999, fontSize: 10.5, fontWeight: 700,
           textAlign: 'center', color: '#eaf2ff', background: 'rgba(56,189,248,.14)',
-          border: '1px solid #38bdf8', outline: 'none',
+          border: '1px solid #38bdf8', outline: 'none', flexShrink: 0,
         }} />
     )
   }
@@ -432,7 +437,10 @@ function BadgePorcentaje({ valor, onGuardar }) {
     <button type="button" onClick={() => { setTexto(String(valor ?? '')); setEditando(true) }}
       title="Porcentaje de esta ruta"
       style={{
-        padding: '3px 7px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+        // Ancho fijo aunque el número sea más corto: así las banderas y los
+        // nombres de todas las filas empiezan en la misma vertical.
+        width: ANCHO_BADGE, padding: '2px 4px', borderRadius: 999, fontSize: 10.5, fontWeight: 700,
+        flexShrink: 0, textAlign: 'center',
         background: puesto ? 'rgba(74,222,128,.13)' : 'rgba(255,255,255,.05)',
         border: `1px solid ${puesto ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.12)'}`,
         color: puesto ? '#4ade80' : '#64748b',
@@ -460,7 +468,7 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
   if (trancada) {
     return (
       <td style={celda}>
-        <input className="fin-cel trancada" value="———" readOnly size={4}
+        <input className="fin-cel trancada" value="—" readOnly size={2}
           title={`Pasar este movimiento a ${pais.name}`}
           onFocus={() => onEditar(apunte.id, { destino: pais.name })} />
       </td>
@@ -510,13 +518,10 @@ function FilaPais({
 }) {
   return (
     <tr>
-      <td style={{ ...celda, ...pegadaPct, padding: '6px 3px' }}>
-        <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />
-      </td>
-
-      <td style={{ ...celda, ...pegadaPais, padding: '6px 10px 6px 6px' }}>
+      <td style={{ ...celda, ...pegadaPais, padding: '5px 8px 5px 5px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
-          <Bandera iso2={pais.iso2} tam={17} />
+          <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />
+          <Bandera iso2={pais.iso2} tam={16} />
           {pais.name}
         </span>
       </td>
