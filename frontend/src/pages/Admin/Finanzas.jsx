@@ -165,6 +165,9 @@ export default function Finanzas() {
 
   const movidoDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + a.monto, 0)
   const ganadoDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + a.ganancia, 0)
+  // Lo mismo en pesos chilenos, que es la moneda de la caja.
+  const movidoClpDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + (a.monto_clp || 0), 0)
+  const ganadoClpDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + (a.ganancia_clp || 0), 0)
 
   const totalMovido = delOrigen.reduce((s, a) => s + a.monto, 0)
   const totalGanado = delOrigen.reduce((s, a) => s + a.ganancia, 0)
@@ -244,33 +247,6 @@ export default function Finanzas() {
           </div>
         </header>
 
-        {/* Los países desde los que se envía. */}
-        <div style={{
-          display: 'flex', gap: 7, padding: '11px 22px', overflowX: 'auto',
-          borderBottom: '1px solid rgba(255,255,255,.07)',
-        }}>
-          {origenes.map(p => {
-            const activo = p.name === origen
-            return (
-              <button key={p.id} type="button" onClick={() => setElegido(p.name)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
-                  padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
-                  transition: 'all .15s',
-                  background: activo ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
-                  border: `1px solid ${activo ? '#38bdf8' : 'rgba(255,255,255,.07)'}`,
-                  color: activo ? '#eaf2ff' : '#8aa0cc',
-                }}>
-                <Bandera iso2={p.iso2} />
-                {p.name}
-              </button>
-            )
-          })}
-          {!origenes.length && (
-            <p style={{ fontSize: 13, color: '#64748b' }}>No hay países marcados como origen.</p>
-          )}
-        </div>
-
         {/* Qué se mira de ese país: los montos que se anotan día a día, o lo
             que suman. Van en pestañas y no uno debajo del otro porque no se
             usan a la vez: se anota, o se mira el total. */}
@@ -315,6 +291,36 @@ export default function Finanzas() {
                 sinTasa={acumulado.sin_tasa || 0} />
             </div>
             </>
+          )}
+
+          {/* Los países desde los que se envía. Salen solo en esta pestaña
+              porque solo mandan aquí: el cuadro del total es el mismo para
+              todos y no depende de cuál esté elegido. */}
+          {vista === 'diarios' && (
+          <div style={{
+            display: 'flex', gap: 7, marginBottom: 16, overflowX: 'auto',
+          }}>
+            {origenes.map(p => {
+              const activo = p.name === origen
+              return (
+                <button key={p.id} type="button" onClick={() => setElegido(p.name)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
+                    padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+                    transition: 'all .15s',
+                    background: activo ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
+                    border: `1px solid ${activo ? '#38bdf8' : 'rgba(255,255,255,.07)'}`,
+                    color: activo ? '#eaf2ff' : '#8aa0cc',
+                  }}>
+                  <Bandera iso2={p.iso2} />
+                  {p.name}
+                </button>
+              )
+            })}
+            {!origenes.length && (
+              <p style={{ fontSize: 13, color: '#64748b' }}>No hay países marcados como origen.</p>
+            )}
+          </div>
           )}
 
           {vista === 'diarios' && origen && (
@@ -387,6 +393,8 @@ export default function Finanzas() {
                         onBorrar={borrar}
                         movido={movidoDe(d.name)}
                         ganado={ganadoDe(d.name)}
+                        movidoClp={movidoClpDe(d.name)}
+                        ganadoClp={ganadoClpDe(d.name)}
                       />
                     ))}
                   </tbody>
@@ -407,15 +415,15 @@ export default function Finanzas() {
                             que se lleva la caja: el total del país dice lo que
                             se movió allá, este dice lo que vale aquí. */}
                         {enPesos && (
-                          <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#64748b', marginTop: 2 }}>
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
                             {miles(enPesos.movido)} CLP
                           </span>
                         )}
                       </td>
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14, borderRight: 'none' }}>
-                        {miles(totalGanado)}
+                        {miles(totalGanado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{paisOrigen?.currency}</span>
                         {enPesos && (
-                          <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#3f8f5c', marginTop: 2 }}>
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
                             {miles(enPesos.ganado)} CLP
                           </span>
                         )}
@@ -486,23 +494,21 @@ const ANCHO_BADGE = 44
  * No cuenta para el ancho de la columna: el texto es más largo que el propio
  * monto, y era eso —no las cifras— lo que estaba abriendo las columnas.
  */
-function Comision({ monto, pct, moneda }) {
-  if (!monto) return null
+function Comision({ monto, pct, moneda, montoClp }) {
+  if (!monto || !pct) return null
+  const enPesos = montoClp ? montoClp * pct / 100 : 0
   return (
-    <p title={pct ? `Comisión del ${miles(pct)}%` : undefined}
-      style={{
-        // Sin el truco de ancho cero: con "ARS · comisión: 16.000" el texto se
-        // salía de la casilla y pisaba la de al lado. Que la columna mida lo
-        // que ocupa esta línea es el precio de que se lea entera.
-        fontSize: 10, textAlign: 'right', lineHeight: 1.25,
-        padding: '0 7px 3px', whiteSpace: 'nowrap',
-      }}>
-      {/* La moneda va aquí abajo y no pegada a la cifra: así se sabe en qué
-          está anotado el monto sin que el texto abra la columna. */}
-      {moneda && <span style={{ color: '#64748b' }}>{moneda}</span>}
-      {moneda && pct ? <span style={{ color: '#334155' }}> · </span> : null}
-      {pct ? <span style={{ color: '#4ade80' }}>comisión: {miles(monto * pct / 100)}</span> : null}
-    </p>
+    <div title={`Comisión del ${miles(pct)}%`}
+      style={{ fontSize: 10, textAlign: 'right', lineHeight: 1.3, padding: '0 7px 3px', whiteSpace: 'nowrap' }}>
+      <p style={{ color: '#4ade80' }}>
+        comisión: {miles(monto * pct / 100)} <span style={{ color: '#3f8f5c' }}>{moneda}</span>
+      </p>
+      {/* Y lo mismo en pesos chilenos, que es la moneda en la que se lleva la
+          caja: arriba lo que cobró el cliente allá, aquí lo que entra aquí. */}
+      {enPesos > 0 && (
+        <p style={{ color: '#3f8f5c' }}>{miles(enPesos)} CLP</p>
+      )}
+    </div>
   )
 }
 
@@ -587,32 +593,40 @@ function Casilla({ pais, col, apunte, pct, moneda, borrador, setBorrador, onGuar
   if (suya) {
     return (
       <td className="fin-casilla" style={{ ...celda, background: 'rgba(56,189,248,.04)', position: 'relative' }}>
-        <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
-          onChange={e => setTexto(conPuntos(e.target.value))}
-          onBlur={() => {
-            const n = aNumero(texto)
-            if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
-          }} />
+        <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+          <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
+            onChange={e => setTexto(conPuntos(e.target.value))}
+            onBlur={() => {
+              const n = aNumero(texto)
+              if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
+            }} />
+          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
+        </span>
         <button type="button" className="fin-x" onClick={() => onBorrar(apunte.id)}
           title="Quitar este movimiento">
           ✕
         </button>
-        <Comision monto={apunte.monto} pct={pct} moneda={moneda} />
+        <Comision monto={apunte.monto} pct={pct} moneda={moneda} montoClp={apunte.monto_clp} />
       </td>
     )
   }
 
   return (
     <td style={celda}>
-      <input className="fin-cel" inputMode="decimal"
-        value={enBorrador ? borrador.texto : ''}
-        size={anchoDe(enBorrador ? borrador.texto : '')}
-        onChange={e => setBorrador({
-          col,
-          destino: e.target.value ? pais.name : null,
-          texto: conPuntos(e.target.value),
-        })}
-        onBlur={onGuardarBorrador} />
+      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+        <input className="fin-cel" inputMode="decimal"
+          value={enBorrador ? borrador.texto : ''}
+          size={anchoDe(enBorrador ? borrador.texto : '')}
+          onChange={e => setBorrador({
+            col,
+            destino: e.target.value ? pais.name : null,
+            texto: conPuntos(e.target.value),
+          })}
+          onBlur={onGuardarBorrador} />
+        {enBorrador && (
+          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
+        )}
+      </span>
       {enBorrador && <Comision monto={aNumero(borrador.texto)} pct={pct} moneda={moneda} />}
     </td>
   )
@@ -621,7 +635,7 @@ function Casilla({ pais, col, apunte, pct, moneda, borrador, setBorrador, onGuar
 /** Un país: su porcentaje, sus casillas y lo que deja. */
 function FilaPais({
   pais, pct, moneda, columnas, porColumna, borrador, setBorrador, onGuardarBorrador,
-  onPorcentaje, onEditar, onBorrar, movido, ganado,
+  onPorcentaje, onEditar, onBorrar, movido, ganado, movidoClp, ganadoClp,
 }) {
   return (
     <tr>
@@ -653,10 +667,28 @@ function FilaPais({
       })}
 
       <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', color: '#aebfe2', fontSize: 13 }}>
-        {movido ? <>{miles(movido)} <span style={{ fontSize: 10.5, color: '#64748b' }}>{moneda}</span></> : ''}
+        {movido ? (
+          <>
+            {miles(movido)} <span style={{ fontSize: 10.5, color: '#64748b' }}>{moneda}</span>
+            {movidoClp > 0 && (
+              <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
+                {miles(movidoClp)} CLP
+              </span>
+            )}
+          </>
+        ) : ''}
       </td>
       <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
-        {ganado ? miles(ganado) : ''}
+        {ganado ? (
+          <>
+            {miles(ganado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{moneda}</span>
+            {ganadoClp > 0 && (
+              <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#4ade80' }}>
+                {miles(ganadoClp)} CLP
+              </span>
+            )}
+          </>
+        ) : ''}
       </td>
     </tr>
   )
