@@ -53,6 +53,10 @@ function Bandera({ iso2, tam = 18 }) {
 // propósito: por aquí entra también lo que se movió fuera de la plataforma, y
 // eso ningún listado de envíos lo sabe.
 //
+// Los países van en vertical y cada movimiento ocupa su columna. Una columna
+// es un movimiento: escribir en ella la reserva para ese país y tranca las
+// demás casillas de esa misma columna.
+//
 // AVISO mientras siga así: la única llave es ser super-admin. La clave aparte
 // todavía no existe. No se puso un campo de contraseña de adorno esperándola,
 // porque un candado que el servidor no comprueba aparenta una protección que
@@ -74,7 +78,6 @@ export default function Finanzas() {
   // guardado con un efecto: así no hay un primer dibujado sin país y otro con
   // él, que es lo que hacía parpadear la tabla al entrar.
   const origen = elegido ?? origenes[0]?.name ?? null
-  const setOrigen = setElegido
 
   const desde = iso(rango.from)
   const hasta = iso(rango.to || rango.from)
@@ -86,49 +89,59 @@ export default function Finanzas() {
 
   const apuntes = respuesta?.data || []
   const totales = respuesta?.totales || []
-  // El porcentaje es de la ruta, no de la línea: el badge sobre la columna.
+  // El porcentaje es de la ruta, no de la línea: el badge de cada país.
   const pctDe = (destino) => (respuesta?.porcentajes || [])
     .find(p => p.origen === origen && p.destino === destino)?.porcentaje ?? 0
-  const delOrigen = useMemo(
-    () => apuntes.filter(a => a.origen === origen),
-    [apuntes, origen],
-  )
+
+  const delOrigen = useMemo(() => apuntes.filter(a => a.origen === origen), [apuntes, origen])
+
+  // Cada movimiento ocupa una columna, y su número de columna es el `orden`
+  // con el que se guardó. Como una columna solo admite un monto, basta con
+  // saber qué apunte hay en cada una.
+  const porColumna = useMemo(() => {
+    const m = new Map()
+    delOrigen.forEach(a => { if (!m.has(a.orden)) m.set(a.orden, a) })
+    return m
+  }, [delOrigen])
+
+  // Las columnas ya usadas y una libre al final, para el siguiente movimiento.
+  const columnas = useMemo(() => {
+    const usadas = [...porColumna.keys()]
+    const tope = usadas.length ? Math.max(...usadas) + 1 : 0
+    return Array.from({ length: tope + 1 }, (_, i) => i)
+  }, [porColumna])
 
   const paisOrigen = origenes.find(p => p.name === origen)
   const refrescar = () => qc.invalidateQueries({ queryKey: ['finanzas'] })
 
-  // La fila en blanco del final. Vive solo aquí hasta que tenga monto: guardar
-  // filas vacías llenaría el cuaderno de apuntes en cero.
-  const [nueva, setNueva] = useState({ destino: null, monto: '' })
+  // Lo que se está escribiendo en una casilla todavía vacía. Vive solo aquí
+  // hasta que tenga monto: guardar columnas en blanco llenaría el cuaderno de
+  // apuntes en cero.
+  const [borrador, setBorrador] = useState({ col: null, destino: null, texto: '' })
 
-  const guardarNueva = async () => {
-    const monto = aNumero(nueva.monto)
-    if (!monto || !nueva.destino || !origen) return
+  const guardarBorrador = async () => {
+    const monto = aNumero(borrador.texto)
+    if (!monto || !borrador.destino || borrador.col === null || !origen) return
     await api.post('/finanzas', {
       fecha: desde,               // los apuntes nuevos caen en el primer día del rango
       origen,
-      destino: nueva.destino,
+      destino: borrador.destino,
       monto,
-      orden: delOrigen.length,
+      orden: borrador.col,
     })
-    setNueva({ destino: null, monto: '' })
+    setBorrador({ col: null, destino: null, texto: '' })
     refrescar()
   }
 
+  const editar = async (id, cambios) => { await api.patch(`/finanzas/${id}`, cambios); refrescar() }
+  const borrar = async (id) => { await api.delete(`/finanzas/${id}`); refrescar() }
   const ponerPorcentaje = async (destino, porcentaje) => {
     await api.put('/finanzas/porcentaje', { origen, destino, porcentaje })
     refrescar()
   }
 
-  const editar = async (id, cambios) => {
-    await api.patch(`/finanzas/${id}`, cambios)
-    refrescar()
-  }
-
-  const borrar = async (id) => {
-    await api.delete(`/finanzas/${id}`)
-    refrescar()
-  }
+  const movidoDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + a.monto, 0)
+  const ganadoDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + a.ganancia, 0)
 
   const totalMovido = delOrigen.reduce((s, a) => s + a.monto, 0)
   const totalGanado = delOrigen.reduce((s, a) => s + a.ganancia, 0)
@@ -141,8 +154,7 @@ export default function Finanzas() {
           padding:7px 9px;width:100%;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
         .fin-cel:hover:not(:disabled){border-color:rgba(255,255,255,.12)}
         .fin-cel:focus{outline:none;border-color:#38bdf8;background:rgba(56,189,248,.07)}
-        .fin-cel:disabled{color:#334155;cursor:not-allowed}
-        .fin-th{position:sticky;top:0;z-index:2;background:#071331}
+        .fin-cel.trancada{color:#2b3a55;cursor:pointer}
         .fin-nav{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;
           font-size:13px;font-weight:600;transition:background .15s,color .15s}
       `}</style>
@@ -180,7 +192,6 @@ export default function Finanzas() {
       </aside>
 
       <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        {/* Header: qué se está mirando y de qué fechas. */}
         <header style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           gap: 16, padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,.07)',
@@ -194,7 +205,7 @@ export default function Finanzas() {
           <DateRangePicker value={rango} onChange={setRango} />
         </header>
 
-        {/* Subheader: los países desde los que se envía. */}
+        {/* Los países desde los que se envía. */}
         <div style={{
           display: 'flex', gap: 7, padding: '11px 22px', overflowX: 'auto',
           borderBottom: '1px solid rgba(255,255,255,.07)',
@@ -202,7 +213,7 @@ export default function Finanzas() {
           {origenes.map(p => {
             const activo = p.name === origen
             return (
-              <button key={p.id} type="button" onClick={() => setOrigen(p.name)}
+              <button key={p.id} type="button" onClick={() => setElegido(p.name)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
                   padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -239,90 +250,61 @@ export default function Finanzas() {
               </div>
 
               <div style={{ ...GLASS, overflow: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: destinos.length * 150 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr>
-                      {destinos.map(d => (
-                        <th key={d.id} className="fin-th" style={{
-                          padding: '9px 12px', verticalAlign: 'bottom',
-                          borderBottom: '1px solid rgba(255,255,255,.08)', whiteSpace: 'nowrap',
-                        }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#aebfe2' }}>
-                            <Bandera iso2={d.iso2} tam={16} />
-                            {d.name}
-                            {/* El porcentaje de la columna: vale para todo lo
-                                que se anote debajo, no para una línea suelta. */}
-                            <BadgePorcentaje
-                              valor={pctDe(d.name)}
-                              onGuardar={v => ponerPorcentaje(d.name, v)} />
-                          </span>
+                      <th style={{ ...cabecera, ...pegadaPct, width: 76 }}>%</th>
+                      <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left' }}>PAÍS</th>
+
+                      {/* Una columna por movimiento, numeradas como se anotan. */}
+                      {columnas.map(c => (
+                        <th key={c} style={{ ...cabecera, minWidth: 130, color: '#64748b', textAlign: 'right' }}>
+                          {c + 1}
                         </th>
                       ))}
 
-                      <th className="fin-th" style={{
-                        textAlign: 'right', padding: '11px 14px', fontSize: 11, fontWeight: 700,
-                        letterSpacing: '.08em', color: '#4ade80', whiteSpace: 'nowrap',
-                        borderBottom: '1px solid rgba(255,255,255,.08)',
-                      }}>GANANCIA</th>
-                      <th className="fin-th" style={{ width: 34, borderBottom: '1px solid rgba(255,255,255,.08)' }} />
+                      <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2', whiteSpace: 'nowrap' }}>MOVIDO</th>
+                      <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', whiteSpace: 'nowrap' }}>GANANCIA</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {delOrigen.map(a => (
-                      <Fila key={`${a.id}:${a.porcentaje}:${a.monto}:${a.destino}`}
-                        apunte={a}
-                        destinos={destinos}
-                        onEditar={cambios => editar(a.id, cambios)}
-                        onBorrar={() => borrar(a.id)} />
+                    {destinos.map(d => (
+                      <FilaPais
+                        key={`${d.id}:${origen}`}
+                        pais={d}
+                        pct={pctDe(d.name)}
+                        columnas={columnas}
+                        porColumna={porColumna}
+                        borrador={borrador}
+                        setBorrador={setBorrador}
+                        onGuardarBorrador={guardarBorrador}
+                        onPorcentaje={v => ponerPorcentaje(d.name, v)}
+                        onEditar={editar}
+                        onBorrar={borrar}
+                        movido={movidoDe(d.name)}
+                        ganado={ganadoDe(d.name)}
+                      />
                     ))}
-
-                    {/* La fila en blanco. Escribir en una columna la reserva
-                        para ese destino y apaga el resto —una fila es un solo
-                        movimiento—, pero tocar otra columna la mueve ahí: si se
-                        eligió mal, se corrige de un clic y no hay que borrarla. */}
-                    <tr>
-                      {destinos.map(d => {
-                        const suya = nueva.destino === d.name
-                        const tomada = nueva.destino && !suya
-                        return (
-                          <td key={d.id} style={celda}>
-                            <input className="fin-cel" inputMode="decimal"
-                              value={suya ? nueva.monto : ''}
-                              title={tomada ? `Mover esta línea a ${d.name}` : undefined}
-                              style={tomada ? { color: '#334155' } : undefined}
-                              onFocus={() => {
-                                // Tocar otra columna con algo ya escrito se
-                                // lleva el monto: es cambiar de destino, no
-                                // empezar otra línea.
-                                if (tomada) setNueva(n => ({ ...n, destino: d.name }))
-                              }}
-                              onChange={e => setNueva({
-                                destino: e.target.value ? d.name : null,
-                                monto: conPuntos(e.target.value),
-                              })}
-                              onBlur={guardarNueva} />
-                            <Comision monto={aNumero(suya ? nueva.monto : 0)} pct={pctDe(d.name)} />
-                          </td>
-                        )
-                      })}
-                      <td style={{ ...celda, textAlign: 'right', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
-                        {miles(aNumero(nueva.monto) * pctDe(nueva.destino) / 100)}
-                      </td>
-                      <td style={celda} />
-                    </tr>
                   </tbody>
 
                   <tfoot>
                     <tr>
-                      <td colSpan={destinos.length} style={{ ...celda, textAlign: 'right', color: '#aebfe2', fontSize: 13, padding: '10px 12px' }}>
-                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700, marginRight: 10 }}>TOTAL</span>
-                        movido {miles(totalMovido)} {paisOrigen?.currency}
+                      <td style={{ ...pieCelda, ...pegadaPct }} />
+                      <td style={{ ...pieCelda, ...pegadaPais, fontSize: 11, color: '#64748b', fontWeight: 700 }}>
+                        TOTAL
                       </td>
-                      <td style={{ ...celda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14 }}>
+                      {columnas.map(c => (
+                        <td key={c} style={{ ...pieCelda, textAlign: 'right', color: '#8aa0cc', fontSize: 12 }}>
+                          {porColumna.get(c) ? miles(porColumna.get(c).monto) : ''}
+                        </td>
+                      ))}
+                      <td style={{ ...pieCelda, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
+                        {miles(totalMovido)}
+                      </td>
+                      <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14 }}>
                         {miles(totalGanado)}
                       </td>
-                      <td style={celda} />
                     </tr>
                   </tfoot>
                 </table>
@@ -356,7 +338,19 @@ export default function Finanzas() {
   )
 }
 
+const cabecera = {
+  position: 'sticky', top: 0, zIndex: 2, background: '#071331',
+  padding: '10px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
+  borderBottom: '1px solid rgba(255,255,255,.08)', color: '#7dd3fc',
+}
 const celda = { padding: '2px 4px', borderBottom: '1px solid rgba(255,255,255,.04)' }
+const pieCelda = { padding: '9px 12px', borderTop: '1px solid rgba(255,255,255,.1)' }
+
+// El porcentaje y el país se quedan a la vista al desplazar a lo ancho: con
+// veinte movimientos anotados, sin esto no se sabe de qué fila es cada cifra.
+const pegadaPct = { position: 'sticky', left: 0, zIndex: 3, background: '#071331', textAlign: 'center' }
+const pegadaPais = { position: 'sticky', left: 76, zIndex: 3, background: '#071331', borderRight: '1px solid rgba(255,255,255,.08)' }
+
 /** Lo que se lleva la casa de ese monto, bajo la propia cifra. */
 function Comision({ monto, pct }) {
   if (!monto || !pct) return null
@@ -368,10 +362,10 @@ function Comision({ monto, pct }) {
 }
 
 /**
- * El porcentaje de una columna.
+ * El porcentaje de un país.
  *
  * Es un badge y no una casilla más porque no se toca casi nunca: se pone una
- * vez por ruta y vale para todo lo que se anote debajo. Se edita al tocarlo.
+ * vez por ruta y vale para toda la fila. Se edita al tocarlo.
  */
 function BadgePorcentaje({ valor, onGuardar }) {
   const [editando, setEditando] = useState(false)
@@ -393,7 +387,7 @@ function BadgePorcentaje({ valor, onGuardar }) {
         onBlur={cerrar}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
         style={{
-          width: 52, padding: '2px 6px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+          width: 56, padding: '3px 6px', borderRadius: 999, fontSize: 11, fontWeight: 700,
           textAlign: 'center', color: '#eaf2ff', background: 'rgba(56,189,248,.14)',
           border: '1px solid #38bdf8', outline: 'none',
         }} />
@@ -405,7 +399,7 @@ function BadgePorcentaje({ valor, onGuardar }) {
     <button type="button" onClick={() => { setTexto(String(valor ?? '')); setEditando(true) }}
       title="Porcentaje de esta ruta"
       style={{
-        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+        padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700,
         background: puesto ? 'rgba(74,222,128,.13)' : 'rgba(255,255,255,.05)',
         border: `1px solid ${puesto ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.12)'}`,
         color: puesto ? '#4ade80' : '#64748b',
@@ -416,48 +410,106 @@ function BadgePorcentaje({ valor, onGuardar }) {
 }
 
 /**
- * Una fila ya guardada.
+ * Una casilla: el cruce de un país con un movimiento.
  *
- * Su destino está decidido, así que las demás columnas se ven apagadas — pero
- * siguen siendo clicables: tocar otra mueve la línea ahí. Sin eso, elegir mal
- * la columna obligaba a borrar la línea y escribirla otra vez.
+ * Tres estados. La suya —lleva el monto y se edita—, una libre, y una trancada
+ * porque ese movimiento ya es de otro país. La trancada no está muerta: al
+ * tocarla el movimiento se pasa a este país, que es como se corrige haberse
+ * equivocado de fila sin tener que borrar nada.
  */
-function Fila({ apunte, destinos, onEditar, onBorrar }) {
-  const [monto, setMonto] = useState(conPuntos(String(apunte.monto ?? '')))
+function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorrador, onEditar, onBorrar }) {
+  const suya = apunte && apunte.destino === pais.name
+  const trancada = apunte && !suya
+  const enBorrador = !apunte && borrador.col === col && borrador.destino === pais.name
 
-  // Si el apunte cambia por detrás, la fila se monta de nuevo entera: la clave
-  // que le pone la tabla lleva el monto, el destino y el porcentaje.
+  const [texto, setTexto] = useState(suya ? conPuntos(String(apunte.monto)) : '')
+
+  if (trancada) {
+    return (
+      <td style={celda}>
+        <input className="fin-cel trancada" value="———" readOnly
+          title={`Pasar este movimiento a ${pais.name}`}
+          onFocus={() => onEditar(apunte.id, { destino: pais.name })} />
+      </td>
+    )
+  }
+
+  if (suya) {
+    return (
+      <td style={{ ...celda, background: 'rgba(56,189,248,.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <input className="fin-cel" inputMode="decimal" value={texto}
+            onChange={e => setTexto(conPuntos(e.target.value))}
+            onBlur={() => {
+              const n = aNumero(texto)
+              if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
+            }} />
+          <button type="button" onClick={() => onBorrar(apunte.id)} title="Quitar este movimiento"
+            style={{ color: '#475569', padding: '0 5px', fontSize: 12, lineHeight: 1 }}>
+            ✕
+          </button>
+        </div>
+        <Comision monto={apunte.monto} pct={pct} />
+      </td>
+    )
+  }
 
   return (
+    <td style={celda}>
+      <input className="fin-cel" inputMode="decimal"
+        value={enBorrador ? borrador.texto : ''}
+        onChange={e => setBorrador({
+          col,
+          destino: e.target.value ? pais.name : null,
+          texto: conPuntos(e.target.value),
+        })}
+        onBlur={onGuardarBorrador} />
+      {enBorrador && <Comision monto={aNumero(borrador.texto)} pct={pct} />}
+    </td>
+  )
+}
+
+/** Un país: su porcentaje, sus casillas y lo que deja. */
+function FilaPais({
+  pais, pct, columnas, porColumna, borrador, setBorrador, onGuardarBorrador,
+  onPorcentaje, onEditar, onBorrar, movido, ganado,
+}) {
+  return (
     <tr>
-      {destinos.map(d => {
-        const suya = d.name === apunte.destino
+      <td style={{ ...celda, ...pegadaPct, padding: '6px 8px' }}>
+        <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />
+      </td>
+
+      <td style={{ ...celda, ...pegadaPais, padding: '6px 12px', whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
+          <Bandera iso2={pais.iso2} tam={17} />
+          {pais.name}
+        </span>
+      </td>
+
+      {columnas.map(c => {
+        const apunte = porColumna.get(c)
         return (
-          <td key={d.id} style={celda}>
-            <input className="fin-cel" inputMode="decimal"
-              value={suya ? monto : ''}
-              title={suya ? undefined : `Mover esta línea a ${d.name}`}
-              style={suya ? undefined : { color: '#334155' }}
-              onFocus={() => { if (!suya) onEditar({ destino: d.name }) }}
-              onChange={e => setMonto(conPuntos(e.target.value))}
-              onBlur={() => {
-                const n = aNumero(monto)
-                if (suya && n !== apunte.monto) onEditar({ monto: n })
-              }} />
-            {suya && <Comision monto={apunte.monto} pct={apunte.porcentaje} />}
-          </td>
+          <Casilla
+            key={`${c}:${apunte?.id ?? 'libre'}:${apunte?.monto ?? ''}:${apunte?.destino ?? ''}`}
+            pais={pais}
+            col={c}
+            apunte={apunte}
+            pct={pct}
+            borrador={borrador}
+            setBorrador={setBorrador}
+            onGuardarBorrador={onGuardarBorrador}
+            onEditar={onEditar}
+            onBorrar={onBorrar}
+          />
         )
       })}
 
-      <td style={{ ...celda, textAlign: 'right', color: '#4ade80', fontWeight: 700, fontSize: 13, paddingRight: 14 }}>
-        {miles(apunte.ganancia)}
+      <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#aebfe2', fontSize: 13 }}>
+        {movido ? miles(movido) : ''}
       </td>
-
-      <td style={celda}>
-        <button type="button" onClick={onBorrar} title="Borrar esta línea"
-          style={{ color: '#475569', padding: '4px 6px', fontSize: 14, lineHeight: 1 }}>
-          ✕
-        </button>
+      <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
+        {ganado ? miles(ganado) : ''}
       </td>
     </tr>
   )
