@@ -162,7 +162,14 @@ export default function Finanzas() {
           box-sizing:content-box}
         .fin-cel:hover:not(:disabled){border-color:rgba(255,255,255,.12)}
         .fin-cel:focus{outline:none;border-color:#38bdf8;background:rgba(56,189,248,.07)}
-        .fin-cel.trancada{color:#2b3a55;cursor:pointer}
+        /* La casilla trancada ocupa la columna entera: así se ve de un
+           vistazo que ese movimiento ya está tomado, en vez de un guion
+           suelto que parecía una casilla a medio escribir. */
+        .fin-trancada{display:block;width:100%;border:1px solid transparent;border-radius:8px;
+          padding:6px 5px;text-align:center;color:#2b3a55;font-size:13px;cursor:pointer;
+          background:repeating-linear-gradient(135deg,transparent,transparent 5px,
+            rgba(255,255,255,.028) 5px,rgba(255,255,255,.028) 10px)}
+        .fin-trancada:hover{border-color:rgba(56,189,248,.3);color:#7dd3fc}
         /* La aspa de quitar iba dentro de la fila y le sumaba su ancho a la
            columna entera. Ahora se superpone sobre la cifra y solo asoma al
            pasar por encima. */
@@ -284,12 +291,12 @@ export default function Finanzas() {
                         </th>
                       ))}
 
-                      {/* Un hueco para que los totales no vayan pegados al
-                          último movimiento. */}
-                      <th style={{ ...cabecera, width: 26, borderRight: 'none' }} />
-
-                      <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>MOVIDO</th>
-                      <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>GANANCIA</th>
+                      {/* Los dos totales de la fila. Antes había un hueco sin
+                          título entre medias que no se entendía; ahora lo que
+                          los separa de los movimientos es una raya más marcada
+                          y su propio nombre. */}
+                      <th style={{ ...cabecera, ...separa, textAlign: 'right', color: '#aebfe2' }}>TOTAL</th>
+                      <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>COMISIÓN</th>
                     </tr>
                   </thead>
 
@@ -323,8 +330,7 @@ export default function Finanzas() {
                           {porColumna.get(c) ? miles(porColumna.get(c).monto) : ''}
                         </td>
                       ))}
-                      <td style={{ ...pieCelda, width: 26, borderRight: 'none' }} />
-                      <td style={{ ...pieCelda, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
+                      <td style={{ ...pieCelda, ...separa, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
                         {miles(totalMovido)}
                       </td>
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14, borderRight: 'none' }}>
@@ -384,6 +390,10 @@ const celda = {
   ...ajustada,
   padding: '2px 3px', borderBottom: '1px solid rgba(255,255,255,.05)', borderRight: RAYA,
 }
+// La raya que separa los movimientos de los totales: son otra cosa, no un
+// movimiento más.
+const separa = { borderLeft: '2px solid rgba(255,255,255,.14)' }
+
 const pieCelda = {
   ...ajustada,
   padding: '9px 10px', borderTop: '1px solid rgba(255,255,255,.12)', borderRight: RAYA,
@@ -492,9 +502,11 @@ function Casilla({ pais, col, apunte, pct, borrador, setBorrador, onGuardarBorra
   if (trancada) {
     return (
       <td style={celda}>
-        <input className="fin-cel trancada" value="—" readOnly size={2}
+        <button type="button" className="fin-trancada"
           title={`Pasar este movimiento a ${pais.name}`}
-          onFocus={() => onEditar(apunte.id, { destino: pais.name })} />
+          onClick={() => onEditar(apunte.id, { destino: pais.name })}>
+          —
+        </button>
       </td>
     )
   }
@@ -566,7 +578,7 @@ function FilaPais({
         )
       })}
 
-      <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#aebfe2', fontSize: 13 }}>
+      <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', color: '#aebfe2', fontSize: 13 }}>
         {movido ? miles(movido) : ''}
       </td>
       <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
