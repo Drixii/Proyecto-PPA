@@ -168,6 +168,8 @@ export default function Finanzas() {
 
   const totalMovido = delOrigen.reduce((s, a) => s + a.monto, 0)
   const totalGanado = delOrigen.reduce((s, a) => s + a.ganancia, 0)
+  // Lo mismo pasado a pesos chilenos, que es como se lleva la caja.
+  const enPesos = porOrigen.find(o => o.origen === origen)
   const variosDias = desde !== hasta
 
   return (
@@ -401,9 +403,22 @@ export default function Finanzas() {
                       ))}
                       <td style={{ ...pieCelda, ...separa, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
                         {miles(totalMovido)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>{paisOrigen?.currency}</span>
+                        {/* Y lo mismo en pesos chilenos, que es la moneda en la
+                            que se lleva la caja: el total del país dice lo que
+                            se movió allá, este dice lo que vale aquí. */}
+                        {enPesos && (
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#64748b', marginTop: 2 }}>
+                            {miles(enPesos.movido)} CLP
+                          </span>
+                        )}
                       </td>
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14, borderRight: 'none' }}>
                         {miles(totalGanado)}
+                        {enPesos && (
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#3f8f5c', marginTop: 2 }}>
+                            {miles(enPesos.ganado)} CLP
+                          </span>
+                        )}
                       </td>
                     </tr>
                   </tfoot>
@@ -476,8 +491,11 @@ function Comision({ monto, pct, moneda }) {
   return (
     <p title={pct ? `Comisión del ${miles(pct)}%` : undefined}
       style={{
-        fontSize: 10, textAlign: 'right', lineHeight: 1.2,
-        padding: '0 7px 3px', width: 0, minWidth: '100%', whiteSpace: 'nowrap',
+        // Sin el truco de ancho cero: con "ARS · comisión: 16.000" el texto se
+        // salía de la casilla y pisaba la de al lado. Que la columna mida lo
+        // que ocupa esta línea es el precio de que se lea entera.
+        fontSize: 10, textAlign: 'right', lineHeight: 1.25,
+        padding: '0 7px 3px', whiteSpace: 'nowrap',
       }}>
       {/* La moneda va aquí abajo y no pegada a la cifra: así se sabe en qué
           está anotado el monto sin que el texto abra la columna. */}

@@ -102,6 +102,33 @@ def _sale(a: FinanceEntry) -> dict:
     }
 
 
+def _rellena_en_pesos(db: Session, filas) -> int:
+    """Pone el valor en pesos a los apuntes que aún no lo tengan.
+
+    Los anotados antes de que la caja se llevara en pesos no guardaron su
+    equivalente, y sumaban cero: el dinero estaba anotado pero no aparecía en
+    ningún total. Se les calcula la primera vez que se leen y se guarda, con lo
+    que el arreglo se hace solo y una sola vez.
+
+    Se usa la tasa de hoy porque la de aquel día ya no está guardada. Es una
+    aproximación, y por eso solo se aplica a lo que está sin convertir: a partir
+    de ahí cada apunte conserva la suya.
+    """
+    tocados = 0
+    for a in filas:
+        if a.monto_clp or not a.monto:
+            continue
+        tasa = _tasa_a_caja(db, a.moneda)
+        if not tasa:
+            continue
+        a.tasa_clp = tasa
+        a.monto_clp = a.monto * tasa
+        tocados += 1
+    if tocados:
+        db.commit()
+    return tocados
+
+
 def _suma_en_caja(filas) -> tuple[list[dict], dict, int]:
     """Lo movido y lo ganado por país, en pesos chilenos.
 
@@ -169,6 +196,9 @@ def listar(
         FinanceEntry.fecha <= hasta,
     ).order_by(FinanceEntry.fecha, FinanceEntry.orden, FinanceEntry.id).all()
 
+    todo = db.query(FinanceEntry).filter(FinanceEntry.super_admin_id == admin.id).all()
+    _rellena_en_pesos(db, todo)
+
     apuntes = [_sale(a) for a in filas]
 
     por_origen, total_dia, sin_tasa_dia = _suma_en_caja(filas)
@@ -177,7 +207,6 @@ def listar(
     # lo que va sumando día tras día. Se calcula aquí y no en otra llamada
     # porque siempre se piden juntos —el día al lado del acumulado— y son dos
     # sumas sobre la misma tabla.
-    todo = db.query(FinanceEntry).filter(FinanceEntry.super_admin_id == admin.id).all()
     acum_origen, total_acum, sin_tasa_acum = _suma_en_caja(todo)
 
     return {
