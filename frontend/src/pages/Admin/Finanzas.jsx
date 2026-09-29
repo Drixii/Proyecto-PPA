@@ -87,27 +87,14 @@ export default function Finanzas() {
   // El mes del acumulable va por su cuenta: null es el mes en curso, que es lo
   // que se quiere ver casi siempre.
   const [mesAcum, setMesAcum] = useState(null)
+  // Modo de reordenar las filas, y el país que se está preguntando si quitar.
+  const [ordenando, setOrdenando] = useState(false)
+  const [porQuitar, setPorQuitar] = useState(null)
 
   const { data: paises = [] } = useQuery({
     queryKey: ['finanzas-paises'],
     queryFn: () => api.get('/admin/countries').then(r => r.data.data || []),
   })
-
-  const origenes = useMemo(() => paises.filter(p => p.can_send && p.active), [paises])
-  // Entregar efectivo en Venezuela es otra cosa que transferir allí: se cobra
-  // distinto, así que necesita su propia fila y su propio porcentaje.
-  //
-  // Vive solo en esta pantalla y no en el catálogo de países de la web: no es
-  // un país, y añadirlo allí lo sacaría en la calculadora del inicio y en el
-  // formulario de envío, donde no tiene sentido. El cuaderno guarda el destino
-  // como texto, así que aquí es una fila más.
-  const destinos = useMemo(() => {
-    const lista = paises.filter(p => p.can_receive && p.active)
-    const ve = lista.findIndex(p => p.name === 'Venezuela')
-    if (ve === -1) return lista
-    const cash = { id: 've-cash', name: 'Venezuela Cash', iso2: lista[ve].iso2, currency: lista[ve].currency }
-    return [...lista.slice(0, ve + 1), cash, ...lista.slice(ve + 1)]
-  }, [paises])
 
   // Mientras no se haya tocado nada, el primero de la lista. Derivado y no
   // guardado con un efecto: así no hay un primer dibujado sin país y otro con
@@ -131,6 +118,39 @@ export default function Finanzas() {
   const apuntes = respuesta?.data || []
   const totales = respuesta?.totales || []
   const porOrigen = respuesta?.por_origen || []
+  const prefs = respuesta?.preferencias || { ocultos: [], orden: [] }
+
+  const origenes = useMemo(
+    () => paises.filter(p => p.can_send && p.active && !prefs.ocultos.includes(p.name)),
+    [paises, prefs.ocultos],
+  )
+  // Entregar efectivo en Venezuela es otra cosa que transferir allí: se cobra
+  // distinto, así que necesita su propia fila y su propio porcentaje.
+  //
+  // Vive solo en esta pantalla y no en el catálogo de países de la web: no es
+  // un país, y añadirlo allí lo sacaría en la calculadora del inicio y en el
+  // formulario de envío, donde no tiene sentido. El cuaderno guarda el destino
+  // como texto, así que aquí es una fila más.
+  const destinos = useMemo(() => {
+    const lista = paises.filter(p => p.can_receive && p.active)
+    const ve = lista.findIndex(p => p.name === 'Venezuela')
+    if (ve === -1) return lista
+    const cash = { id: 've-cash', name: 'Venezuela Cash', iso2: lista[ve].iso2, currency: lista[ve].currency }
+    return [...lista.slice(0, ve + 1), cash, ...lista.slice(ve + 1)]
+  }, [paises])
+
+  // El orden que se dejó arrastrando. Los que no estén en él —un país nuevo,
+  // por ejemplo— van detrás, en el orden de siempre, en vez de desaparecer.
+  const destinosOrdenados = useMemo(() => {
+    const guardado = prefs.orden
+    if (!guardado.length) return destinos
+    const puesto = n => {
+      const i = guardado.indexOf(n)
+      return i === -1 ? guardado.length : i
+    }
+    return [...destinos].sort((a, b) => puesto(a.name) - puesto(b.name))
+  }, [destinos, prefs.orden])
+
   // Todo lo anotado desde siempre, sin mirar las fechas: es lo que va
   // sumando día tras día.
   const acumulado = respuesta?.acumulado || { por_origen: [], totales: [] }
@@ -162,8 +182,8 @@ export default function Finanzas() {
   // fila no sale nunca. El servidor tampoco deja guardar esa ruta, así que no
   // puede quedarse dinero escondido detrás de la fila que no se pinta.
   const destinosDelOrigen = useMemo(
-    () => destinos.filter(d => d.name !== origen),
-    [destinos, origen],
+    () => destinosOrdenados.filter(d => d.name !== origen),
+    [destinosOrdenados, origen],
   )
   const refrescar = () => qc.invalidateQueries({ queryKey: ['finanzas'] })
 
@@ -194,6 +214,33 @@ export default function Finanzas() {
   const ponerPorcentaje = async (destino, porcentaje) => {
     await api.put('/finanzas/porcentaje', { origen, destino, porcentaje })
     refrescar()
+  }
+
+  const guardarPrefs = async (cambios) => {
+    await api.put('/finanzas/preferencias', cambios)
+    refrescar()
+  }
+
+  const quitarPais = async (nombre) => {
+    await guardarPrefs({ ocultos: [...prefs.ocultos, nombre] })
+    setPorQuitar(null)
+    // Si se quitó el que se estaba mirando, hay que soltarlo o la tabla se
+    // queda en un país que ya no está en la lista.
+    if (elegido === nombre) setElegido(null)
+  }
+
+  // Mover un país delante de otro y guardar la lista entera.
+  //
+  // Se guarda completa y no solo lo que cambió: así el orden queda fijado
+  // aunque mañana se añada un país nuevo, y no depende de en qué país se
+  // estuviera cuando se arrastró.
+  const reordenar = async (quien, delante) => {
+    const nombres = destinosOrdenados.map(d => d.name)
+    const desde = nombres.indexOf(quien)
+    const hasta = nombres.indexOf(delante)
+    if (desde === -1 || hasta === -1 || desde === hasta) return
+    nombres.splice(hasta, 0, ...nombres.splice(desde, 1))
+    await guardarPrefs({ orden: nombres })
   }
 
   const ponerPorcentajeGeneral = async (porcentaje) => {
@@ -242,6 +289,12 @@ export default function Finanzas() {
         .fin-x:hover{color:#f87171}
         .fin-nav{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;
           font-size:13px;font-weight:600;transition:background .15s,color .15s}
+        /* El aspa de quitar un país solo asoma al pasar por encima. */
+        .fin-quitar{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+          opacity:0;color:#64748b;font-size:11px;line-height:1;padding:3px;border-radius:6px;
+          transition:opacity .12s,color .12s}
+        .fin-pais:hover .fin-quitar{opacity:1}
+        .fin-quitar:hover{color:#f87171;background:rgba(248,113,113,.12)}
       `}</style>
 
       {/* Menú propio. Solo dos sitios a los que ir: aquí y de vuelta. */}
@@ -361,18 +414,27 @@ export default function Finanzas() {
             {origenes.map(p => {
               const activo = p.name === origen
               return (
-                <button key={p.id} type="button" onClick={() => setElegido(p.name)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
-                    padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
-                    transition: 'all .15s',
-                    background: activo ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
-                    border: `1px solid ${activo ? '#38bdf8' : 'rgba(255,255,255,.07)'}`,
-                    color: activo ? '#eaf2ff' : '#8aa0cc',
-                  }}>
-                  <Bandera iso2={p.iso2} />
-                  {p.name}
-                </button>
+                <span key={p.id} className="fin-pais" style={{ position: 'relative', flexShrink: 0 }}>
+                  <button type="button" onClick={() => setElegido(p.name)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7,
+                      padding: '7px 26px 7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+                      transition: 'all .15s',
+                      background: activo ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
+                      border: `1px solid ${activo ? '#38bdf8' : 'rgba(255,255,255,.07)'}`,
+                      color: activo ? '#eaf2ff' : '#8aa0cc',
+                    }}>
+                    <Bandera iso2={p.iso2} />
+                    {p.name}
+                  </button>
+                  {/* Solo al pasar por encima: un aspa siempre visible en cada
+                      país invita a pulsarla sin querer. */}
+                  <button type="button" className="fin-quitar"
+                    onClick={() => setPorQuitar(p.name)}
+                    title={`Quitar ${p.name} de esta pantalla`}>
+                    ✕
+                  </button>
+                </span>
               )
             })}
             {!origenes.length && (
@@ -398,6 +460,23 @@ export default function Finanzas() {
 
                 {/* El filtro de fechas, junto a lo que filtra. */}
                 <DateRangePicker value={rango} onChange={setRango} />
+
+                <button type="button" onClick={() => setOrdenando(o => !o)}
+                  title="Cambiar el orden de los países arrastrando"
+                  style={{
+                    padding: '5px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 600,
+                    background: ordenando ? 'rgba(74,222,128,.14)' : 'rgba(255,255,255,.04)',
+                    border: `1px solid ${ordenando ? 'rgba(74,222,128,.4)' : 'rgba(255,255,255,.1)'}`,
+                    color: ordenando ? '#4ade80' : '#8aa0cc',
+                  }}>
+                  {ordenando ? 'Listo' : 'Editar'}
+                </button>
+
+                {ordenando && (
+                  <span style={{ fontSize: 11.5, color: '#64748b' }}>
+                    arrastra los países para ponerlos en el orden que quieras
+                  </span>
+                )}
                 {variosDias && (
                   <span style={{ fontSize: 12, color: '#fcd34d' }}>
                     · el rango son varios días; lo que anotes se guarda en el {desde}
@@ -439,6 +518,8 @@ export default function Finanzas() {
                       <FilaPais
                         key={`${d.id}:${origen}`}
                         pais={d}
+                        ordenando={ordenando}
+                        onSoltar={nombre => reordenar(nombre, d.name)}
                         pct={pctDe(d.name)}
                         moneda={paisOrigen?.currency}
                         columnas={columnas}
@@ -495,6 +576,61 @@ export default function Finanzas() {
 
         </div>
       </main>
+
+      {porQuitar && (
+        <ConfirmarQuitar
+          pais={porQuitar}
+          onSi={() => quitarPais(porQuitar)}
+          onNo={() => setPorQuitar(null)} />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Preguntar antes de quitar un país de la pantalla.
+ *
+ * Dice qué pasa y qué no: lo que asusta de un "eliminar" es no saber si se
+ * lleva por delante lo ya anotado o el país de toda la web. Ni una cosa ni la
+ * otra, y por eso se dice aquí en vez de dejarlo a la imaginación.
+ */
+function ConfirmarQuitar({ pais, onSi, onNo }) {
+  return (
+    <div
+      onClick={onNo}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(3,8,22,.72)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        backdropFilter: 'blur(3px)',
+      }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ ...GLASS, width: 'min(420px, 100%)', padding: '20px 22px' }}>
+        <p style={{ fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>
+          ¿Quitar {pais} de esta pantalla?
+        </p>
+        <p style={{ fontSize: 12.5, color: '#8aa0cc', marginTop: 9, lineHeight: 1.5 }}>
+          Deja de salir en tu cuaderno de finanzas. Lo que ya tengas anotado de
+          {' '}{pais} no se borra y sigue contando en los totales, y la web del
+          cliente no cambia en nada.
+        </p>
+
+        <div style={{ display: 'flex', gap: 9, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onNo}
+            style={{
+              padding: '8px 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 600,
+              background: 'transparent', border: '1px solid rgba(255,255,255,.12)', color: '#aebfe2',
+            }}>
+            No, dejarlo
+          </button>
+          <button type="button" onClick={onSi}
+            style={{
+              padding: '8px 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
+              background: 'rgba(248,113,113,.15)', border: '1px solid rgba(248,113,113,.45)', color: '#f87171',
+            }}>
+            Sí, quitarlo
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -707,9 +843,37 @@ function Casilla({ pais, col, apunte, pct, moneda, borrador, setBorrador, onGuar
 function FilaPais({
   pais, pct, moneda, columnas, porColumna, borrador, setBorrador, onGuardarBorrador,
   onPorcentaje, onEditar, onBorrar, movido, ganado, movidoClp, ganadoClp,
+  ordenando, onSoltar,
 }) {
+  const [encima, setEncima] = useState(false)
+
+  // Arrastrar con lo que trae el navegador, sin librería: una fila entera es
+  // lo que se coge y lo que se suelta, y eso HTML ya lo sabe hacer.
+  const arrastre = ordenando ? {
+    draggable: true,
+    onDragStart: e => {
+      e.dataTransfer.setData('text/plain', pais.name)
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragOver: e => { e.preventDefault(); setEncima(true) },
+    onDragLeave: () => setEncima(false),
+    onDrop: e => {
+      e.preventDefault()
+      setEncima(false)
+      const quien = e.dataTransfer.getData('text/plain')
+      if (quien && quien !== pais.name) onSoltar(quien)
+    },
+  } : {}
+
   return (
-    <tr>
+    <tr {...arrastre}
+      style={ordenando ? {
+        cursor: 'grab',
+        // La línea marca dónde va a caer, que es lo único que hace falta saber
+        // mientras se arrastra.
+        boxShadow: encima ? 'inset 0 2px 0 #38bdf8' : undefined,
+        background: encima ? 'rgba(56,189,248,.06)' : undefined,
+      } : undefined}>
       <td style={{ ...celda, ...pegadaPais, padding: '5px 8px 5px 5px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
           <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />

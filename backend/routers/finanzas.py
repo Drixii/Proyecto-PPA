@@ -7,6 +7,7 @@ fuera de la plataforma.
 Cada super-admin ve solo lo suyo, y eso se comprueba en cada operación contra
 el dueño guardado en la fila, nunca contra lo que venga en la petición.
 """
+import json
 import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 from auth.dependencies import require_super_admin
 from database import get_db
 from models.country import Country
-from models.finance_entry import FinanceEntry, FinanceRate
+from models.finance_entry import FinanceEntry, FinanceRate, FinancePref
 from models.user import User
 from services.exchange_service import get_rate
 
@@ -50,6 +51,29 @@ class PorcentajeIn(BaseModel):
     origen: str
     destino: str
     porcentaje: float = Field(ge=0, le=100)
+
+
+class PreferenciasIn(BaseModel):
+    ocultos: Optional[list[str]] = None
+    orden: Optional[list[str]] = None
+
+
+def _prefs(db: Session, dueno_id: int) -> FinancePref:
+    fila = db.query(FinancePref).filter(FinancePref.super_admin_id == dueno_id).first()
+    if not fila:
+        fila = FinancePref(super_admin_id=dueno_id, ocultos="[]", orden="[]")
+        db.add(fila)
+        db.commit()
+        db.refresh(fila)
+    return fila
+
+
+def _lista(texto: str) -> list[str]:
+    try:
+        valor = json.loads(texto or "[]")
+        return [str(x) for x in valor] if isinstance(valor, list) else []
+    except (ValueError, TypeError):
+        return []
 
 
 def _moneda_de(db: Session, pais: str) -> str:
@@ -212,6 +236,8 @@ def listar(
         FinanceEntry.fecha <= hasta,
     ).order_by(FinanceEntry.fecha, FinanceEntry.orden, FinanceEntry.id).all()
 
+    prefs = _prefs(db, admin.id)
+
     todo = db.query(FinanceEntry).filter(FinanceEntry.super_admin_id == admin.id).all()
     _rellena_en_pesos(db, todo)
 
@@ -259,6 +285,10 @@ def listar(
         # Todas las rutas con porcentaje puesto, no solo las que tienen apuntes
         # en este rango: el badge del país tiene que verse aunque ese día no se
         # haya movido nada por ahí.
+        "preferencias": {
+            "ocultos": _lista(prefs.ocultos),
+            "orden": _lista(prefs.orden),
+        },
         "porcentajes": [
             {"origen": o, "destino": d, "porcentaje": p}
             for (o, d), p in _porcentajes(db, admin.id).items()
@@ -415,6 +445,28 @@ def porcentaje_general(
 
     db.commit()
     return {"ok": True, "puestos": puestos, "respetados": len(ya)}
+
+
+@router.put("/preferencias", response_model=dict)
+def guardar_preferencias(
+    datos: PreferenciasIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Qué países no quiere ver y en qué orden.
+
+    Ocultar un país es cosa de esta pantalla: ni se borra el país de la web ni
+    se toca lo que ya esté anotado de él, que sigue contando en los totales.
+    Por eso se guarda aquí y no en el catálogo de países.
+    """
+    fila = _prefs(db, admin.id)
+    if datos.ocultos is not None:
+        fila.ocultos = json.dumps(datos.ocultos, ensure_ascii=False)
+    if datos.orden is not None:
+        fila.orden = json.dumps(datos.orden, ensure_ascii=False)
+    db.commit()
+    db.refresh(fila)
+    return {"data": {"ocultos": _lista(fila.ocultos), "orden": _lista(fila.orden)}}
 
 
 @router.delete("/{apunte_id}", response_model=dict)

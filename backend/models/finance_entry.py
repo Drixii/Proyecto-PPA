@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Index
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Index, Text
 from sqlalchemy.sql import func
 from database import Base
 
@@ -82,3 +82,26 @@ class FinanceRate(Base):
 
 
 Index("ix_finance_rates_ruta", FinanceRate.super_admin_id, FinanceRate.origen, FinanceRate.destino, unique=True)
+
+
+class FinancePref(Base):
+    """Cómo quiere ver el cuaderno cada super-admin.
+
+    Qué países no le interesan y en qué orden quiere las filas. Son gustos de
+    esta pantalla, no datos del negocio, y por eso viven aquí y no en el
+    catálogo de países: ocultar un país en su cuaderno no puede quitárselo a
+    los clientes de la web.
+
+    Las dos listas van como JSON en una columna de texto porque solo se leen y
+    se escriben enteras; una tabla con una fila por país sería más máquina para
+    lo mismo.
+    """
+    __tablename__ = "finance_prefs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    super_admin_id = Column(Integer, nullable=False, unique=True, index=True)
+
+    ocultos = Column(Text, nullable=False, default="[]")   # países que no quiere ver
+    orden = Column(Text, nullable=False, default="[]")     # los destinos, en su orden
+
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
