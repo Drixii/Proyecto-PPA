@@ -96,11 +96,6 @@ export default function Finanzas() {
     queryFn: () => api.get('/admin/countries').then(r => r.data.data || []),
   })
 
-  // Mientras no se haya tocado nada, el primero de la lista. Derivado y no
-  // guardado con un efecto: así no hay un primer dibujado sin país y otro con
-  // él, que es lo que hacía parpadear la tabla al entrar.
-  const origen = elegido ?? origenes[0]?.name ?? null
-
   const desde = iso(rango.from)
   const hasta = iso(rango.to || rango.from)
 
@@ -157,6 +152,14 @@ export default function Finanzas() {
   // El porcentaje es de la ruta, no de la línea: el badge de cada país.
   const pctDe = (destino) => (respuesta?.porcentajes || [])
     .find(p => p.origen === origen && p.destino === destino)?.porcentaje ?? 0
+
+  // Mientras no se haya tocado nada, el primero de la lista. Derivado y no
+  // guardado con un efecto: así no hay un primer dibujado sin país y otro con
+  // él, que es lo que hacía parpadear la tabla al entrar.
+  //
+  // Va detrás de `origenes` a la fuerza: leerlo antes de declararlo deja la
+  // pantalla en blanco entera, y el compilador no avisa.
+  const origen = elegido ?? origenes[0]?.name ?? null
 
   const delOrigen = useMemo(() => apuntes.filter(a => a.origen === origen), [apuntes, origen])
 
