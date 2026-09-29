@@ -6,6 +6,9 @@ import api from '../../services/api'
 
 const GLASS = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: '18px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }
 
+// La entrada de la barra que no es un país, sino la lista entera.
+const GENERAL = '__general__'
+
 const hoy = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()) }
 const finDe = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -127,12 +130,13 @@ export default function Finanzas() {
   // formulario de envío, donde no tiene sentido. El cuaderno guarda el destino
   // como texto, así que aquí es una fila más.
   const destinos = useMemo(() => {
-    const lista = paises.filter(p => p.can_receive && p.active)
+    const lista = paises.filter(p => p.can_receive && p.active && !prefs.ocultos.includes(p.name))
     const ve = lista.findIndex(p => p.name === 'Venezuela')
     if (ve === -1) return lista
     const cash = { id: 've-cash', name: 'Venezuela Cash', iso2: lista[ve].iso2, currency: lista[ve].currency }
-    return [...lista.slice(0, ve + 1), cash, ...lista.slice(ve + 1)]
-  }, [paises])
+    const con = [...lista.slice(0, ve + 1), cash, ...lista.slice(ve + 1)]
+    return con.filter(p => !prefs.ocultos.includes(p.name))
+  }, [paises, prefs.ocultos])
 
   // El orden que se dejó arrastrando. Los que no estén en él —un país nuevo,
   // por ejemplo— van detrás, en el orden de siempre, en vez de desaparecer.
@@ -179,6 +183,18 @@ export default function Finanzas() {
     return Array.from({ length: tope + 1 }, (_, i) => i)
   }, [porColumna])
 
+  // Lo que se quitó, para poder devolverlo. Venezuela Cash no está en el
+  // catálogo, así que se añade a mano o no habría forma de recuperarlo.
+  const quitados = useMemo(() => {
+    const todos = [
+      ...paises.filter(p => p.active),
+      { id: 've-cash', name: 'Venezuela Cash', iso2: 've' },
+    ]
+    return prefs.ocultos
+      .map(n => todos.find(p => p.name === n) || { id: `x-${n}`, name: n })
+      .filter(Boolean)
+  }, [paises, prefs.ocultos])
+
   const paisOrigen = origenes.find(p => p.name === origen)
 
   // Un país no se envía a sí mismo: el elegido no es destino de sí mismo y su
@@ -222,6 +238,10 @@ export default function Finanzas() {
   const guardarPrefs = async (cambios) => {
     await api.put('/finanzas/preferencias', cambios)
     refrescar()
+  }
+
+  const devolverPais = async (nombre) => {
+    await guardarPrefs({ ocultos: prefs.ocultos.filter(n => n !== nombre) })
   }
 
   const quitarPais = async (nombre) => {
@@ -414,6 +434,23 @@ export default function Finanzas() {
           <div style={{
             display: 'flex', gap: 7, marginBottom: 16, overflowX: 'auto',
           }}>
+            {/* "General" no es un país: es la lista entera para dejarla como
+                se quiera, sin tener que entrar en ninguno. */}
+            <button type="button" onClick={() => setElegido(GENERAL)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
+                padding: '7px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+                background: origen === GENERAL ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
+                border: `1px solid ${origen === GENERAL ? '#38bdf8' : 'rgba(255,255,255,.07)'}`,
+                color: origen === GENERAL ? '#eaf2ff' : '#8aa0cc',
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              General
+            </button>
+
             {origenes.map(p => {
               const activo = p.name === origen
               return (
@@ -440,13 +477,28 @@ export default function Finanzas() {
                 </span>
               )
             })}
+            {/* Devolver lo que se quitó. Sale solo si hay algo que devolver:
+                un botón que nunca hace nada estorba más de lo que ayuda. */}
+            {quitados.length > 0 && (
+              <AgregarPais quitados={quitados} onAgregar={devolverPais} />
+            )}
+
             {!origenes.length && (
               <p style={{ fontSize: 13, color: '#64748b' }}>No hay países marcados como origen.</p>
             )}
           </div>
           )}
 
-          {vista === 'diarios' && origen && (
+          {vista === 'diarios' && origen === GENERAL && (
+            <ListaGeneral
+              paises={destinosOrdenados}
+              quitados={quitados}
+              onMover={reordenar}
+              onQuitar={setPorQuitar}
+              onDevolver={devolverPais} />
+          )}
+
+          {vista === 'diarios' && origen && origen !== GENERAL && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
                 <h2 style={{ fontSize: 22, fontWeight: 800, color: '#eaf2ff', letterSpacing: '-.01em' }}>
@@ -523,6 +575,7 @@ export default function Finanzas() {
                         pais={d}
                         ordenando={ordenando}
                         onSoltar={nombre => reordenar(nombre, d.name)}
+                        onQuitar={() => setPorQuitar(d.name)}
                         pct={pctDe(d.name)}
                         moneda={paisOrigen?.currency}
                         columnas={columnas}
@@ -846,7 +899,7 @@ function Casilla({ pais, col, apunte, pct, moneda, borrador, setBorrador, onGuar
 function FilaPais({
   pais, pct, moneda, columnas, porColumna, borrador, setBorrador, onGuardarBorrador,
   onPorcentaje, onEditar, onBorrar, movido, ganado, movidoClp, ganadoClp,
-  ordenando, onSoltar,
+  ordenando, onSoltar, onQuitar,
 }) {
   const [encima, setEncima] = useState(false)
 
@@ -877,11 +930,15 @@ function FilaPais({
         boxShadow: encima ? 'inset 0 2px 0 #38bdf8' : undefined,
         background: encima ? 'rgba(56,189,248,.06)' : undefined,
       } : undefined}>
-      <td style={{ ...celda, ...pegadaPais, padding: '5px 8px 5px 5px' }}>
+      <td className="fin-pais" style={{ ...celda, ...pegadaPais, padding: '5px 8px 5px 5px', position: 'relative' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
           <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />
           <Bandera iso2={pais.iso2} tam={16} />
           {pais.name}
+          <button type="button" className="fin-quitar"
+            onClick={onQuitar} title={`Quitar ${pais.name} de esta pantalla`}>
+            ✕
+          </button>
         </span>
       </td>
 
@@ -1186,6 +1243,130 @@ function GananciasDiarias({ dia, mes, nombreMes, unDia }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** Devolver a la lista un país que se había quitado. */
+function AgregarPais({ quitados, onAgregar }) {
+  const [abierto, setAbierto] = useState(false)
+
+  return (
+    <span style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={() => setAbierto(a => !a)}
+        title="Volver a mostrar un país"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+          background: 'rgba(255,255,255,.04)', border: '1px dashed rgba(255,255,255,.18)',
+          color: '#8aa0cc',
+        }}>
+        + Agregar
+      </button>
+
+      {abierto && (
+        <>
+          <span onClick={() => setAbierto(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+          <div style={{
+            ...GLASS, position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 21,
+            padding: 6, minWidth: 200, maxHeight: 300, overflowY: 'auto',
+          }}>
+            {quitados.map(p => (
+              <button key={p.id} type="button"
+                onClick={() => { onAgregar(p.name); setAbierto(false) }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '7px 10px', borderRadius: 9, fontSize: 13, color: '#eaf2ff',
+                  textAlign: 'left',
+                }}>
+                <Bandera iso2={p.iso2} tam={15} />
+                {p.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  )
+}
+
+/**
+ * La lista entera, para dejarla como se quiera.
+ *
+ * Aquí no hay montos ni porcentajes: solo el orden y qué se ve. Ordenar desde
+ * la tabla de un país obliga a mirar diecisiete columnas de cifras para algo
+ * que no tiene que ver con el dinero.
+ */
+function ListaGeneral({ paises, quitados, onMover, onQuitar, onDevolver }) {
+  const [encima, setEncima] = useState(null)
+
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <p style={{ fontSize: 14, fontWeight: 700, color: '#eaf2ff' }}>Todos los países</p>
+      <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 4, marginBottom: 14, lineHeight: 1.5 }}>
+        Arrástralos para ponerlos en el orden que quieras. Es el mismo orden en
+        todas las tablas. Lo que quites deja de salir en el cuaderno, sin borrar
+        nada de lo anotado.
+      </p>
+
+      <div style={{ ...GLASS, padding: 6 }}>
+        {paises.map((p, i) => (
+          <div key={p.id}
+            draggable
+            onDragStart={e => { e.dataTransfer.setData('text/plain', p.name); e.dataTransfer.effectAllowed = 'move' }}
+            onDragOver={e => { e.preventDefault(); setEncima(p.name) }}
+            onDragLeave={() => setEncima(null)}
+            onDrop={e => {
+              e.preventDefault()
+              setEncima(null)
+              const quien = e.dataTransfer.getData('text/plain')
+              if (quien && quien !== p.name) onMover(quien, p.name)
+            }}
+            className="fin-pais"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 9, position: 'relative',
+              padding: '9px 11px', borderRadius: 10, cursor: 'grab',
+              background: encima === p.name ? 'rgba(56,189,248,.1)' : 'transparent',
+              boxShadow: encima === p.name ? 'inset 0 2px 0 #38bdf8' : undefined,
+            }}>
+            <span style={{ fontSize: 11, color: '#475569', width: 20, textAlign: 'right' }}>{i + 1}</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round">
+              <path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" />
+            </svg>
+            <Bandera iso2={p.iso2} tam={16} />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>{p.name}</span>
+            <button type="button" className="fin-quitar" onClick={() => onQuitar(p.name)}
+              title={`Quitar ${p.name}`} style={{ position: 'static', transform: 'none' }}>
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {quitados.length > 0 && (
+        <>
+          <p style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#64748b', margin: '18px 0 8px' }}>
+            QUITADOS
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {quitados.map(p => (
+              <button key={p.id} type="button" onClick={() => onDevolver(p.name)}
+                title={`Volver a mostrar ${p.name}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '6px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600,
+                  background: 'rgba(255,255,255,.03)', border: '1px dashed rgba(255,255,255,.15)',
+                  color: '#64748b',
+                }}>
+                <Bandera iso2={p.iso2} tam={14} />
+                {p.name}
+                <span style={{ color: '#4ade80', fontSize: 13 }}>+</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
