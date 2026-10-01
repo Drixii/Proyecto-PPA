@@ -78,24 +78,30 @@ def _paises_ocupados(db: Session, admin: User, excepto_id: int | None = None) ->
     o no lo trabaje ninguno: la cola de cada uno se arma por país, así que la
     misma orden aparecería en dos sitios.
 
-    Se miran TODOS los sub-admins, no solo los del super-admin que pregunta.
-    Los sub-admins cuelgan de quien los dio de alta, pero los países son del
-    negocio: si se filtrara por dueño, el otro super-admin vería Venezuela
-    libre y la asignaría por segunda vez, que es justo lo que esto evita.
+    Se mira solo entre los sub-admins de quien pregunta: cada super-admin lleva
+    su propio equipo, y que Freizer tenga encargado para Venezuela no puede
+    impedirle a Ender poner el suyo.
     """
-    q = (
+    mios = [
+        r.sub_admin_id
+        for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == admin.id).all()
+        if r.sub_admin_id != excepto_id
+    ]
+    if not mios:
+        return {}
+
+    filas = (
         db.query(SubAdminCountry, User)
         .join(User, User.id == SubAdminCountry.user_id)
         .filter(
-            User.role == "sub_admin",
+            SubAdminCountry.user_id.in_(mios),
             # Uno en la papelera no ocupa nada: su país tiene que poder darse a
-            # otro sin tener que acordarse de vaciar la papelera antes.
+            # otro sin acordarse de vaciar la papelera antes.
             User.deleted_at == None,  # noqa: E711
         )
+        .all()
     )
-    if excepto_id is not None:
-        q = q.filter(SubAdminCountry.user_id != excepto_id)
-    return {fila.country: (usuario.full_name or usuario.email) for fila, usuario in q.all()}
+    return {fila.country: (usuario.full_name or usuario.email) for fila, usuario in filas}
 
 
 def _exigir_paises_libres(db: Session, admin: User, paises: list[str], excepto_id: int | None = None) -> None:
@@ -940,7 +946,7 @@ def create_user_admin(
     }
 
 
-def _usuario_gestionable(db: Session, user_id: int, admin: User) -> User:
+def _usuario_gestionable(db: Session, user_id: int, admin: User, incluir_papelera: bool = False) -> User:
     """El usuario, si este super-admin puede tocarlo. Si no, 404.
 
     Faltaba: /users/{id}/password no miraba de quién era el usuario, así que un
@@ -951,7 +957,10 @@ def _usuario_gestionable(db: Session, user_id: int, admin: User) -> User:
     Se puede gestionar: los clientes propios y los sub-admins vinculados. Nunca
     otro admin, nunca uno mismo — para eso está el perfil.
     """
-    user = db.query(User).filter(User.id == user_id, User.deleted_at == None).first()
+    q = db.query(User).filter(User.id == user_id)
+    if not incluir_papelera:
+        q = q.filter(User.deleted_at == None)  # noqa: E711
+    user = q.first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if user.id == admin.id:
@@ -1126,9 +1135,7 @@ def get_user_countries(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    user = _usuario_gestionable(db, user_id, _admin)
     if user.role != "sub_admin":
         raise HTTPException(status_code=400, detail="Solo sub-administradores tienen países asignados")
     return {"success": True, "data": _sub_admin_countries(db, user_id), "message": ""}
@@ -1145,9 +1152,7 @@ def update_user_countries(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    user = _usuario_gestionable(db, user_id, _admin)
     if user.role != "sub_admin":
         raise HTTPException(status_code=400, detail="Solo sub-administradores tienen países asignados")
     # Los suyos no cuentan como ocupados: está reeditando su propia lista.
@@ -1181,11 +1186,7 @@ def delete_user(
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
-    user = db.query(User).filter(User.id == user_id, User.deleted_at == None).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    if user.id == admin.id:
-        raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo")
+    user = _usuario_gestionable(db, user_id, admin)
     if user.role == "admin":
         raise HTTPException(status_code=400, detail="No puedes eliminar a un super-admin")
     user.deleted_at = datetime.utcnow()
@@ -1226,8 +1227,8 @@ def restore_user(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_super_admin),
 ):
-    user = db.query(User).filter(User.id == user_id, User.deleted_at != None).first()
-    if not user:
+    user = _usuario_gestionable(db, user_id, _admin, incluir_papelera=True)
+    if user.deleted_at is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado en papelera")
     user.deleted_at = None
     db.commit()
