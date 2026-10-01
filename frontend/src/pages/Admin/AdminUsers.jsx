@@ -182,7 +182,7 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-function CountryMultiSelect({ selected, onChange }) {
+function CountryMultiSelect({ selected, onChange, ocupados = {} }) {
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(() => new Date())
   const ref = useRef()
@@ -197,6 +197,9 @@ function CountryMultiSelect({ selected, onChange }) {
     return () => clearInterval(id)
   }, [open])
   const toggle = (c) => {
+    // Un país que ya lleva otro no se puede coger: la cola de cada sub-admin
+    // se arma por país, así que el mismo envío le saldría a los dos.
+    if (ocupados[c] && !selected.includes(c)) return
     if (selected.includes(c)) onChange(selected.filter(x => x !== c))
     else onChange([...selected, c])
   }
@@ -225,19 +228,29 @@ function CountryMultiSelect({ selected, onChange }) {
           {AVAILABLE_COUNTRIES.map(c => {
             const tz = countryToTz(c)
             const timeNow = now.toLocaleTimeString('es-CL', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false })
+            const duenio = !selected.includes(c) && ocupados[c]
             return (
               <button
                 key={c}
                 type="button"
+                disabled={!!duenio}
                 onClick={() => toggle(c)}
+                title={duenio ? `Ya lo lleva ${duenio}` : undefined}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors"
-                style={selected.includes(c) ? {background:'rgba(45,212,191,.08)'} : {}}
-                onMouseEnter={e => { if (!selected.includes(c)) e.currentTarget.style.background = 'rgba(255,255,255,.04)' }}
-                onMouseLeave={e => { if (!selected.includes(c)) e.currentTarget.style.background = '' }}
+                style={{
+                  ...(selected.includes(c) ? {background:'rgba(45,212,191,.08)'} : {}),
+                  ...(duenio ? { opacity: .45, cursor: 'not-allowed' } : {}),
+                }}
+                onMouseEnter={e => { if (!selected.includes(c) && !duenio) e.currentTarget.style.background = 'rgba(255,255,255,.04)' }}
+                onMouseLeave={e => { if (!selected.includes(c) && !duenio) e.currentTarget.style.background = '' }}
               >
                 <CountryWithFlag country={c} />
                 <span className="ml-auto flex items-center gap-2 shrink-0">
-                  <span className="font-mono text-[10px]" style={{color:'#475569'}}>{timeNow}</span>
+                  {/* Quien lo lleva, no solo que está ocupado: si no, hay que ir
+                      a mirar la lista de sub-admins uno por uno. */}
+                  {duenio
+                    ? <span className="text-[10px] truncate max-w-[120px]" style={{color:'#f87171'}}>lo lleva {duenio}</span>
+                    : <span className="font-mono text-[10px]" style={{color:'#475569'}}>{timeNow}</span>}
                   {selected.includes(c) && <span className="text-xs" style={{color:'#2dd4bf'}}>✓</span>}
                 </span>
               </button>
@@ -297,10 +310,17 @@ export default function AdminUsers() {
     staleTime: 0,
   })
 
+  // Qué país lleva ya cada sub-admin, para no ofrecer los que tienen dueño.
+  const { data: ocupados = {} } = useQuery({
+    queryKey: ['paises-ocupados'],
+    queryFn: () => api.get('/admin/countries/ocupados').then(r => r.data.data || {}),
+  })
+
   const createMutation = useMutation({
     mutationFn: (data) => api.post('/admin/users', data),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
+      qc.invalidateQueries({ queryKey: ['paises-ocupados'] })
       setCreateModal(false)
       setForm({ email: '', full_name: '', password: '', phone: '', country: '', managed_countries: [] })
       showToast(res.data.message || 'Usuario creado')
@@ -352,6 +372,7 @@ export default function AdminUsers() {
     mutationFn: ({ id, countries }) => api.put(`/admin/users/${id}/countries`, { countries }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
+      qc.invalidateQueries({ queryKey: ['paises-ocupados'] })
       qc.invalidateQueries({ queryKey: ['sub-admins'] })
       setCountriesModal(null)
       showToast('Países actualizados')
@@ -370,6 +391,7 @@ export default function AdminUsers() {
     mutationFn: (id) => api.delete(`/admin/users/${id}`),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
+      qc.invalidateQueries({ queryKey: ['paises-ocupados'] })
       qc.invalidateQueries({ queryKey: ['admin-users-trash'] })
       setDeleteModal(null)
       showToast(res.data.message || 'Usuario movido a papelera')
@@ -381,6 +403,7 @@ export default function AdminUsers() {
     mutationFn: (id) => api.post(`/admin/users/${id}/restore`),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
+      qc.invalidateQueries({ queryKey: ['paises-ocupados'] })
       qc.invalidateQueries({ queryKey: ['admin-users-trash'] })
       showToast(res.data.message || 'Usuario restaurado')
     },
@@ -398,6 +421,7 @@ export default function AdminUsers() {
     mutationFn: (id) => api.post(`/admin/sub-admins/${id}/link`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
+      qc.invalidateQueries({ queryKey: ['paises-ocupados'] })
       qc.invalidateQueries({ queryKey: ['admin-available-sub-admins'] })
       setCreateModal(false)
       setSubAdminView('choice')
@@ -1029,6 +1053,7 @@ export default function AdminUsers() {
                 <CountryMultiSelect
                   selected={form.managed_countries}
                   onChange={v => setForm(f => ({ ...f, managed_countries: v }))}
+                  ocupados={ocupados}
                 />
                 {form.managed_countries.length > 0 && (
                   <p className="text-xs mt-1.5 flex items-center gap-1 flex-wrap" style={{color:'#60a5fa'}}>
@@ -1061,7 +1086,11 @@ export default function AdminUsers() {
         <Modal title={`Países — ${countriesModal.full_name}`} onClose={() => setCountriesModal(null)}>
           <div className="space-y-4">
             <p className="text-xs" style={{color:'#8aa0cc'}}>El primer país seleccionado define la zona horaria del sub-admin.</p>
-            <CountryMultiSelect selected={editCountries} onChange={setEditCountries} />
+            <CountryMultiSelect selected={editCountries} onChange={setEditCountries}
+              ocupados={Object.fromEntries(
+                // Los suyos no cuentan como ocupados: está reeditando su lista.
+                Object.entries(ocupados).filter(([, quien]) => quien !== (countriesModal.full_name || countriesModal.email)),
+              )} />
             {editCountries.length > 0 && (
               <p className="text-xs flex items-center gap-1 flex-wrap" style={{color:'#60a5fa'}}>
                 🕐 Zona horaria: <span className="font-semibold">{countryToTz(editCountries[0])}</span>

@@ -71,6 +71,47 @@ def _sub_admin_countries(db: Session, user_id: int) -> list:
     return [r.country for r in rows]
 
 
+def _paises_ocupados(db: Session, admin: User, excepto_id: int | None = None) -> dict[str, str]:
+    """Qué país lleva ya cada sub-admin de este super-admin.
+
+    Un país con dos encargados es el camino a que un envío lo trabajen los dos
+    o no lo trabaje ninguno: la cola de cada uno se arma por país, así que la
+    misma orden aparecería en dos sitios.
+
+    Se mira solo entre los sub-admins de quien pregunta: dos casas distintas
+    pueden tener cada una su encargado de Venezuela sin pisarse.
+    """
+    enlazados = [
+        r.sub_admin_id
+        for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == admin.id).all()
+    ]
+    if excepto_id is not None:
+        enlazados = [i for i in enlazados if i != excepto_id]
+    if not enlazados:
+        return {}
+
+    filas = (
+        db.query(SubAdminCountry, User)
+        .join(User, User.id == SubAdminCountry.user_id)
+        .filter(
+            SubAdminCountry.user_id.in_(enlazados),
+            # Uno en la papelera no ocupa nada: su país tiene que poder darse a
+            # otro sin tener que acordarse de vaciar la papelera antes.
+            User.deleted_at == None,  # noqa: E711
+        )
+        .all()
+    )
+    return {fila.country: (usuario.full_name or usuario.email) for fila, usuario in filas}
+
+
+def _exigir_paises_libres(db: Session, admin: User, paises: list[str], excepto_id: int | None = None) -> None:
+    ocupados = _paises_ocupados(db, admin, excepto_id)
+    chocan = [(c, ocupados[c]) for c in paises if c in ocupados]
+    if chocan:
+        detalle = ", ".join(f"{c} ya lo lleva {quien}" for c, quien in chocan)
+        raise HTTPException(status_code=400, detail=detalle)
+
+
 def _own_order_or_404(db: Session, order_id: int, admin: User) -> Order:
     """Orden del admin que pregunta, o 404.
 
@@ -833,6 +874,10 @@ def create_user_admin(
         raise HTTPException(status_code=400, detail="Email ya registrado")
     if data.role not in ("client", "admin", "sub_admin"):
         raise HTTPException(status_code=400, detail="Rol inválido")
+    # Antes de crear nada: si el país ya tiene encargado, el alta no sale
+    # adelante a medias con la cuenta hecha y los países sin poner.
+    if data.role == "sub_admin" and data.managed_countries:
+        _exigir_paises_libres(db, _admin, data.managed_countries)
     hashed = pwd_context.hash(data.password)
     # For sub_admin derive timezone from first managed country; otherwise from personal country
     if data.role == 'sub_admin' and data.managed_countries:
@@ -1072,6 +1117,15 @@ def toggle_user_active(
     return {"success": True, "data": {"is_active": user.is_active}, "message": "Estado actualizado"}
 
 
+@router.get("/countries/ocupados", response_model=dict)
+def paises_ocupados(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Qué país lleva cada sub-admin, para no ofrecer los que ya tienen dueño."""
+    return {"success": True, "data": _paises_ocupados(db, _admin), "message": ""}
+
+
 @router.get("/users/{user_id}/countries", response_model=dict)
 def get_user_countries(
     user_id: int,
@@ -1102,6 +1156,8 @@ def update_user_countries(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if user.role != "sub_admin":
         raise HTTPException(status_code=400, detail="Solo sub-administradores tienen países asignados")
+    # Los suyos no cuentan como ocupados: está reeditando su propia lista.
+    _exigir_paises_libres(db, _admin, data.countries, excepto_id=user_id)
     db.query(SubAdminCountry).filter(SubAdminCountry.user_id == user_id).delete()
     for c in data.countries:
         db.add(SubAdminCountry(user_id=user_id, country=c))
