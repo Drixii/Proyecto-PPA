@@ -72,36 +72,30 @@ def _sub_admin_countries(db: Session, user_id: int) -> list:
 
 
 def _paises_ocupados(db: Session, admin: User, excepto_id: int | None = None) -> dict[str, str]:
-    """Qué país lleva ya cada sub-admin de este super-admin.
+    """Qué país lleva ya cada sub-admin.
 
     Un país con dos encargados es el camino a que un envío lo trabajen los dos
     o no lo trabaje ninguno: la cola de cada uno se arma por país, así que la
     misma orden aparecería en dos sitios.
 
-    Se mira solo entre los sub-admins de quien pregunta: dos casas distintas
-    pueden tener cada una su encargado de Venezuela sin pisarse.
+    Se miran TODOS los sub-admins, no solo los del super-admin que pregunta.
+    Los sub-admins cuelgan de quien los dio de alta, pero los países son del
+    negocio: si se filtrara por dueño, el otro super-admin vería Venezuela
+    libre y la asignaría por segunda vez, que es justo lo que esto evita.
     """
-    enlazados = [
-        r.sub_admin_id
-        for r in db.query(AdminSubAdmin).filter(AdminSubAdmin.admin_id == admin.id).all()
-    ]
-    if excepto_id is not None:
-        enlazados = [i for i in enlazados if i != excepto_id]
-    if not enlazados:
-        return {}
-
-    filas = (
+    q = (
         db.query(SubAdminCountry, User)
         .join(User, User.id == SubAdminCountry.user_id)
         .filter(
-            SubAdminCountry.user_id.in_(enlazados),
+            User.role == "sub_admin",
             # Uno en la papelera no ocupa nada: su país tiene que poder darse a
             # otro sin tener que acordarse de vaciar la papelera antes.
             User.deleted_at == None,  # noqa: E711
         )
-        .all()
     )
-    return {fila.country: (usuario.full_name or usuario.email) for fila, usuario in filas}
+    if excepto_id is not None:
+        q = q.filter(SubAdminCountry.user_id != excepto_id)
+    return {fila.country: (usuario.full_name or usuario.email) for fila, usuario in q.all()}
 
 
 def _exigir_paises_libres(db: Session, admin: User, paises: list[str], excepto_id: int | None = None) -> None:
