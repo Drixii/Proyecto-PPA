@@ -176,8 +176,8 @@ export default function Finanzas() {
     return m
   }, [delOrigen])
 
-  // Las columnas ya usadas y una libre al final, para el siguiente movimiento.
-  const columnas = useMemo(() => {
+  // Las filas ya usadas y una libre al final, para el siguiente cliente.
+  const filas = useMemo(() => {
     const usadas = [...porColumna.keys()]
     const tope = usadas.length ? Math.max(...usadas) + 1 : 0
     return Array.from({ length: tope + 1 }, (_, i) => i)
@@ -548,67 +548,77 @@ export default function Finanzas() {
                 <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
                   <thead>
                     <tr>
-                      <th style={{ ...cabecera, ...pegadaPais, padding: '9px 8px' }}>
-                        % · PAÍS
-                      </th>
+                      <th style={{ ...cabecera, ...pegadaPais, padding: '9px 10px' }}>CLIENTE</th>
 
-                      {/* Una columna por cliente, numeradas como se anotan. */}
-                      {columnas.map(c => (
-                        <th key={c} style={{ ...cabecera, color: '#64748b' }}>
-                          Cliente {c + 1}
-                        </th>
+                      {/* Un país por columna, con su porcentaje encima: es lo
+                          que vale para todo lo que se anote debajo. */}
+                      {destinosDelOrigen.map(d => (
+                        <ColumnaPais
+                          key={d.id}
+                          pais={d}
+                          pct={pctDe(d.name)}
+                          ordenando={ordenando}
+                          onSoltar={nombre => reordenar(nombre, d.name)}
+                          onQuitar={() => setPorQuitar(d.name)}
+                          onPorcentaje={v => ponerPorcentaje(d.name, v)}
+                        />
                       ))}
 
-                      {/* Los dos totales de la fila. Antes había un hueco sin
-                          título entre medias que no se entendía; ahora lo que
-                          los separa de los movimientos es una raya más marcada
-                          y su propio nombre. */}
+                      {/* Lo que cierra cada fila. Lo separa una raya más
+                          marcada: no son un país más. */}
                       <th style={{ ...cabecera, ...separa, color: '#aebfe2' }}>TOTAL</th>
                       <th style={{ ...cabecera, color: '#4ade80', borderRight: 'none' }}>COMISIÓN</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {destinosDelOrigen.map(d => (
-                      <FilaPais
-                        key={`${d.id}:${origen}`}
-                        pais={d}
-                        ordenando={ordenando}
-                        onSoltar={nombre => reordenar(nombre, d.name)}
-                        onQuitar={() => setPorQuitar(d.name)}
-                        pct={pctDe(d.name)}
+                    {filas.map(f => (
+                      <FilaCliente
+                        key={f}
+                        fila={f}
+                        destinos={destinosDelOrigen}
+                        apunte={porColumna.get(f)}
                         moneda={paisOrigen?.currency}
-                        columnas={columnas}
-                        porColumna={porColumna}
+                        pctDe={pctDe}
                         borrador={borrador}
                         setBorrador={setBorrador}
                         onGuardarBorrador={guardarBorrador}
-                        onPorcentaje={v => ponerPorcentaje(d.name, v)}
                         onEditar={editar}
                         onBorrar={borrar}
-                        movido={movidoDe(d.name)}
-                        ganado={ganadoDe(d.name)}
-                        movidoClp={movidoClpDe(d.name)}
-                        ganadoClp={ganadoClpDe(d.name)}
                       />
                     ))}
                   </tbody>
 
                   <tfoot>
                     <tr>
-                      <td style={{ ...pieCelda, ...pegadaPais, fontSize: 11, color: '#64748b', fontWeight: 700, padding: '9px 8px 9px 5px' }}>
+                      <td style={{ ...pieCelda, ...pegadaPais, fontSize: 11, color: '#64748b', fontWeight: 700, padding: '9px 10px' }}>
                         TOTAL
                       </td>
-                      {columnas.map(c => (
-                        <td key={c} style={{ ...pieCelda, textAlign: 'right', color: '#8aa0cc', fontSize: 12 }}>
-                          {porColumna.get(c) ? miles(porColumna.get(c).monto) : ''}
-                        </td>
-                      ))}
+                      {destinosDelOrigen.map(d => {
+                        const movido = movidoDe(d.name)
+                        return (
+                          <td key={d.id} style={{ ...pieCelda, textAlign: 'right', fontSize: 12.5 }}>
+                            {movido ? (
+                              <>
+                                <span style={{ color: '#eaf2ff', fontWeight: 700 }}>{miles(movido)}</span>
+                                <span style={{ fontSize: 10, color: '#64748b' }}> {paisOrigen?.currency}</span>
+                                <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
+                                  {pesos(movidoClpDe(d.name))} CLP
+                                </span>
+                                <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
+                                  {miles(ganadoDe(d.name))} de comisión
+                                  {ganadoClpDe(d.name) > 0 && ` · ${pesos(ganadoClpDe(d.name))} CLP`}
+                                </span>
+                              </>
+                            ) : ''}
+                          </td>
+                        )
+                      })}
                       <td style={{ ...pieCelda, ...separa, textAlign: 'right', color: '#eaf2ff', fontWeight: 700, fontSize: 13 }}>
                         {miles(totalMovido)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>{paisOrigen?.currency}</span>
                         {/* Y lo mismo en pesos chilenos, que es la moneda en la
-                            que se lleva la caja: el total del país dice lo que
-                            se movió allá, este dice lo que vale aquí. */}
+                            que se lleva la caja: arriba lo que se movió allá,
+                            aquí lo que vale aquí. */}
                         {enPesos && (
                           <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
                             {pesos(enPesos.movido)} CLP
@@ -827,169 +837,6 @@ function BadgePorcentaje({ valor, onGuardar }) {
 }
 
 /**
- * Una casilla: el cruce de un país con un movimiento.
- *
- * Tres estados. La suya —lleva el monto y se edita—, una libre, y una trancada
- * porque ese movimiento ya es de otro país. La trancada no está muerta: al
- * tocarla el movimiento se pasa a este país, que es como se corrige haberse
- * equivocado de fila sin tener que borrar nada.
- */
-function Casilla({ pais, col, apunte, pct, moneda, borrador, setBorrador, onGuardarBorrador, onEditar, onBorrar }) {
-  const suya = apunte && apunte.destino === pais.name
-  const trancada = apunte && !suya
-  const enBorrador = !apunte && borrador.col === col && borrador.destino === pais.name
-
-  const [texto, setTexto] = useState(suya ? conPuntos(String(apunte.monto)) : '')
-
-  if (trancada) {
-    return (
-      <td style={celda}>
-        <button type="button" className="fin-trancada"
-          title={`Pasar este movimiento a ${pais.name}`}
-          onClick={() => onEditar(apunte.id, { destino: pais.name })}>
-          —
-        </button>
-      </td>
-    )
-  }
-
-  if (suya) {
-    return (
-      <td className="fin-casilla" style={{ ...celda, background: 'rgba(56,189,248,.04)', position: 'relative' }}>
-        <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
-          <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
-            onChange={e => setTexto(conPuntos(e.target.value))}
-            onBlur={() => {
-              const n = aNumero(texto)
-              if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
-            }} />
-          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
-        </span>
-        <button type="button" className="fin-x" onClick={() => onBorrar(apunte.id)}
-          title="Quitar este movimiento">
-          ✕
-        </button>
-        <Comision monto={apunte.monto} pct={pct} moneda={moneda} montoClp={apunte.monto_clp} />
-      </td>
-    )
-  }
-
-  return (
-    <td style={celda}>
-      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
-        <input className="fin-cel" inputMode="decimal"
-          value={enBorrador ? borrador.texto : ''}
-          size={anchoDe(enBorrador ? borrador.texto : '')}
-          onChange={e => setBorrador({
-            col,
-            destino: e.target.value ? pais.name : null,
-            texto: conPuntos(e.target.value),
-          })}
-          onBlur={onGuardarBorrador} />
-        {enBorrador && (
-          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
-        )}
-      </span>
-      {enBorrador && <Comision monto={aNumero(borrador.texto)} pct={pct} moneda={moneda} />}
-    </td>
-  )
-}
-
-/** Un país: su porcentaje, sus casillas y lo que deja. */
-function FilaPais({
-  pais, pct, moneda, columnas, porColumna, borrador, setBorrador, onGuardarBorrador,
-  onPorcentaje, onEditar, onBorrar, movido, ganado, movidoClp, ganadoClp,
-  ordenando, onSoltar, onQuitar,
-}) {
-  const [encima, setEncima] = useState(false)
-
-  // Arrastrar con lo que trae el navegador, sin librería: una fila entera es
-  // lo que se coge y lo que se suelta, y eso HTML ya lo sabe hacer.
-  const arrastre = ordenando ? {
-    draggable: true,
-    onDragStart: e => {
-      e.dataTransfer.setData('text/plain', pais.name)
-      e.dataTransfer.effectAllowed = 'move'
-    },
-    onDragOver: e => { e.preventDefault(); setEncima(true) },
-    onDragLeave: () => setEncima(false),
-    onDrop: e => {
-      e.preventDefault()
-      setEncima(false)
-      const quien = e.dataTransfer.getData('text/plain')
-      if (quien && quien !== pais.name) onSoltar(quien)
-    },
-  } : {}
-
-  return (
-    <tr {...arrastre}
-      style={ordenando ? {
-        cursor: 'grab',
-        // La línea marca dónde va a caer, que es lo único que hace falta saber
-        // mientras se arrastra.
-        boxShadow: encima ? 'inset 0 2px 0 #38bdf8' : undefined,
-        background: encima ? 'rgba(56,189,248,.06)' : undefined,
-      } : undefined}>
-      <td className="fin-pais" style={{ ...celda, ...pegadaPais, padding: '5px 8px 5px 5px', position: 'relative' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
-          <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />
-          <Bandera iso2={pais.iso2} tam={16} />
-          {pais.name}
-          <button type="button" className="fin-quitar"
-            onClick={onQuitar} title={`Quitar ${pais.name} de esta pantalla`}>
-            ✕
-          </button>
-        </span>
-      </td>
-
-      {columnas.map(c => {
-        const apunte = porColumna.get(c)
-        return (
-          <Casilla
-            key={`${c}:${apunte?.id ?? 'libre'}:${apunte?.monto ?? ''}:${apunte?.destino ?? ''}`}
-            pais={pais}
-            col={c}
-            apunte={apunte}
-            pct={pct}
-            moneda={moneda}
-            borrador={borrador}
-            setBorrador={setBorrador}
-            onGuardarBorrador={onGuardarBorrador}
-            onEditar={onEditar}
-            onBorrar={onBorrar}
-          />
-        )
-      })}
-
-      <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', color: '#aebfe2', fontSize: 13 }}>
-        {movido ? (
-          <>
-            {miles(movido)} <span style={{ fontSize: 10.5, color: '#64748b' }}>{moneda}</span>
-            {movidoClp > 0 && (
-              <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
-                {pesos(movidoClp)} CLP
-              </span>
-            )}
-          </>
-        ) : ''}
-      </td>
-      <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
-        {ganado ? (
-          <>
-            {miles(ganado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{moneda}</span>
-            {ganadoClp > 0 && (
-              <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#4ade80' }}>
-                {pesos(ganadoClp)} CLP
-              </span>
-            )}
-          </>
-        ) : ''}
-      </td>
-    </tr>
-  )
-}
-
-/**
  * Poner el mismo porcentaje a todos los destinos de un país de una vez.
  *
  * Con diecisiete destinos, ir badge por badge para dejarlos todos igual es el
@@ -1048,6 +895,184 @@ function PorcentajeGeneral({ onPoner }) {
         respeta los que ya tienen el suyo
       </span>
     </span>
+  )
+}
+
+
+/**
+ * La cabecera de un país: su porcentaje, su nombre y el aspa.
+ *
+ * El porcentaje va aquí arriba y no en cada celda porque es de la ruta
+ * entera: vale para todo lo que se anote en esa columna.
+ */
+function ColumnaPais({ pais, pct, ordenando, onSoltar, onQuitar, onPorcentaje }) {
+  const [encima, setEncima] = useState(false)
+
+  // Arrastrar con lo que trae el navegador, sin librería: se coge una columna
+  // por su cabecera y se suelta sobre otra.
+  const arrastre = ordenando ? {
+    draggable: true,
+    onDragStart: e => {
+      e.dataTransfer.setData('text/plain', pais.name)
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragOver: e => { e.preventDefault(); setEncima(true) },
+    onDragLeave: () => setEncima(false),
+    onDrop: e => {
+      e.preventDefault()
+      setEncima(false)
+      const quien = e.dataTransfer.getData('text/plain')
+      if (quien && quien !== pais.name) onSoltar(quien)
+    },
+  } : {}
+
+  return (
+    <th {...arrastre} className="fin-pais"
+      style={{
+        ...cabecera, padding: '7px 9px', position: 'relative',
+        cursor: ordenando ? 'grab' : undefined,
+        // La raya marca dónde va a caer la columna que se arrastra.
+        boxShadow: encima ? 'inset 2px 0 0 #38bdf8' : undefined,
+        background: encima ? 'rgba(56,189,248,.08)' : '#071331',
+      }}>
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        <BadgePorcentaje valor={pct} onGuardar={onPorcentaje} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#aebfe2' }}>
+          <Bandera iso2={pais.iso2} tam={15} />
+          {pais.name}
+        </span>
+      </span>
+      <button type="button" className="fin-quitar" onClick={onQuitar}
+        title={`Quitar ${pais.name} de esta pantalla`}>
+        ✕
+      </button>
+    </th>
+  )
+}
+
+/**
+ * Una casilla: el cruce de un cliente con un país.
+ *
+ * Tres estados. La suya —lleva el monto y se edita—, una libre, y una
+ * trancada porque ese cliente ya mandó a otro país. La trancada no está
+ * muerta: al tocarla el movimiento se pasa a esa columna, que es como se
+ * corrige haberse equivocado de país sin borrar nada.
+ */
+function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, onGuardarBorrador, onEditar, onBorrar }) {
+  const suya = apunte && apunte.destino === pais.name
+  const trancada = apunte && !suya
+  const enBorrador = !apunte && borrador.col === fila && borrador.destino === pais.name
+
+  const [texto, setTexto] = useState(suya ? conPuntos(String(apunte.monto)) : '')
+
+  if (trancada) {
+    return (
+      <td style={celda}>
+        <button type="button" className="fin-trancada"
+          title={`Pasar este movimiento a ${pais.name}`}
+          onClick={() => onEditar(apunte.id, { destino: pais.name })}>
+          —
+        </button>
+      </td>
+    )
+  }
+
+  if (suya) {
+    return (
+      <td className="fin-casilla" style={{ ...celda, background: 'rgba(56,189,248,.04)', position: 'relative' }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+          <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
+            onChange={e => setTexto(conPuntos(e.target.value))}
+            onBlur={() => {
+              const n = aNumero(texto)
+              if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
+            }} />
+          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
+        </span>
+        <button type="button" className="fin-x" onClick={() => onBorrar(apunte.id)}
+          title="Quitar este movimiento">
+          ✕
+        </button>
+        <Comision monto={apunte.monto} pct={pct} moneda={moneda} montoClp={apunte.monto_clp} />
+      </td>
+    )
+  }
+
+  return (
+    <td style={celda}>
+      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+        <input className="fin-cel" inputMode="decimal"
+          value={enBorrador ? borrador.texto : ''}
+          size={anchoDe(enBorrador ? borrador.texto : '')}
+          onChange={e => setBorrador({
+            col: fila,
+            destino: e.target.value ? pais.name : null,
+            texto: conPuntos(e.target.value),
+          })}
+          onBlur={onGuardarBorrador} />
+        {enBorrador && (
+          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
+        )}
+      </span>
+      {enBorrador && <Comision monto={aNumero(borrador.texto)} pct={pct} moneda={moneda} />}
+    </td>
+  )
+}
+
+/** Un cliente: su fila, con el monto en el país al que mandó. */
+function FilaCliente({
+  fila, destinos, apunte, moneda, pctDe, borrador, setBorrador,
+  onGuardarBorrador, onEditar, onBorrar,
+}) {
+  const pct = apunte ? apunte.porcentaje : 0
+
+  return (
+    <tr>
+      <td style={{ ...celda, ...pegadaPais, padding: '6px 10px', fontSize: 12.5, fontWeight: 600, color: '#8aa0cc' }}>
+        Cliente {fila + 1}
+      </td>
+
+      {destinos.map(d => (
+        <CeldaMonto
+          key={`${d.id}:${apunte?.id ?? 'libre'}:${apunte?.monto ?? ''}:${apunte?.destino ?? ''}`}
+          pais={d}
+          fila={fila}
+          apunte={apunte}
+          pct={pctDe(d.name)}
+          moneda={moneda}
+          borrador={borrador}
+          setBorrador={setBorrador}
+          onGuardarBorrador={onGuardarBorrador}
+          onEditar={onEditar}
+          onBorrar={onBorrar}
+        />
+      ))}
+
+      <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', color: '#aebfe2', fontSize: 13 }}>
+        {apunte ? (
+          <>
+            {miles(apunte.monto)} <span style={{ fontSize: 10.5, color: '#64748b' }}>{moneda}</span>
+            {apunte.monto_clp > 0 && (
+              <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
+                {pesos(apunte.monto_clp)} CLP
+              </span>
+            )}
+          </>
+        ) : ''}
+      </td>
+      <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
+        {apunte && pct ? (
+          <>
+            {miles(apunte.ganancia)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{moneda}</span>
+            {apunte.ganancia_clp > 0 && (
+              <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#4ade80' }}>
+                {pesos(apunte.ganancia_clp)} CLP
+              </span>
+            )}
+          </>
+        ) : ''}
+      </td>
+    </tr>
   )
 }
 
