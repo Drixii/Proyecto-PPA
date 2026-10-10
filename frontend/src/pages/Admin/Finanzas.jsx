@@ -285,6 +285,8 @@ export default function Finanzas() {
   const totalGanado = delOrigen.reduce((s, a) => s + a.ganancia, 0)
   // Lo mismo pasado a pesos chilenos, que es como se lleva la caja.
   const enPesos = porOrigen.find(o => o.origen === origen)
+  // Si el país ya cobra en pesos, el equivalente es la misma cifra repetida.
+  const enCaja = paisOrigen?.currency === 'CLP'
   const variosDias = desde !== hasta
 
   return (
@@ -602,12 +604,14 @@ export default function Finanzas() {
                               <>
                                 <span style={{ color: '#eaf2ff', fontWeight: 700 }}>{miles(movido)}</span>
                                 <span style={{ fontSize: 10, color: '#64748b' }}> {paisOrigen?.currency}</span>
-                                <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
-                                  {pesos(movidoClpDe(d.name))} CLP
-                                </span>
+                                {enCaja || (
+                                  <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
+                                    {pesos(movidoClpDe(d.name))} CLP
+                                  </span>
+                                )}
                                 <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
                                   {miles(ganadoDe(d.name))} de comisión
-                                  {ganadoClpDe(d.name) > 0 && ` · ${pesos(ganadoClpDe(d.name))} CLP`}
+                                  {!enCaja && ganadoClpDe(d.name) > 0 && ` · ${pesos(ganadoClpDe(d.name))} CLP`}
                                 </span>
                               </>
                             ) : ''}
@@ -619,7 +623,7 @@ export default function Finanzas() {
                         {/* Y lo mismo en pesos chilenos, que es la moneda en la
                             que se lleva la caja: arriba lo que se movió allá,
                             aquí lo que vale aquí. */}
-                        {enPesos && (
+                        {enPesos && !enCaja && (
                           <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
                             {pesos(enPesos.movido)} CLP
                           </span>
@@ -627,7 +631,7 @@ export default function Finanzas() {
                       </td>
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14, borderRight: 'none' }}>
                         {miles(totalGanado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{paisOrigen?.currency}</span>
-                        {enPesos && (
+                        {enPesos && !enCaja && (
                           <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
                             {pesos(enPesos.ganado)} CLP
                           </span>
@@ -763,13 +767,15 @@ function Comision({ monto, pct, moneda, montoClp }) {
   if (!pct) {
     return (
       <div style={{ fontSize: 10, textAlign: 'right', lineHeight: 1.3, padding: '0 7px 3px', whiteSpace: 'nowrap' }}>
-        {montoClp > 0 && <p style={{ color: '#64748b' }}>{pesos(montoClp)} CLP</p>}
+        {montoClp > 0 && moneda !== 'CLP' && <p style={{ color: '#64748b' }}>{pesos(montoClp)} CLP</p>}
         <p style={{ color: '#fcd34d' }}>sin %</p>
       </div>
     )
   }
 
-  const enPesos = montoClp ? montoClp * pct / 100 : 0
+  // Cuando el país ya cobra en pesos, el "equivalente" es la misma cifra: se
+  // vería dos veces seguidas y no añade nada.
+  const enPesos = moneda === 'CLP' ? 0 : (montoClp ? montoClp * pct / 100 : 0)
   return (
     <div title={`Comisión del ${miles(pct)}%`}
       style={{ fontSize: 10, textAlign: 'right', lineHeight: 1.3, padding: '0 7px 3px', whiteSpace: 'nowrap' }}>
@@ -1052,7 +1058,7 @@ function FilaCliente({
         {apunte ? (
           <>
             {miles(apunte.monto)} <span style={{ fontSize: 10.5, color: '#64748b' }}>{moneda}</span>
-            {apunte.monto_clp > 0 && (
+            {apunte.monto_clp > 0 && moneda !== 'CLP' && (
               <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
                 {pesos(apunte.monto_clp)} CLP
               </span>
@@ -1064,7 +1070,7 @@ function FilaCliente({
         {apunte && pct ? (
           <>
             {miles(apunte.ganancia)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{moneda}</span>
-            {apunte.ganancia_clp > 0 && (
+            {apunte.ganancia_clp > 0 && moneda !== 'CLP' && (
               <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#4ade80' }}>
                 {pesos(apunte.ganancia_clp)} CLP
               </span>
