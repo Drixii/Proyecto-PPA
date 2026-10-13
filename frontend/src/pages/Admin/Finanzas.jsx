@@ -601,6 +601,7 @@ export default function Finanzas() {
                   pais={p}
                   activo={activo}
                   conMovimiento={conMovimiento.has(p.name)}
+                  ordenando={ordenando}
                   onElegir={() => setElegido(p.name)}
                   onQuitar={() => setPorQuitar(p.name)}
                   onSoltar={quien => reordenar(quien, p.name)}
@@ -660,7 +661,7 @@ export default function Finanzas() {
 
                 {ordenando && (
                   <span style={{ fontSize: 11.5, color: '#64748b' }}>
-                    arrastra los países para ponerlos en el orden que quieras
+                    arrastra los países de la barra de arriba o las columnas de la tabla
                   </span>
                 )}
                 {variosDias && (
@@ -1611,31 +1612,35 @@ function NoSeGuardo({ fallo, onCerrar }) {
 /**
  * Un país de la barra de arriba.
  *
- * Se puede arrastrar para dejarlo donde se quiera, sin entrar en ningún modo
- * de edición: es la lista que más se mira, y tener que ir a otra pantalla
- * para moverla era el camino largo de algo que se hace con el ratón.
+ * Solo se arrastra con "Editar" puesto, igual que las columnas de la tabla:
+ * es la barra que más se pulsa, y con el arrastre siempre suelto un clic que
+ * se va dos píxeles mueve el país en vez de abrirlo.
  *
  * El orden que queda es el mismo que el de las columnas de la tabla.
  */
-function BotonPais({ pais, activo, conMovimiento, onElegir, onQuitar, onSoltar }) {
+function BotonPais({ pais, activo, conMovimiento, ordenando, onElegir, onQuitar, onSoltar }) {
   const [encima, setEncima] = useState(false)
+
+  const arrastre = ordenando ? {
+    draggable: true,
+    onDragStart: e => {
+      e.dataTransfer.setData('text/plain', pais.name)
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragOver: e => { e.preventDefault(); setEncima(true) },
+    onDragLeave: () => setEncima(false),
+    onDrop: e => {
+      e.preventDefault()
+      setEncima(false)
+      const quien = e.dataTransfer.getData('text/plain')
+      if (quien && quien !== pais.name) onSoltar(quien)
+    },
+  } : {}
 
   return (
     <span
       className="fin-pais"
-      draggable
-      onDragStart={e => {
-        e.dataTransfer.setData('text/plain', pais.name)
-        e.dataTransfer.effectAllowed = 'move'
-      }}
-      onDragOver={e => { e.preventDefault(); setEncima(true) }}
-      onDragLeave={() => setEncima(false)}
-      onDrop={e => {
-        e.preventDefault()
-        setEncima(false)
-        const quien = e.dataTransfer.getData('text/plain')
-        if (quien && quien !== pais.name) onSoltar(quien)
-      }}
+      {...arrastre}
       style={{
         position: 'relative', flexShrink: 0, borderRadius: 999,
         // La raya marca dónde va a caer el que se arrastra.
@@ -1643,7 +1648,8 @@ function BotonPais({ pais, activo, conMovimiento, onElegir, onQuitar, onSoltar }
       }}>
       <button type="button" onClick={onElegir}
         style={{
-          display: 'flex', alignItems: 'center', gap: 7, cursor: 'grab',
+          display: 'flex', alignItems: 'center', gap: 7,
+          cursor: ordenando ? 'grab' : 'pointer',
           padding: '7px 26px 7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
           transition: 'all .15s',
           background: activo ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
