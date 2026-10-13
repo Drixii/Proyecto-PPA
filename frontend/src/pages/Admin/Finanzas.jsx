@@ -214,29 +214,84 @@ export default function Finanzas() {
   // Qué se está mirando: lo que se anota, o lo que suma.
   const [vista, setVista] = useState('diarios')   // 'diarios' | 'total'
 
+  // Lo último que no se pudo guardar, para poder decirlo y reintentarlo.
+  const [fallo, setFallo] = useState(null)
+
+  /**
+   * Guardar sin perder nada por el camino.
+   *
+   * Cada casilla se manda sola al salir del campo, y hasta ahora si la
+   * petición fallaba no pasaba nada visible: la cifra se quedaba escrita en
+   * pantalla como si estuviera guardada y desaparecía al refrescar. El caso
+   * normal no es un fallo raro — es el medio minuto en que la API se reinicia
+   * al publicar un cambio.
+   *
+   * Por eso se reintenta solo unas cuantas veces antes de rendirse: casi
+   * siempre el segundo intento ya entra. Y si de verdad no se puede, se dice.
+   */
+  const conReintento = async (quehacer, queEra) => {
+    for (let intento = 0; intento < 4; intento++) {
+      try {
+        const r = await quehacer()
+        setFallo(null)
+        return r
+      } catch (e) {
+        const respondio = e?.response?.status
+        // Si el servidor contestó que no (un monto inválido, un país
+        // repetido), reintentar no va a cambiar nada: se dice y punto.
+        const esDeRed = !respondio || respondio >= 500
+        if (!esDeRed || intento === 3) {
+          setFallo({
+            que: queEra,
+            porque: e?.response?.data?.detail || 'no se pudo conectar con el servidor',
+            reintentar: () => conReintento(quehacer, queEra),
+          })
+          return null
+        }
+        await new Promise(r => setTimeout(r, 1200 * (intento + 1)))
+      }
+    }
+  }
+
   const guardarBorrador = async () => {
     const monto = aNumero(borrador.texto)
     if (!monto || !borrador.destino || borrador.col === null || !origen) return
-    await api.post('/finanzas', {
-      fecha: desde,               // los apuntes nuevos caen en el primer día del rango
-      origen,
-      destino: borrador.destino,
-      monto,
-      orden: borrador.col,
-    })
-    setBorrador({ col: null, destino: null, texto: '' })
+    const destino = borrador.destino
+    const col = borrador.col
+    const hecho = await conReintento(
+      () => api.post('/finanzas', {
+        fecha: desde,             // los apuntes nuevos caen en el primer día del rango
+        origen,
+        destino,
+        monto,
+        orden: col,
+      }),
+      `${miles(monto)} en ${destino}`,
+    )
+    // El borrador solo se borra si de verdad se guardó: si no, lo escrito
+    // sigue en pantalla para poder reintentarlo.
+    if (hecho) setBorrador({ col: null, destino: null, texto: '' })
     refrescar()
   }
 
-  const editar = async (id, cambios) => { await api.patch(`/finanzas/${id}`, cambios); refrescar() }
-  const borrar = async (id) => { await api.delete(`/finanzas/${id}`); refrescar() }
+  const editar = async (id, cambios) => {
+    await conReintento(() => api.patch(`/finanzas/${id}`, cambios), 'el cambio en esa casilla')
+    refrescar()
+  }
+  const borrar = async (id) => {
+    await conReintento(() => api.delete(`/finanzas/${id}`), 'borrar ese movimiento')
+    refrescar()
+  }
   const ponerPorcentaje = async (destino, porcentaje) => {
-    await api.put('/finanzas/porcentaje', { origen, destino, porcentaje })
+    await conReintento(
+      () => api.put('/finanzas/porcentaje', { origen, destino, porcentaje }),
+      `el ${miles(porcentaje)}% de ${destino}`,
+    )
     refrescar()
   }
 
   const guardarPrefs = async (cambios) => {
-    await api.put('/finanzas/preferencias', cambios)
+    await conReintento(() => api.put('/finanzas/preferencias', cambios), 'la lista de países')
     refrescar()
   }
 
@@ -646,6 +701,10 @@ export default function Finanzas() {
 
         </div>
       </main>
+
+      {fallo && (
+        <NoSeGuardo fallo={fallo} onCerrar={() => setFallo(null)} />
+      )}
 
       {porQuitar && (
         <ConfirmarQuitar
@@ -1398,6 +1457,55 @@ function ListaGeneral({ paises, quitados, onMover, onQuitar, onDevolver }) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/**
+ * Avisar de que algo no se guardó.
+ *
+ * Se queda en pantalla hasta que se cierre: un aviso que se va solo en tres
+ * segundos no sirve para esto, porque lo que hay que hacer es volver a
+ * intentarlo y eso lleva más de tres segundos.
+ */
+function NoSeGuardo({ fallo, onCerrar }) {
+  const [reintentando, setReintentando] = useState(false)
+
+  return (
+    <div style={{
+      position: 'fixed', left: 16, bottom: 16, zIndex: 60, maxWidth: 'min(420px, calc(100vw - 32px))',
+      padding: '13px 16px', borderRadius: 14,
+      background: 'rgba(40,10,14,.96)', border: '1px solid rgba(248,113,113,.45)',
+      boxShadow: '0 12px 34px rgba(0,6,28,.55)',
+    }}>
+      <p style={{ fontSize: 13, fontWeight: 700, color: '#fca5a5' }}>
+        No se guardó {fallo.que}
+      </p>
+      <p style={{ fontSize: 12, color: '#e7b9b9', marginTop: 5, lineHeight: 1.45 }}>
+        {fallo.porque}. Lo que escribiste sigue en pantalla: puedes reintentarlo.
+      </p>
+      <div style={{ display: 'flex', gap: 8, marginTop: 11, justifyContent: 'flex-end' }}>
+        <button type="button" onClick={onCerrar}
+          style={{
+            padding: '6px 12px', borderRadius: 9, fontSize: 12, fontWeight: 600,
+            background: 'transparent', border: '1px solid rgba(255,255,255,.14)', color: '#e7b9b9',
+          }}>
+          Cerrar
+        </button>
+        <button type="button" disabled={reintentando}
+          onClick={async () => {
+            setReintentando(true)
+            await fallo.reintentar()
+            setReintentando(false)
+          }}
+          style={{
+            padding: '6px 12px', borderRadius: 9, fontSize: 12, fontWeight: 700,
+            background: 'rgba(248,113,113,.2)', border: '1px solid rgba(248,113,113,.5)', color: '#fca5a5',
+            opacity: reintentando ? .6 : 1,
+          }}>
+          {reintentando ? 'Probando…' : 'Reintentar'}
+        </button>
+      </div>
     </div>
   )
 }
