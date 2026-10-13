@@ -118,10 +118,17 @@ export default function Finanzas() {
   const porOrigen = respuesta?.por_origen || []
   const prefs = respuesta?.preferencias || { ocultos: [], orden: [] }
 
-  const origenes = useMemo(
-    () => paises.filter(p => p.can_send && p.active && !prefs.ocultos.includes(p.name)),
-    [paises, prefs.ocultos],
-  )
+  const origenes = useMemo(() => {
+    const lista = paises.filter(p => p.can_send && p.active && !prefs.ocultos.includes(p.name))
+    if (!prefs.orden.length) return lista
+    // El mismo orden que las columnas: se deja una vez en "General" y vale
+    // para los dos sitios, que es lo que uno espera al moverlos.
+    const puesto = n => {
+      const i = prefs.orden.indexOf(n)
+      return i === -1 ? prefs.orden.length : i
+    }
+    return [...lista].sort((a, b) => puesto(a.name) - puesto(b.name))
+  }, [paises, prefs.ocultos, prefs.orden])
   // Entregar efectivo en Venezuela es otra cosa que transferir allí: se cobra
   // distinto, así que necesita su propia fila y su propio porcentaje.
   //
@@ -157,13 +164,23 @@ export default function Finanzas() {
   const pctDe = (destino) => (respuesta?.porcentajes || [])
     .find(p => p.origen === origen && p.destino === destino)?.porcentaje ?? 0
 
-  // Mientras no se haya tocado nada, el primero de la lista. Derivado y no
-  // guardado con un efecto: así no hay un primer dibujado sin país y otro con
-  // él, que es lo que hacía parpadear la tabla al entrar.
+  // Mientras no se haya tocado nada, el primer país QUE TENGA algo anotado
+  // ese día.
+  //
+  // Antes se abría siempre por el primero de la lista, y si ese día no se
+  // había movido nada desde ahí la tabla salía vacía: parecía que lo anotado
+  // se había perdido, estando guardado y contando en los totales de arriba.
   //
   // Va detrás de `origenes` a la fuerza: leerlo antes de declararlo deja la
   // pantalla en blanco entera, y el compilador no avisa.
-  const origen = elegido ?? origenes[0]?.name ?? null
+  const conMovimiento = useMemo(
+    () => new Set(apuntes.map(a => a.origen)),
+    [apuntes],
+  )
+  const origen = elegido
+    ?? origenes.find(p => conMovimiento.has(p.name))?.name
+    ?? origenes[0]?.name
+    ?? null
 
   const delOrigen = useMemo(() => apuntes.filter(a => a.origen === origen), [apuntes, origen])
 
@@ -465,7 +482,7 @@ export default function Finanzas() {
                 <DateRangePicker value={rango} onChange={setRango} />
               </div>
 
-            <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 22, alignItems: 'flex-start' }}>
               <Resumen titulo={variosDias ? 'Suma total del rango' : 'Suma total del día'}
                 nota="en pesos chilenos"
                 paises={origenes} porOrigen={porOrigen} totales={totales}
@@ -523,6 +540,13 @@ export default function Finanzas() {
                     }}>
                     <Bandera iso2={p.iso2} />
                     {p.name}
+                    {/* Un punto en los que tienen algo anotado ese día: sin
+                        esto hay que entrar país por país para encontrar dónde
+                        está lo del día. */}
+                    {conMovimiento.has(p.name) && (
+                      <span title="Tiene movimientos este día"
+                        style={{ width: 6, height: 6, borderRadius: 999, background: '#4ade80', flexShrink: 0 }} />
+                    )}
                   </button>
                   {/* Solo al pasar por encima: un aspa siempre visible en cada
                       país invita a pulsarla sin querer. */}
@@ -1145,12 +1169,10 @@ function FilaCliente({
 function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa = 0 }) {
   const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
-  // A diferencia de la tabla de captura, estos dos cuadros sí se estiran: son
-  // dos y tienen que repartirse el ancho de la pantalla a partes iguales. El
-  // mínimo es para que en una ventana estrecha caigan uno debajo del otro en
-  // vez de quedar espachurrados.
+  // Con los países en columnas los dos cuadros son anchos, así que van uno
+  // debajo del otro: lado a lado no cabrían sin partir las cifras.
   return (
-    <div style={{ flex: '1 1 380px', minWidth: 300 }}>
+    <div style={{ width: '100%' }}>
       {/* Los títulos ocupan lo mismo lleven selector de mes o no, para que las
           dos tablas arranquen a la misma altura. Sin esto, la de la derecha
           bajaba lo que mide el selector y las filas de una no coincidían con
@@ -1175,60 +1197,77 @@ function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa
           no hay cambio guardado para su moneda.
         </p>
       )}
-    <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+    <div style={{ ...GLASS, width: 'max-content', maxWidth: '100%', overflow: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
         <thead>
           <tr>
-            <th style={{ ...cabecera, textAlign: 'left', width: 'auto' }}>PAÍS</th>
-            <th style={{ ...cabecera, textAlign: 'right', color: '#aebfe2' }}>TOTAL COMPLETO</th>
-            <th style={{ ...cabecera, textAlign: 'right', color: '#4ade80', borderRight: 'none' }}>TOTAL COMISIÓN</th>
+            <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }} />
+            {paises.map(p => (
+              <th key={p.id} style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                  <Bandera iso2={p.iso2} tam={15} />
+                  {p.name}
+                </span>
+              </th>
+            ))}
+            {totales.map(t => (
+              <th key={t.moneda} style={{ ...cabecera, ...separa, color: '#7dd3fc', borderRight: 'none' }}>
+                TOTAL {t.moneda}
+              </th>
+            ))}
           </tr>
         </thead>
 
         <tbody>
-          {paises.map(p => {
-            const d = datoDe(p.name)
-            return (
-              <tr key={p.id}>
-                <td style={{ ...celda, padding: '5px 14px 5px 10px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#eaf2ff' }}>
-                    <Bandera iso2={p.iso2} tam={15} />
-                    {p.name}
-                  </span>
+          {/* Dos filas y los países en columnas, como la tabla de arriba: así
+              las dos se leen igual y no hay que cambiar el chip al pasar de
+              una a otra. */}
+          <tr>
+            <td style={{ ...celda, ...pegadaPais, padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+              TOTAL COMPLETO
+            </td>
+            {paises.map(p => {
+              const d = datoDe(p.name)
+              return (
+                <td key={p.id} style={{ ...celda, textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#eaf2ff' }}>
+                  {d ? <>{pesos(d.movido)} <span style={{ fontSize: 10, color: '#64748b' }}>{d.moneda}</span></> : ''}
                 </td>
-                <td style={{ ...celda, textAlign: 'right', padding: '5px 10px', fontSize: 12.5, color: '#aebfe2' }}>
-                  {d ? `${pesos(d.movido)} ${d.moneda}` : ''}
-                </td>
-                <td style={{ ...celda, textAlign: 'right', padding: '5px 10px', fontSize: 12.5, fontWeight: 700, color: '#4ade80', borderRight: 'none' }}>
-                  {d ? <>{pesos(d.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{d.moneda}</span></> : ''}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
+              )
+            })}
+            {totales.map(t => (
+              <td key={t.moneda} style={{ ...celda, ...separa, textAlign: 'right', padding: '8px 10px', fontSize: 13, fontWeight: 700, color: '#eaf2ff', borderRight: 'none' }}>
+                {pesos(t.movido)} <span style={{ fontWeight: 500, fontSize: 10.5, color: '#64748b' }}>{t.moneda}</span>
+              </td>
+            ))}
+          </tr>
 
-        <tfoot>
-          {totales.map(t => (
-            <tr key={t.moneda}>
-              <td style={{ ...pieCelda, fontSize: 11, fontWeight: 700, color: '#64748b', padding: '8px 14px 8px 10px' }}>
-                TOTAL {t.moneda}
+          <tr>
+            <td style={{ ...celda, ...pegadaPais, padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#4ade80' }}>
+              TOTAL COMISIÓN
+            </td>
+            {paises.map(p => {
+              const d = datoDe(p.name)
+              return (
+                <td key={p.id} style={{ ...celda, textAlign: 'right', padding: '8px 10px', fontSize: 12.5, fontWeight: 700, color: '#4ade80' }}>
+                  {d ? <>{pesos(d.ganado)} <span style={{ fontWeight: 500, fontSize: 10, color: '#3f8f5c' }}>{d.moneda}</span></> : ''}
+                </td>
+              )
+            })}
+            {totales.map(t => (
+              <td key={t.moneda} style={{ ...celda, ...separa, textAlign: 'right', padding: '8px 10px', fontSize: 13.5, fontWeight: 800, color: '#4ade80', borderRight: 'none' }}>
+                {pesos(t.ganado)} <span style={{ fontWeight: 500, fontSize: 10.5, color: '#3f8f5c' }}>{t.moneda}</span>
               </td>
-              <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13, fontWeight: 700, color: '#eaf2ff' }}>
-                {pesos(t.movido)} <span style={{ fontWeight: 500, fontSize: 11, color: '#64748b' }}>{t.moneda}</span>
-              </td>
-              <td style={{ ...pieCelda, textAlign: 'right', padding: '8px 10px', fontSize: 13.5, fontWeight: 800, color: '#4ade80', borderRight: 'none' }}>
-                {pesos(t.ganado)} <span style={{ fontWeight: 500, fontSize: 11, color: '#3f8f5c' }}>{t.moneda}</span>
-              </td>
-            </tr>
-          ))}
+            ))}
+          </tr>
+
           {!totales.length && (
             <tr>
-              <td colSpan={3} style={{ ...pieCelda, fontSize: 12.5, color: '#64748b', borderRight: 'none' }}>
+              <td colSpan={paises.length + 1} style={{ ...celda, padding: '10px', fontSize: 12.5, color: '#64748b', borderRight: 'none' }}>
                 Todavía no hay nada anotado en estas fechas.
               </td>
             </tr>
           )}
-        </tfoot>
+        </tbody>
       </table>
     </div>
     </div>
