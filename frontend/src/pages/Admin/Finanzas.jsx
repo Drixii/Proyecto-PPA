@@ -182,16 +182,70 @@ export default function Finanzas() {
     ?? origenes[0]?.name
     ?? null
 
-  const delOrigen = useMemo(() => apuntes.filter(a => a.origen === origen), [apuntes, origen])
+  // Lo que hay AHORA MISMO en la casilla que se está escribiendo.
+  //
+  // Vive aquí y no solo dentro de la celda porque los totales de abajo tienen
+  // que moverse con cada tecla: esperar a salir del campo para ver el
+  // resultado obliga a un clic al aire cada vez que se anota algo.
+  const [tecleando, setTecleando] = useState(null)   // { id, monto }
+
+  const delOrigenGuardado = useMemo(() => apuntes.filter(a => a.origen === origen), [apuntes, origen])
+
+  /**
+   * Los apuntes con lo que se está tecleando ya aplicado.
+   *
+   * La cifra en pesos se estima con el cambio del propio apunte, o con el de
+   * cualquier otro del mismo país —misma moneda, mismo cambio—. Mientras no
+   * haya ninguno con el que estimarlo, el total en pesos espera a que se
+   * guarde: es preferible que falte un rato a enseñar una cifra inventada.
+   */
+  const delOrigen = useMemo(() => {
+    const cambioDe = a => (a.tasa_clp || (a.monto ? a.monto_clp / a.monto : 0))
+    const cambioSuelto = delOrigenGuardado.map(cambioDe).find(t => t > 0) || 0
+
+    const lista = delOrigenGuardado.map(a => {
+      if (!tecleando || tecleando.id !== a.id) return a
+      const tasa = cambioDe(a) || cambioSuelto
+      return {
+        ...a,
+        monto: tecleando.monto,
+        ganancia: tecleando.monto * a.porcentaje / 100,
+        monto_clp: tecleando.monto * tasa,
+        ganancia_clp: tecleando.monto * tasa * a.porcentaje / 100,
+      }
+    })
+
+    // Y la casilla en blanco que se está rellenando: todavía no existe en la
+    // base, pero su cifra ya cuenta en lo que se ve.
+    const nuevo = tecleando?.id == null && tecleando?.monto
+      ? [{
+          id: 'enCurso',
+          origen,
+          destino: tecleando.destino,
+          orden: tecleando.col,
+          monto: tecleando.monto,
+          porcentaje: tecleando.porcentaje,
+          ganancia: tecleando.monto * tecleando.porcentaje / 100,
+          monto_clp: tecleando.monto * cambioSuelto,
+          ganancia_clp: tecleando.monto * cambioSuelto * tecleando.porcentaje / 100,
+        }]
+      : []
+
+    return [...lista, ...nuevo]
+  }, [delOrigenGuardado, tecleando, origen])
 
   // Cada movimiento ocupa una columna, y su número de columna es el `orden`
   // con el que se guardó. Como una columna solo admite un monto, basta con
   // saber qué apunte hay en cada una.
+  //
+  // Se arma con lo GUARDADO, no con la versión viva: la casilla en blanco que
+  // se está rellenando no puede convertirse a media tecla en una casilla ya
+  // escrita, o el campo dejaría de ser el mismo mientras se escribe en él.
   const porColumna = useMemo(() => {
     const m = new Map()
-    delOrigen.forEach(a => { if (!m.has(a.orden)) m.set(a.orden, a) })
+    delOrigenGuardado.forEach(a => { if (!m.has(a.orden)) m.set(a.orden, a) })
     return m
-  }, [delOrigen])
+  }, [delOrigenGuardado])
 
   // Las filas ya usadas y una libre al final, para el siguiente cliente.
   const filas = useMemo(() => {
@@ -287,7 +341,10 @@ export default function Finanzas() {
     )
     // El borrador solo se borra si de verdad se guardó: si no, lo escrito
     // sigue en pantalla para poder reintentarlo.
-    if (hecho) setBorrador({ col: null, destino: null, texto: '' })
+    if (hecho) {
+      setBorrador({ col: null, destino: null, texto: '' })
+      setTecleando(null)
+    }
     refrescar()
   }
 
@@ -355,8 +412,13 @@ export default function Finanzas() {
 
   const totalMovido = delOrigen.reduce((s, a) => s + a.monto, 0)
   const totalGanado = delOrigen.reduce((s, a) => s + a.ganancia, 0)
-  // Lo mismo pasado a pesos chilenos, que es como se lleva la caja.
-  const enPesos = porOrigen.find(o => o.origen === origen)
+  // Lo mismo pasado a pesos chilenos, que es como se lleva la caja. Se suma
+  // de los apuntes y no del total que manda el servidor, que no sabe lo que
+  // se está tecleando ahora mismo.
+  const enPesos = {
+    movido: delOrigen.reduce((s, a) => s + (a.monto_clp || 0), 0),
+    ganado: delOrigen.reduce((s, a) => s + (a.ganancia_clp || 0), 0),
+  }
   // Si el país ya cobra en pesos, el equivalente es la misma cifra repetida.
   const enCaja = paisOrigen?.currency === 'CLP'
   const variosDias = desde !== hasta
@@ -666,6 +728,7 @@ export default function Finanzas() {
                         onGuardarBorrador={guardarBorrador}
                         onEditar={editar}
                         onBorrar={borrar}
+                        onTecleando={setTecleando}
                       />
                     ))}
                   </tbody>
@@ -1047,7 +1110,7 @@ function ColumnaPais({ pais, pct, ordenando, onSoltar, onQuitar, onPorcentaje })
  * muerta: al tocarla el movimiento se pasa a esa columna, que es como se
  * corrige haberse equivocado de país sin borrar nada.
  */
-function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, onGuardarBorrador, onEditar, onBorrar }) {
+function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, onGuardarBorrador, onEditar, onBorrar, onTecleando }) {
   const suya = apunte && apunte.destino === pais.name
   const trancada = apunte && !suya
   const enBorrador = !apunte && borrador.col === fila && borrador.destino === pais.name
@@ -1071,9 +1134,14 @@ function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, on
       <td className="fin-casilla" style={{ ...celda, background: 'rgba(56,189,248,.04)', position: 'relative' }}>
         <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
           <input className="fin-cel" inputMode="decimal" value={texto} size={anchoDe(texto)}
-            onChange={e => setTexto(conPuntos(e.target.value))}
+            onChange={e => {
+              const nuevo = conPuntos(e.target.value)
+              setTexto(nuevo)
+              onTecleando({ id: apunte.id, monto: aNumero(nuevo) })
+            }}
             onBlur={() => {
               const n = aNumero(texto)
+              onTecleando(null)
               if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
             }} />
           <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
@@ -1082,7 +1150,7 @@ function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, on
           title="Quitar este movimiento">
           ✕
         </button>
-        <Comision monto={apunte.monto} pct={pct} moneda={moneda} montoClp={apunte.monto_clp} />
+        <Comision monto={aNumero(texto)} pct={pct} moneda={moneda} montoClp={apunte.monto_clp} />
       </td>
     )
   }
@@ -1093,11 +1161,13 @@ function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, on
         <input className="fin-cel" inputMode="decimal"
           value={enBorrador ? borrador.texto : ''}
           size={anchoDe(enBorrador ? borrador.texto : '')}
-          onChange={e => setBorrador({
-            col: fila,
-            destino: e.target.value ? pais.name : null,
-            texto: conPuntos(e.target.value),
-          })}
+          onChange={e => {
+            const texto = conPuntos(e.target.value)
+            setBorrador({ col: fila, destino: e.target.value ? pais.name : null, texto })
+            onTecleando(texto
+              ? { id: null, col: fila, destino: pais.name, monto: aNumero(texto), porcentaje: pct }
+              : null)
+          }}
           onBlur={onGuardarBorrador} />
         {enBorrador && (
           <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
@@ -1111,7 +1181,7 @@ function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, on
 /** Un cliente: su fila, con el monto en el país al que mandó. */
 function FilaCliente({
   fila, destinos, apunte, moneda, pctDe, borrador, setBorrador,
-  onGuardarBorrador, onEditar, onBorrar,
+  onGuardarBorrador, onEditar, onBorrar, onTecleando,
 }) {
   const pct = apunte ? apunte.porcentaje : 0
 
@@ -1134,6 +1204,7 @@ function FilaCliente({
           onGuardarBorrador={onGuardarBorrador}
           onEditar={onEditar}
           onBorrar={onBorrar}
+          onTecleando={onTecleando}
         />
       ))}
 
