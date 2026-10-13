@@ -387,7 +387,13 @@ export default function Finanzas() {
   // aunque mañana se añada un país nuevo, y no depende de en qué país se
   // estuviera cuando se arrastró.
   const reordenar = async (quien, delante) => {
-    const nombres = destinosOrdenados.map(d => d.name)
+    // Sobre todos los países, no solo sobre los que se estén viendo: la barra
+    // de arriba enseña los que envían y la tabla los que reciben. Guardar solo
+    // la sublista que se arrastró mandaría al final a todos los demás.
+    const nombres = [...new Set([
+      ...destinosOrdenados.map(d => d.name),
+      ...origenes.map(p => p.name),
+    ])]
     const desde = nombres.indexOf(quien)
     const hasta = nombres.indexOf(delante)
     if (desde === -1 || hasta === -1 || desde === hasta) return
@@ -590,36 +596,18 @@ export default function Finanzas() {
             {origenes.map(p => {
               const activo = p.name === origen
               return (
-                <span key={p.id} className="fin-pais" style={{ position: 'relative', flexShrink: 0 }}>
-                  <button type="button" onClick={() => setElegido(p.name)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      padding: '7px 26px 7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
-                      transition: 'all .15s',
-                      background: activo ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
-                      border: `1px solid ${activo ? '#38bdf8' : 'rgba(255,255,255,.07)'}`,
-                      color: activo ? '#eaf2ff' : '#8aa0cc',
-                    }}>
-                    <Bandera iso2={p.iso2} />
-                    {p.name}
-                    {/* Un punto en los que tienen algo anotado ese día: sin
-                        esto hay que entrar país por país para encontrar dónde
-                        está lo del día. */}
-                    {conMovimiento.has(p.name) && (
-                      <span title="Tiene movimientos este día"
-                        style={{ width: 6, height: 6, borderRadius: 999, background: '#4ade80', flexShrink: 0 }} />
-                    )}
-                  </button>
-                  {/* Solo al pasar por encima: un aspa siempre visible en cada
-                      país invita a pulsarla sin querer. */}
-                  <button type="button" className="fin-quitar"
-                    onClick={() => setPorQuitar(p.name)}
-                    title={`Quitar ${p.name} de esta pantalla`}>
-                    ✕
-                  </button>
-                </span>
+                <BotonPais
+                  key={p.id}
+                  pais={p}
+                  activo={activo}
+                  conMovimiento={conMovimiento.has(p.name)}
+                  onElegir={() => setElegido(p.name)}
+                  onQuitar={() => setPorQuitar(p.name)}
+                  onSoltar={quien => reordenar(quien, p.name)}
+                />
               )
             })}
+
             {/* Devolver lo que se quitó. Sale solo si hay algo que devolver:
                 un botón que nunca hace nada estorba más de lo que ayuda. */}
             {quitados.length > 0 && (
@@ -1617,5 +1605,63 @@ function NoSeGuardo({ fallo, onCerrar }) {
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Un país de la barra de arriba.
+ *
+ * Se puede arrastrar para dejarlo donde se quiera, sin entrar en ningún modo
+ * de edición: es la lista que más se mira, y tener que ir a otra pantalla
+ * para moverla era el camino largo de algo que se hace con el ratón.
+ *
+ * El orden que queda es el mismo que el de las columnas de la tabla.
+ */
+function BotonPais({ pais, activo, conMovimiento, onElegir, onQuitar, onSoltar }) {
+  const [encima, setEncima] = useState(false)
+
+  return (
+    <span
+      className="fin-pais"
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('text/plain', pais.name)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      onDragOver={e => { e.preventDefault(); setEncima(true) }}
+      onDragLeave={() => setEncima(false)}
+      onDrop={e => {
+        e.preventDefault()
+        setEncima(false)
+        const quien = e.dataTransfer.getData('text/plain')
+        if (quien && quien !== pais.name) onSoltar(quien)
+      }}
+      style={{
+        position: 'relative', flexShrink: 0, borderRadius: 999,
+        // La raya marca dónde va a caer el que se arrastra.
+        boxShadow: encima ? 'inset 3px 0 0 #38bdf8' : undefined,
+      }}>
+      <button type="button" onClick={onElegir}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 7, cursor: 'grab',
+          padding: '7px 26px 7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+          transition: 'all .15s',
+          background: activo ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.04)',
+          border: `1px solid ${activo ? '#38bdf8' : 'rgba(255,255,255,.07)'}`,
+          color: activo ? '#eaf2ff' : '#8aa0cc',
+        }}>
+        <Bandera iso2={pais.iso2} />
+        {pais.name}
+        {/* Un punto en los que tienen algo anotado ese día. */}
+        {conMovimiento && (
+          <span title="Tiene movimientos este día"
+            style={{ width: 6, height: 6, borderRadius: 999, background: '#4ade80', flexShrink: 0 }} />
+        )}
+      </button>
+      <button type="button" className="fin-quitar" onClick={onQuitar}
+        title={`Quitar ${pais.name} de esta pantalla`}>
+        ✕
+      </button>
+    </span>
   )
 }
