@@ -18,6 +18,23 @@ const miles = n => (Number(n) || 0).toLocaleString('es-CL', { maximumFractionDig
 // El peso chileno no tiene céntimos: "119.732,23" no es una cifra que exista.
 const pesos = n => Math.round(Number(n) || 0).toLocaleString('es-CL')
 
+/**
+ * Lo mismo en dólares, con la tasa de hoy que manda el servidor.
+ *
+ * Null cuando no hay tasa: la pantalla entonces enseña solo los pesos en vez
+ * de una conversión inventada. Y el dólar SÍ tiene centavos, pero por encima
+ * de cien se caen: en "1.040,37 USD" los dos últimos dígitos no dicen nada y
+ * estorban al comparar una columna con otra.
+ */
+const enDolares = (clp, usdClp) => {
+  if (!usdClp) return null
+  const v = (Number(clp) || 0) / usdClp
+  return v.toLocaleString('es-CL', {
+    minimumFractionDigits: Math.abs(v) < 100 ? 2 : 0,
+    maximumFractionDigits: Math.abs(v) < 100 ? 2 : 0,
+  })
+}
+
 // "septiembre", a partir del primer día que manda el servidor. Se toma de ahí
 // y no del reloj de quien mira: el mes lo decide el calendario chileno, que es
 // donde está la caja.
@@ -115,6 +132,9 @@ export default function Finanzas() {
 
   const apuntes = respuesta?.data || []
   const totales = respuesta?.totales || []
+  // Cuántos pesos vale un dólar hoy. En cero cuando el servidor no tiene
+  // cambio para el dólar, y entonces no se enseña ninguna cifra en dólares.
+  const usdClp = respuesta?.usd_clp || 0
   const porOrigen = respuesta?.por_origen || []
   const prefs = respuesta?.preferencias || { ocultos: [], orden: [] }
 
@@ -515,7 +535,8 @@ export default function Finanzas() {
           dia={totales[0]}
           mes={acumulado.totales?.[0]}
           nombreMes={nombreDelMes(acumulado.desde)}
-          unDia={!variosDias} />
+          unDia={!variosDias}
+          usdClp={usdClp} />
 
         {/* Qué se mira de ese país: los montos que se anotan día a día, o lo
             que suman. Van en pestañas y no uno debajo del otro porque no se
@@ -552,11 +573,12 @@ export default function Finanzas() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 22, alignItems: 'flex-start' }}>
               <Resumen titulo={variosDias ? 'Suma total del rango' : 'Suma total del día'}
-                nota="en pesos chilenos"
+                nota={usdClp ? 'en dólares' : 'en pesos chilenos'}
                 paises={origenes} porOrigen={porOrigen} totales={totales}
+                usdClp={usdClp}
                 sinTasa={respuesta?.sin_tasa || 0} />
               <Resumen titulo="Acumulable del mes"
-                nota="en pesos chilenos"
+                nota={usdClp ? 'en dólares' : 'en pesos chilenos'}
                 encabezado={
                   <SelectorDeMes
                     mes={acumulado.desde?.slice(0, 7)}
@@ -564,6 +586,7 @@ export default function Finanzas() {
                     onCambiar={setMesAcum} />
                 }
                 paises={origenes} porOrigen={acumulado.por_origen} totales={acumulado.totales}
+                usdClp={usdClp}
                 sinTasa={acumulado.sin_tasa || 0} />
             </div>
             </>
@@ -1132,6 +1155,15 @@ function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, on
               const n = aNumero(texto)
               onTecleando(null)
               if (n !== apunte.monto) onEditar(apunte.id, { monto: n })
+            }}
+            // Enter guarda, sin tener que pulsar fuera: se anota una fila tras
+            // otra con el teclado y buscar un sitio en blanco donde hacer clic
+            // cada vez era el camino largo.
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.currentTarget.blur()
+              }
             }} />
           <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
         </span>
@@ -1157,7 +1189,15 @@ function CeldaMonto({ pais, fila, apunte, pct, moneda, borrador, setBorrador, on
               ? { id: null, col: fila, destino: pais.name, monto: aNumero(texto), porcentaje: pct }
               : null)
           }}
-          onBlur={onGuardarBorrador} />
+          onBlur={onGuardarBorrador}
+          // Igual que en la casilla ya guardada: Enter suelta el campo y lo
+          // que ya había al salir se encarga de guardarlo.
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              e.currentTarget.blur()
+            }
+          }} />
         {enBorrador && (
           <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
         )}
@@ -1225,9 +1265,33 @@ function FilaCliente({
   )
 }
 
-/** Lo que movió y lo que dejó cada país, y el total. */
-function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa = 0 }) {
+/**
+ * Lo que movió y lo que dejó cada país, y el total.
+ *
+ * Las cifras van en dólares, que es la moneda en la que se comparan unas con
+ * otras. Debajo queda el peso en chico: es lo que está guardado y congelado el
+ * día del apunte, y el dólar sale de ahí con la tasa de hoy, así que el peso
+ * tiene que seguir a la vista para poder cuadrar.
+ */
+function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, usdClp = 0, sinTasa = 0 }) {
   const datoDe = nombre => porOrigen.find(o => o.origen === nombre)
+
+  /** Una cifra: dólares arriba y pesos debajo, o solo pesos si no hay tasa. */
+  const Doble = ({ clp, moneda, chico, color, colorChico }) => {
+    const usd = enDolares(clp, usdClp)
+    if (usd === null) {
+      return <>{pesos(clp)} <span style={{ fontWeight: 500, fontSize: chico, color: colorChico }}>{moneda}</span></>
+    }
+    return (
+      <>
+        <span style={{ color }}>{usd}</span>{' '}
+        <span style={{ fontWeight: 500, fontSize: chico, color: colorChico }}>USD</span>
+        <span style={{ display: 'block', fontWeight: 500, fontSize: chico, color: colorChico }}>
+          {pesos(clp)} {moneda}
+        </span>
+      </>
+    )
+  }
 
   // Con los países en columnas los dos cuadros son anchos, así que van uno
   // debajo del otro: lado a lado no cabrían sin partir las cifras.
@@ -1272,7 +1336,7 @@ function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa
             ))}
             {totales.map(t => (
               <th key={t.moneda} style={{ ...cabecera, ...separa, color: '#7dd3fc', borderRight: 'none' }}>
-                TOTAL {t.moneda}
+                TOTAL {usdClp ? 'USD' : t.moneda}
               </th>
             ))}
           </tr>
@@ -1290,13 +1354,13 @@ function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa
               const d = datoDe(p.name)
               return (
                 <td key={p.id} style={{ ...celda, textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#eaf2ff' }}>
-                  {d ? <>{pesos(d.movido)} <span style={{ fontSize: 10, color: '#64748b' }}>{d.moneda}</span></> : ''}
+                  {d ? <Doble clp={d.movido} moneda={d.moneda} chico={10} color="#eaf2ff" colorChico="#64748b" /> : ''}
                 </td>
               )
             })}
             {totales.map(t => (
               <td key={t.moneda} style={{ ...celda, ...separa, textAlign: 'right', padding: '8px 10px', fontSize: 13, fontWeight: 700, color: '#eaf2ff', borderRight: 'none' }}>
-                {pesos(t.movido)} <span style={{ fontWeight: 500, fontSize: 10.5, color: '#64748b' }}>{t.moneda}</span>
+                <Doble clp={t.movido} moneda={t.moneda} chico={10.5} color="#eaf2ff" colorChico="#64748b" />
               </td>
             ))}
           </tr>
@@ -1309,13 +1373,13 @@ function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, sinTasa
               const d = datoDe(p.name)
               return (
                 <td key={p.id} style={{ ...celda, textAlign: 'right', padding: '8px 10px', fontSize: 12.5, fontWeight: 700, color: '#4ade80' }}>
-                  {d ? <>{pesos(d.ganado)} <span style={{ fontWeight: 500, fontSize: 10, color: '#3f8f5c' }}>{d.moneda}</span></> : ''}
+                  {d ? <Doble clp={d.ganado} moneda={d.moneda} chico={10} color="#4ade80" colorChico="#3f8f5c" /> : ''}
                 </td>
               )
             })}
             {totales.map(t => (
               <td key={t.moneda} style={{ ...celda, ...separa, textAlign: 'right', padding: '8px 10px', fontSize: 13.5, fontWeight: 800, color: '#4ade80', borderRight: 'none' }}>
-                {pesos(t.ganado)} <span style={{ fontWeight: 500, fontSize: 10.5, color: '#3f8f5c' }}>{t.moneda}</span>
+                <Doble clp={t.ganado} moneda={t.moneda} chico={10.5} color="#4ade80" colorChico="#3f8f5c" />
               </td>
             ))}
           </tr>
@@ -1378,8 +1442,10 @@ function SelectorDeMes({ mes, tope, onCambiar }) {
   )
 }
 
-/** Una cifra grande con su rótulo. */
-function Cifra({ rotulo, valor, verde }) {
+/** Una cifra grande con su rótulo, y al lado lo que vale en dólares. */
+function Cifra({ rotulo, valor, verde, usdClp }) {
+  const usd = enDolares(valor, usdClp)
+
   return (
     <div style={{
       ...GLASS, flex: '1 1 150px', minWidth: 140, padding: '11px 14px',
@@ -1394,6 +1460,13 @@ function Cifra({ rotulo, valor, verde }) {
       }}>
         {pesos(valor)} <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b' }}>CLP</span>
       </p>
+      {/* El mismo dinero en dólares, en chico y debajo: la caja se lleva en
+          pesos, el dólar es para saber de qué tamaño es la cifra. */}
+      {usd !== null && (
+        <p style={{ fontSize: 11.5, fontWeight: 600, marginTop: 1, color: verde ? '#3f8f5c' : '#64748b' }}>
+          ≈ {usd} <span style={{ fontWeight: 500 }}>USD</span>
+        </p>
+      )}
     </div>
   )
 }
@@ -1405,7 +1478,7 @@ function Cifra({ rotulo, valor, verde }) {
  * arriba del todo: son la respuesta a "¿cómo vamos?" y no tenían por qué estar
  * al final de una tabla de diecisiete filas.
  */
-function GananciasDiarias({ dia, mes, nombreMes, unDia }) {
+function GananciasDiarias({ dia, mes, nombreMes, unDia, usdClp }) {
   const bloque = { flex: '1 1 320px', minWidth: 290 }
   const rotulo = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#7dd3fc', marginBottom: 7 }
 
@@ -1419,16 +1492,16 @@ function GananciasDiarias({ dia, mes, nombreMes, unDia }) {
         <div style={bloque}>
           <p style={rotulo}>ENTRADA · {unDia ? 'HOY' : 'RANGO ELEGIDO'}</p>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Cifra rotulo="TOTAL" valor={dia?.movido} />
-            <Cifra rotulo="COMISIÓN" valor={dia?.ganado} verde />
+            <Cifra rotulo="TOTAL" valor={dia?.movido} usdClp={usdClp} />
+            <Cifra rotulo="COMISIÓN" valor={dia?.ganado} usdClp={usdClp} verde />
           </div>
         </div>
 
         <div style={bloque}>
           <p style={rotulo}>ACUMULABLE · {String(nombreMes || '').toUpperCase()}</p>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Cifra rotulo="TOTAL" valor={mes?.movido} />
-            <Cifra rotulo="GANANCIA" valor={mes?.ganado} verde />
+            <Cifra rotulo="TOTAL" valor={mes?.movido} usdClp={usdClp} />
+            <Cifra rotulo="GANANCIA" valor={mes?.ganado} usdClp={usdClp} verde />
           </div>
         </div>
       </div>

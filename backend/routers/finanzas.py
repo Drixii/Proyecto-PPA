@@ -271,6 +271,17 @@ def listar(
     return {
         "data": apuntes,
         "moneda": MONEDA_CAJA,
+        # Cuántos pesos vale un dólar HOY, para poder enseñar los totales
+        # también en dólares.
+        #
+        # Va la tasa y no las cifras ya convertidas a propósito: lo que se
+        # guarda son pesos congelados el día del apunte, y el dólar es una
+        # lectura de hoy sobre ese total. Mandar la tasa deja claro que es una
+        # equivalencia de hoy y no otra cifra guardada.
+        #
+        # Cero si no hay tasa; la pantalla entonces no enseña dólares en vez de
+        # inventar una conversión.
+        "usd_clp": _tasa_a_caja(db, "USD"),
         "totales": [total_dia],
         "por_origen": por_origen,
         "sin_tasa": sin_tasa_dia,
