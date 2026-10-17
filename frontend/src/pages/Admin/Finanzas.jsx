@@ -860,11 +860,16 @@ export default function Finanzas() {
                 </table>
               </div>
 
-              {/* Lo que suma todo lo anotado, debajo de donde se anota. */}
-              <div style={{ marginTop: 26 }}>
+              {/* Lo que suma todo lo anotado, debajo de donde se anota.
+                  La raya y el aire de arriba lo separan de la tabla: son dos
+                  cosas distintas, una se escribe y la otra solo se lee. */}
+              <div style={{
+                marginTop: 44, paddingTop: 26,
+                borderTop: '1px solid rgba(255,255,255,.22)',
+              }}>
                 <p style={{
-                  fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em',
-                  color: '#7dd3fc', marginBottom: 14,
+                  fontSize: 20, fontWeight: 800, letterSpacing: '.04em',
+                  color: '#eaf2ff', marginBottom: 18,
                 }}>
                   TOTAL
                 </p>
@@ -1966,7 +1971,13 @@ function PanelArqueo({
 
   const diferencia = contadoUsd - supuestoUsd
   const cuadra = Math.abs(diferencia) <= MARGEN_USD && (anotadoClp > 0 || capitalUsd > 0)
-  const color = cuadra ? '#4ade80' : '#f87171'
+
+  // El rojo es solo del total de los bancos: es la cifra contada a mano y la
+  // única que puede estar mal. Lo que debería haber sale de lo anotado en el
+  // cuaderno, y pintarlo de rojo haría pensar que también hay que corregirlo
+  // cuando lo que falta por cuadrar está en el banco.
+  const colorContado = cuadra ? '#4ade80' : '#f87171'
+  const color = cuadra ? '#4ade80' : '#eaf2ff'
 
   const quedaUsd = contadoUsd
 
@@ -2094,7 +2105,7 @@ function PanelArqueo({
                   <td style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
                     TOTAL CONTADO
                   </td>
-                  <td style={{ ...pieCelda, textAlign: 'right', padding: '9px 10px', fontSize: 15, fontWeight: 800, color, borderRight: 'none' }}>
+                  <td style={{ ...pieCelda, textAlign: 'right', padding: '9px 10px', fontSize: 15, fontWeight: 800, color: colorContado, borderRight: 'none' }}>
                     {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
                       {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(anotadoUsd))} anotados
