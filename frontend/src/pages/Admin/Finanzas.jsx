@@ -639,6 +639,7 @@ export default function Finanzas() {
               bancos={bancos}
               gastos={gastos}
               capitalUsd={prefs.capital_usd || 0}
+              porOrigen={porOrigen}
               totalDiaClp={totales[0]?.movido || 0}
               variosDias={variosDias}
               usdClp={usdClp}
@@ -1864,8 +1865,14 @@ function Totales({ variosDias, paises, porOrigen, totales, acumulado, usdClp, si
 // deja céntimos de redondeo que no son un descuadre, son aritmética.
 const MARGEN_USD = 1
 
-/** Una casilla del arqueo: se teclea, Enter o salir del campo la guarda. */
-function CasillaArqueo({ valor, moneda, ancho, onGuardar, onBorrar, placeholder }) {
+/**
+ * Una casilla del arqueo: se teclea, Enter o salir del campo la guarda.
+ *
+ * Ocupa su celda entera. En el cuaderno diario el campo crece con lo escrito
+ * porque hay diecisiete columnas y cada píxel cuenta; aquí hay dos, y un campo
+ * estrecho en medio de una celda ancha no se ve y cuesta acertarle.
+ */
+function CasillaArqueo({ valor, moneda, onGuardar, onBorrar, placeholder }) {
   const [texto, setTexto] = useState(valor != null ? conPuntos(String(valor)) : '')
 
   const soltar = () => {
@@ -1876,10 +1883,10 @@ function CasillaArqueo({ valor, moneda, ancho, onGuardar, onBorrar, placeholder 
   }
 
   return (
-    <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+    <span style={{ display: 'flex', alignItems: 'baseline', gap: 4, width: '100%' }}>
       <input className="fin-cel" inputMode="decimal"
+        style={{ flex: 1, width: '100%', minWidth: 0, boxSizing: 'border-box' }}
         value={texto}
-        size={ancho ?? anchoDe(texto)}
         placeholder={placeholder}
         onChange={e => setTexto(conPuntos(e.target.value))}
         onBlur={soltar}
@@ -1899,33 +1906,25 @@ function CasillaArqueo({ valor, moneda, ancho, onGuardar, onBorrar, placeholder 
 /**
  * El arqueo: lo que hay, lo que debería haber y lo que se gastó.
  *
- * Tres secciones en una, y en este orden a propósito: primero se cuenta lo que
- * hay en los bancos, después se compara con lo que el cuaderno dice que
- * debería haber, y al final se descuentan los gastos. Comparar antes de contar
- * no se puede, y descontar los gastos antes de cuadrar esconde el descuadre.
+ * Los dos primeros cuadros van lado a lado y con la misma forma —países en
+ * vertical, una cifra por país, el total abajo— porque lo que se hace con
+ * ellos es compararlos fila por fila. Puestos uno debajo del otro había que
+ * recordar la cifra mientras se bajaba la vista.
+ *
+ * Lo que salió va al final: descontar los gastos antes de cuadrar esconde el
+ * descuadre.
  */
 function PanelArqueo({
-  paises, monedaDe, bancos, gastos, capitalUsd, totalDiaClp, variosDias, usdClp, rango,
+  paises, monedaDe, bancos, gastos, capitalUsd, porOrigen, totalDiaClp,
+  variosDias, usdClp, rango,
   onCrearBanco, onEditarBanco, onBorrarBanco,
   onCrearGasto, onEditarGasto, onBorrarGasto, onCapital,
 }) {
-  // Lo contado, por país y por columna: una columna es una cuenta.
+  // Una cuenta por país: la primera que haya anotada.
   const porPais = useMemo(() => {
     const m = new Map()
-    bancos.forEach(b => {
-      if (!m.has(b.pais)) m.set(b.pais, new Map())
-      const col = m.get(b.pais)
-      if (!col.has(b.orden)) col.set(b.orden, b)
-    })
+    bancos.forEach(b => { if (!m.has(b.pais)) m.set(b.pais, b) })
     return m
-  }, [bancos])
-
-  // Tantas columnas como cuentas tenga el país que más tenga, y una libre al
-  // final para la siguiente.
-  const columnas = useMemo(() => {
-    const usadas = bancos.map(b => b.orden)
-    const tope = usadas.length ? Math.max(...usadas) + 1 : 0
-    return Array.from({ length: tope + 1 }, (_, i) => i)
   }, [bancos])
 
   const enUsd = clp => (usdClp ? (Number(clp) || 0) / usdClp : 0)
@@ -1947,13 +1946,15 @@ function PanelArqueo({
   const gastosUsd = enUsd(gastosClp)
   const quedaUsd = contadoUsd - gastosUsd
 
+  const movidoDe = nombre => porOrigen.find(o => o.origen === nombre)
+
   const titulo = { fontSize: 13, fontWeight: 700, color: '#eaf2ff' }
-  const bajada = { fontSize: 12, color: '#64748b', marginTop: 3, marginBottom: 13, lineHeight: 1.5 }
-  const seccion = { width: '100%' }
-  const rotulo = {
-    fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#7dd3fc',
-    marginBottom: 7,
-  }
+  const bajada = { fontSize: 12, color: '#64748b', marginTop: 3, marginBottom: 13, lineHeight: 1.5, minHeight: 36 }
+  const rotulo = { fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#7dd3fc', marginBottom: 7 }
+  // Los dos cuadros miden lo mismo y se parten en dos líneas cuando la
+  // pantalla no da para los dos.
+  const mitad = { flex: '1 1 380px', minWidth: 320 }
+  const pais = { ...celda, ...pegadaPais, padding: '6px 10px' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
@@ -1961,198 +1962,199 @@ function PanelArqueo({
           habría que volver a la otra pestaña para cambiarlo. */}
       <div>{rango}</div>
 
-      {/* ---------------------------------------------------------------- 1 --
-          Lo que hay. Los países en vertical, una columna por cuenta: un país
-          puede tener varias y cada una se cuenta aparte. */}
-      <div style={seccion}>
-        <p style={rotulo}>1 · LO QUE HAY</p>
-        <p style={titulo}>Saldos de los bancos</p>
-        <p style={bajada}>
-          Se anota a mano lo que hay en cada cuenta, en la moneda de su país.
-          Cada columna es una cuenta: si un país tiene dos bancos, van en dos
-          columnas y suman.
-        </p>
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* -------------------------------------------------------------- 1 --
+            Lo que hay: una cifra por país, escrita a mano. */}
+        <div style={mitad}>
+          <p style={rotulo}>1 · LO QUE HAY</p>
+          <p style={titulo}>Saldos de los bancos</p>
+          <p style={bajada}>
+            Lo que hay en el banco de cada país, en la moneda de ese país.
+          </p>
 
-        <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 'max-content' }}>
-            <thead>
-              <tr>
-                <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>PAÍS</th>
-                {columnas.map(c => (
-                  <th key={c} style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2' }}>
-                    CUENTA {c + 1}
-                  </th>
-                ))}
-                <th style={{ ...cabecera, ...separa, color: '#7dd3fc', borderRight: 'none' }}>TOTAL USD</th>
-              </tr>
-            </thead>
+          <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>PAÍS</th>
+                  <th style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2', borderRight: 'none' }}>CUENTA</th>
+                </tr>
+              </thead>
 
-            <tbody>
-              {paises.map(p => {
-                const suyas = porPais.get(p.name) || new Map()
-                const sumaClp = [...suyas.values()].reduce((t, b) => t + (b.monto_clp || 0), 0)
-                const suma = [...suyas.values()].reduce((t, b) => t + (b.monto || 0), 0)
-                const moneda = monedaDe(p.name)
-                return (
-                  <tr key={p.id}>
-                    <td style={{ ...celda, ...pegadaPais, padding: '6px 10px' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
-                        <Bandera iso2={p.iso2} tam={16} />
-                        {p.name}
-                      </span>
-                    </td>
-
-                    {columnas.map(c => {
-                      const b = suyas.get(c)
-                      return (
-                        <td key={c} className="fin-casilla"
-                          style={{ ...celda, position: 'relative', background: b ? 'rgba(56,189,248,.04)' : undefined }}>
-                          <CasillaArqueo
-                            key={`${b?.id ?? 'libre'}:${b?.monto ?? ''}`}
-                            valor={b ? b.monto : null}
-                            moneda={b ? b.moneda : (suyas.size || c === 0 ? moneda : '')}
-                            onGuardar={n => (b ? onEditarBanco(b.id, { monto: n }) : onCrearBanco(p.name, c, n))}
-                            onBorrar={b ? () => onBorrarBanco(b.id) : null} />
-                          {b && (
-                            <button type="button" className="fin-x" onClick={() => onBorrarBanco(b.id)}
-                              title="Quitar este saldo">
-                              ✕
-                            </button>
-                          )}
-                        </td>
-                      )
-                    })}
-
-                    <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', fontSize: 13, color: '#eaf2ff', borderRight: 'none' }}>
-                      {sumaClp || suma ? (
-                        <>
-                          {usd(sumaClp) !== null && (
-                            <>{usd(sumaClp)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span></>
-                          )}
-                          <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
-                            {miles(suma)} {moneda}
+              <tbody>
+                {paises.map(p => {
+                  const b = porPais.get(p.name)
+                  return (
+                    <tr key={p.id}>
+                      <td style={pais}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
+                          <Bandera iso2={p.iso2} tam={16} />
+                          {p.name}
+                        </span>
+                      </td>
+                      <td className="fin-casilla"
+                        style={{ ...celda, position: 'relative', borderRight: 'none', background: b ? 'rgba(56,189,248,.04)' : undefined }}>
+                        <CasillaArqueo
+                          key={`${b?.id ?? 'libre'}:${b?.monto ?? ''}`}
+                          valor={b ? b.monto : null}
+                          moneda={b ? b.moneda : monedaDe(p.name)}
+                          onGuardar={n => (b ? onEditarBanco(b.id, { monto: n }) : onCrearBanco(p.name, 0, n))}
+                          onBorrar={b ? () => onBorrarBanco(b.id) : null} />
+                        {/* Lo mismo en dólares, debajo: es la moneda en la que
+                            se compara con el cuadro de al lado. */}
+                        {b && b.monto_clp > 0 && usd(b.monto_clp) !== null && (
+                          <span style={{ display: 'block', textAlign: 'right', fontSize: 10.5, color: '#64748b', paddingRight: 7 }}>
+                            {usd(b.monto_clp)} USD
                           </span>
-                        </>
-                      ) : ''}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
 
-            <tfoot>
-              <tr>
-                <td style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-                  TOTAL CONTADO
-                </td>
-                {columnas.map(c => <td key={c} style={pieCelda} />)}
-                <td style={{ ...pieCelda, ...separa, textAlign: 'right', padding: '9px 10px', fontSize: 14, fontWeight: 800, color: '#eaf2ff', borderRight: 'none' }}>
-                  {usd(contadoClp) ?? pesos(contadoClp)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
-                  <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
-                    {pesos(contadoClp)} CLP
-                  </span>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+              <tfoot>
+                <tr>
+                  <td style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+                    TOTAL CONTADO
+                  </td>
+                  <td style={{ ...pieCelda, textAlign: 'right', padding: '9px 10px', fontSize: 15, fontWeight: 800, color, borderRight: 'none' }}>
+                    {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
+                    <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
+                      {pesos(contadoClp)} CLP
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* -------------------------------------------------------------- 2 --
+            Lo que debería haber, con la misma forma para poder compararlo
+            fila por fila con el de al lado. */}
+        <div style={mitad}>
+          <p style={rotulo}>2 · LO QUE DEBERÍA HABER</p>
+          <p style={titulo}>El cuadre</p>
+          <p style={bajada}>
+            Lo que dice el cuaderno {variosDias ? 'del rango' : 'del día'} por
+            país, más el capital. Tiene que dar lo mismo que lo contado.
+          </p>
+
+          <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>PAÍS</th>
+                  <th style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2', borderRight: 'none' }}>MOVIDO</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {paises.map(p => {
+                  const d = movidoDe(p.name)
+                  return (
+                    <tr key={p.id}>
+                      <td style={pais}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
+                          <Bandera iso2={p.iso2} tam={16} />
+                          {p.name}
+                        </span>
+                      </td>
+                      <td style={{ ...celda, textAlign: 'right', padding: '6px 17px 6px 10px', fontSize: 13, color: '#eaf2ff', borderRight: 'none' }}>
+                        {d ? (
+                          <>
+                            {usd(d.movido)} <span style={{ fontSize: 10.5, color: '#64748b' }}>USD</span>
+                            <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
+                              {pesos(d.movido)} CLP
+                            </span>
+                          </>
+                        ) : ''}
+                      </td>
+                    </tr>
+                  )
+                })}
+
+                {/* El capital no es de ningún país: va en su propia fila, y se
+                    edita aquí porque es donde se usa. */}
+                <tr>
+                  <td style={{ ...pais, fontSize: 12.5, fontWeight: 700, color: '#7dd3fc' }}>
+                    CAPITAL
+                  </td>
+                  <td className="fin-casilla" style={{ ...celda, borderRight: 'none', background: 'rgba(56,189,248,.04)' }}>
+                    <CasillaArqueo
+                      key={capitalUsd}
+                      valor={capitalUsd}
+                      moneda="USD"
+                      onGuardar={n => onCapital(n)} />
+                  </td>
+                </tr>
+              </tbody>
+
+              <tfoot>
+                <tr>
+                  <td style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+                    DEBERÍA HABER
+                  </td>
+                  <td style={{ ...pieCelda, textAlign: 'right', padding: '9px 10px', fontSize: 15, fontWeight: 800, color, borderRight: 'none' }}>
+                    {cuadra && '✓ '}{miles(Math.round(supuestoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
+                    <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
+                      {pesos(totalDiaClp)} CLP movidos + {miles(capitalUsd)} USD de capital
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       </div>
 
-      {/* ---------------------------------------------------------------- 2 --
-          Lo que debería haber, y si cuadra con lo contado. */}
-      <div style={seccion}>
-        <p style={rotulo}>2 · LO QUE DEBERÍA HABER</p>
-        <p style={titulo}>El cuadre</p>
-        <p style={bajada}>
-          El capital con el que se arranca más lo que dice el cuaderno
-          {variosDias ? ' en el rango' : ' del día'}. Si no da lo mismo que lo
-          contado arriba, hay algo que falta explicar.
-        </p>
-
-        <div style={{
-          ...GLASS, width: '100%', padding: '16px 18px',
-          display: 'flex', flexWrap: 'wrap', gap: 26, alignItems: 'flex-start',
-        }}>
-          <div style={{ minWidth: 168 }}>
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
-              CAPITAL
-            </p>
-            {/* Editable: es un dato de la casa, no una constante del programa. */}
-            <p style={{ fontSize: 19, fontWeight: 800, color: '#eaf2ff', marginTop: 4 }}>
-              <CasillaArqueo
-                key={capitalUsd}
-                valor={capitalUsd}
-                moneda="USD"
-                onGuardar={n => onCapital(n)} />
-            </p>
-          </div>
-
-          <div style={{ minWidth: 168 }}>
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
-              {variosDias ? 'MOVIDO EN EL RANGO' : 'MOVIDO HOY'}
-            </p>
-            <p style={{ fontSize: 19, fontWeight: 800, color: '#eaf2ff', marginTop: 4 }}>
-              {usd(totalDiaClp) ?? '—'} <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b' }}>USD</span>
-            </p>
-            <p style={{ fontSize: 10.5, color: '#64748b' }}>{pesos(totalDiaClp)} CLP</p>
-          </div>
-
-          <div style={{ minWidth: 190, paddingLeft: 20, borderLeft: '1px solid rgba(255,255,255,.07)' }}>
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
-              DEBERÍA HABER
-            </p>
-            <p style={{ fontSize: 21, fontWeight: 800, color, marginTop: 4 }}>
-              {cuadra && '✓ '}{miles(Math.round(supuestoUsd))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
-            </p>
-          </div>
-
-          <div style={{ minWidth: 190 }}>
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
-              CONTADO EN BANCOS
-            </p>
-            <p style={{ fontSize: 21, fontWeight: 800, color, marginTop: 4 }}>
-              {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
-            </p>
-          </div>
-
-          <div style={{ flex: '1 1 220px', minWidth: 200 }}>
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+      {/* La respuesta de los dos cuadros, a lo ancho: o cuadra, o falta
+          explicar una diferencia. */}
+      <div style={{
+        ...GLASS, width: '100%', padding: '13px 18px',
+        display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'baseline',
+        borderColor: cuadra ? 'rgba(74,222,128,.3)' : 'rgba(248,113,113,.3)',
+        background: cuadra ? 'rgba(74,222,128,.05)' : 'rgba(248,113,113,.05)',
+      }}>
+        {cuadra ? (
+          <>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>✓ Cuadra</span>
+            <span style={{ fontSize: 12.5, color: '#64748b' }}>
+              lo contado y lo que debería haber dan lo mismo: {miles(Math.round(contadoUsd))} USD
+            </span>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
               DIFERENCIA
-            </p>
-            {cuadra ? (
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#4ade80', marginTop: 5 }}>
-                ✓ Cuadra
-              </p>
-            ) : (
-              <>
-                <p style={{ fontSize: 19, fontWeight: 800, color: '#f87171', marginTop: 4 }}>
-                  {diferencia > 0 ? '+' : ''}{miles(Math.round(diferencia))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
-                </p>
-                <p style={{ fontSize: 11, color: '#f87171', marginTop: 2 }}>
-                  {diferencia > 0
-                    ? 'hay más en los bancos de lo que dice el cuaderno'
-                    : 'falta dinero respecto a lo que dice el cuaderno'}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+            </span>
+            <span style={{ fontSize: 19, fontWeight: 800, color: '#f87171' }}>
+              {diferencia > 0 ? '+' : ''}{miles(Math.round(diferencia))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
+            </span>
+            <span style={{ fontSize: 12.5, color: '#f87171' }}>
+              {diferencia > 0
+                ? 'hay más en los bancos de lo que dice el cuaderno'
+                : 'falta dinero respecto a lo que dice el cuaderno'}
+            </span>
+          </>
+        )}
       </div>
 
       {/* ---------------------------------------------------------------- 3 --
           Lo que salió. Se resta de lo contado, que es el dinero que de verdad
           está: restarlo de lo que "debería haber" sería restar de una cifra
           que todavía está en duda. */}
-      <div style={seccion}>
+      <div style={{ width: '100%' }}>
         <p style={rotulo}>3 · LO QUE SALIÓ</p>
         <p style={titulo}>Gastos</p>
-        <p style={bajada}>
+        <p style={{ ...bajada, minHeight: 0 }}>
           Lo que sale de la caja y no es un envío. Se resta de lo contado en los
           bancos para saber con cuánto se queda la casa.
         </p>
 
         <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 'max-content' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
                 <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>CONCEPTO</th>
@@ -2164,8 +2166,8 @@ function PanelArqueo({
             <tbody>
               {gastos.map(g => (
                 <tr key={g.id} className="fin-casilla" style={{ position: 'relative' }}>
-                  <td style={{ ...celda, ...pegadaPais, padding: '4px 10px', position: 'relative' }}>
-                    <input className="fin-cel" style={{ textAlign: 'left', width: '100%' }}
+                  <td style={{ ...celda, ...pegadaPais, padding: '4px 10px' }}>
+                    <input className="fin-cel" style={{ textAlign: 'left', width: '100%', boxSizing: 'border-box' }}
                       defaultValue={g.concepto || ''}
                       placeholder="en qué se gastó"
                       onBlur={e => {
@@ -2258,10 +2260,10 @@ function GastoNuevo({ onCrear }) {
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardar() } }} />
       </td>
       <td style={celda}>
-        <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 4, width: '100%' }}>
           <input className="fin-cel" inputMode="decimal"
+            style={{ flex: 1, width: '100%', minWidth: 0, boxSizing: 'border-box' }}
             value={texto}
-            size={anchoDe(texto)}
             onChange={e => setTexto(conPuntos(e.target.value))}
             onBlur={guardar}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }} />
