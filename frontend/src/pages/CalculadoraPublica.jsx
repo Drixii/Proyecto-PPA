@@ -100,6 +100,11 @@ export default function CalculadoraPublica() {
         .calc-pub .calc-dark-wrap .calc-panel{padding:14px 15px!important;border-radius:18px!important}
         .calc-pub .calc-dark-wrap .calc-cta{padding:16px!important;font-size:16px!important}
         .calc-pub .calc-dark-wrap .calc-footer{display:block!important}
+        /* El titulo ya esta arriba en grande: dentro de la tarjeta sobraba y
+           se leia dos veces seguidas. Se queda el "EN VIVO", pegado a la
+           derecha, que es donde estaba. */
+        .calc-pub .calc-dark-wrap .calc-title{display:none}
+        .calc-pub .calc-dark-wrap .calc-header{justify-content:flex-end!important}
       `}</style>
 
       <div style={{
@@ -138,6 +143,9 @@ export default function CalculadoraPublica() {
         position: 'relative', zIndex: 1,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         gap: 18, padding: '26px 16px 0',
+        // Centrada en la pantalla: es lo unico que hay, y abajo quedaba un
+        // hueco del tamano de la calculadora entera.
+        justifyContent: 'center', minHeight: 'calc(100dvh - 150px)',
       }}>
         <div style={{ textAlign: 'center', maxWidth: 520 }}>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-.02em', color: '#fff' }}>
