@@ -20,7 +20,9 @@ from sqlalchemy.orm import Session
 from auth.dependencies import require_super_admin
 from database import get_db
 from models.country import Country
-from models.finance_entry import FinanceEntry, FinanceRate, FinancePref
+from models.finance_entry import (
+    FinanceEntry, FinanceRate, FinancePref, FinanceBank, FinanceExpense,
+)
 from models.user import User
 from services.exchange_service import get_rate
 
@@ -56,6 +58,38 @@ class PorcentajeIn(BaseModel):
 class PreferenciasIn(BaseModel):
     ocultos: Optional[list[str]] = None
     orden: Optional[list[str]] = None
+
+
+class BancoIn(BaseModel):
+    fecha: date
+    pais: str
+    monto: float = 0.0
+    orden: int = 0
+    nombre: Optional[str] = None
+
+
+class BancoPatch(BaseModel):
+    monto: Optional[float] = None
+    nombre: Optional[str] = None
+    pais: Optional[str] = None
+
+
+class GastoIn(BaseModel):
+    fecha: date
+    monto: float = 0.0
+    concepto: Optional[str] = None
+    moneda: Optional[str] = None
+    orden: int = 0
+
+
+class GastoPatch(BaseModel):
+    monto: Optional[float] = None
+    concepto: Optional[str] = None
+    moneda: Optional[str] = None
+
+
+class CapitalIn(BaseModel):
+    capital_usd: float = Field(ge=0)
 
 
 def _prefs(db: Session, dueno_id: int) -> FinancePref:
@@ -213,6 +247,70 @@ def _mio(db: Session, apunte_id: int, dueno: User) -> FinanceEntry:
     return a
 
 
+def _sale_banco(b: FinanceBank) -> dict:
+    return {
+        "id": b.id,
+        "fecha": b.fecha.isoformat(),
+        "pais": b.pais,
+        "nombre": b.nombre,
+        "moneda": b.moneda,
+        "monto": b.monto,
+        "monto_clp": round(b.monto_clp or 0, 2),
+        "tasa_clp": b.tasa_clp or 0,
+        "orden": b.orden,
+    }
+
+
+def _sale_gasto(g: FinanceExpense) -> dict:
+    return {
+        "id": g.id,
+        "fecha": g.fecha.isoformat(),
+        "concepto": g.concepto,
+        "moneda": g.moneda,
+        "monto": g.monto,
+        "monto_clp": round(g.monto_clp or 0, 2),
+        "tasa_clp": g.tasa_clp or 0,
+        "orden": g.orden,
+    }
+
+
+def _bancos_del_rango(db: Session, dueno_id: int, desde: date, hasta: date):
+    return db.query(FinanceBank).filter(
+        FinanceBank.super_admin_id == dueno_id,
+        FinanceBank.fecha >= desde,
+        FinanceBank.fecha <= hasta,
+    ).order_by(FinanceBank.fecha, FinanceBank.orden, FinanceBank.id).all()
+
+
+def _gastos_del_rango(db: Session, dueno_id: int, desde: date, hasta: date):
+    return db.query(FinanceExpense).filter(
+        FinanceExpense.super_admin_id == dueno_id,
+        FinanceExpense.fecha >= desde,
+        FinanceExpense.fecha <= hasta,
+    ).order_by(FinanceExpense.fecha, FinanceExpense.orden, FinanceExpense.id).all()
+
+
+def _mi_banco(db: Session, fila_id: int, dueno: User) -> FinanceBank:
+    """La cuenta contada, si es de quien pregunta. Si no, no existe."""
+    b = db.query(FinanceBank).filter(
+        FinanceBank.id == fila_id,
+        FinanceBank.super_admin_id == dueno.id,
+    ).first()
+    if not b:
+        raise HTTPException(status_code=404, detail="Esa cuenta no existe")
+    return b
+
+
+def _mi_gasto(db: Session, fila_id: int, dueno: User) -> FinanceExpense:
+    g = db.query(FinanceExpense).filter(
+        FinanceExpense.id == fila_id,
+        FinanceExpense.super_admin_id == dueno.id,
+    ).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="Ese gasto no existe")
+    return g
+
+
 @router.get("", response_model=dict)
 def listar(
     desde: date = Query(...),
@@ -299,7 +397,16 @@ def listar(
         "preferencias": {
             "ocultos": _lista(prefs.ocultos),
             "orden": _lista(prefs.orden),
+            # Con lo que arranca el arqueo. Lo que el cuaderno dice que debería
+            # haber es esto más lo movido; los bancos dicen lo que hay.
+            "capital_usd": prefs.capital_usd or 0,
         },
+        # El arqueo del rango que se está viendo: lo contado en los bancos y lo
+        # que salió en gastos. Va aquí y no en otra llamada porque es la misma
+        # pantalla y el mismo rango de fechas: dos peticiones podrían contestar
+        # de días distintos.
+        "bancos": [_sale_banco(b) for b in _bancos_del_rango(db, admin.id, desde, hasta)],
+        "gastos": [_sale_gasto(g) for g in _gastos_del_rango(db, admin.id, desde, hasta)],
         "porcentajes": [
             {"origen": o, "destino": d, "porcentaje": p}
             for (o, d), p in _porcentajes(db, admin.id).items()
@@ -489,3 +596,154 @@ def borrar(
     db.delete(_mio(db, apunte_id, admin))
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# El arqueo: lo que hay en los bancos, los gastos y el capital.
+#
+# El cuaderno dice lo que debería haber; esto dice lo que hay. La pantalla
+# compara las dos cifras y avisa cuando no cuadran, que es para lo que existe.
+# ---------------------------------------------------------------------------
+
+@router.post("/bancos", response_model=dict)
+def crear_banco(
+    datos: BancoIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """Lo contado en una cuenta de un país.
+
+    La moneda y el cambio se congelan al anotar, igual que en los apuntes: lo
+    contado el lunes tiene que seguir valiendo lo mismo cuando se lea el
+    viernes.
+    """
+    moneda = _moneda_de(db, datos.pais) or MONEDA_CAJA
+    tasa = _tasa_a_caja(db, moneda)
+    b = FinanceBank(
+        super_admin_id=admin.id,
+        fecha=datos.fecha,
+        pais=datos.pais,
+        nombre=datos.nombre,
+        moneda=moneda,
+        monto=datos.monto,
+        tasa_clp=tasa,
+        monto_clp=datos.monto * tasa,
+        orden=datos.orden,
+    )
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    return {"data": _sale_banco(b)}
+
+
+@router.patch("/bancos/{fila_id}", response_model=dict)
+def editar_banco(
+    fila_id: int,
+    datos: BancoPatch,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    b = _mi_banco(db, fila_id, admin)
+    if datos.nombre is not None:
+        b.nombre = datos.nombre
+    if datos.pais is not None and datos.pais != b.pais:
+        # Cambiar de país cambia la moneda, así que el valor en pesos se rehace
+        # con el cambio de la moneda nueva.
+        b.pais = datos.pais
+        b.moneda = _moneda_de(db, datos.pais) or MONEDA_CAJA
+        b.tasa_clp = _tasa_a_caja(db, b.moneda)
+        b.monto_clp = b.monto * b.tasa_clp
+    if datos.monto is not None:
+        # Corregir la cifra la rehace con la MISMA tasa con la que se anotó: el
+        # cambio de hoy daría otro valor y esto es un conteo de un día.
+        b.monto = datos.monto
+        if not b.tasa_clp:
+            b.tasa_clp = _tasa_a_caja(db, b.moneda)
+        b.monto_clp = b.monto * b.tasa_clp
+    db.commit()
+    db.refresh(b)
+    return {"data": _sale_banco(b)}
+
+
+@router.delete("/bancos/{fila_id}", response_model=dict)
+def borrar_banco(
+    fila_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    db.delete(_mi_banco(db, fila_id, admin))
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/gastos", response_model=dict)
+def crear_gasto(
+    datos: GastoIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    moneda = (datos.moneda or MONEDA_CAJA).upper()
+    tasa = _tasa_a_caja(db, moneda)
+    g = FinanceExpense(
+        super_admin_id=admin.id,
+        fecha=datos.fecha,
+        concepto=datos.concepto,
+        moneda=moneda,
+        monto=datos.monto,
+        tasa_clp=tasa,
+        monto_clp=datos.monto * tasa,
+        orden=datos.orden,
+    )
+    db.add(g)
+    db.commit()
+    db.refresh(g)
+    return {"data": _sale_gasto(g)}
+
+
+@router.patch("/gastos/{fila_id}", response_model=dict)
+def editar_gasto(
+    fila_id: int,
+    datos: GastoPatch,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    g = _mi_gasto(db, fila_id, admin)
+    if datos.concepto is not None:
+        g.concepto = datos.concepto
+    if datos.moneda is not None and datos.moneda.upper() != g.moneda:
+        g.moneda = datos.moneda.upper()
+        g.tasa_clp = _tasa_a_caja(db, g.moneda)
+        g.monto_clp = g.monto * g.tasa_clp
+    if datos.monto is not None:
+        g.monto = datos.monto
+        if not g.tasa_clp:
+            g.tasa_clp = _tasa_a_caja(db, g.moneda)
+        g.monto_clp = g.monto * g.tasa_clp
+    db.commit()
+    db.refresh(g)
+    return {"data": _sale_gasto(g)}
+
+
+@router.delete("/gastos/{fila_id}", response_model=dict)
+def borrar_gasto(
+    fila_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    db.delete(_mi_gasto(db, fila_id, admin))
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/capital", response_model=dict)
+def guardar_capital(
+    datos: CapitalIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    """El capital con el que arranca el arqueo, en dólares."""
+    fila = _prefs(db, admin.id)
+    fila.capital_usd = datos.capital_usd
+    db.commit()
+    db.refresh(fila)
+    return {"data": {"capital_usd": fila.capital_usd}}

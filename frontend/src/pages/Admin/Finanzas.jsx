@@ -44,13 +44,26 @@ function nombreDelMes(iso) {
   return new Date(a, m - 1, 1).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
 }
 
-// Lo escrito a mano, a número. Se acepta como lo escribe la gente: "20.000",
-// "20000", "20.000,50". El punto es separador de miles y la coma decimal, que
-// es como se escribe en toda la región.
+/**
+  * Lo escrito a mano, a número. Se acepta como lo escribe la gente: "20.000",
+  * "20000", "20.000,50". El punto es separador de miles y la coma decimal, que
+  * es como se escribe en toda la región.
+  *
+  * Y se suma con el "+": en una casilla que ya tiene 180.000 se escribe
+  * "180.000+20.000" y vale 200.000. Es lo que se hacía a mano con la
+  * calculadora al lado para luego teclear el resultado, y por el camino se
+  * perdía de vista de dónde salía la cifra.
+  */
 function aNumero(texto) {
-  const limpio = String(texto ?? '').replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')
-  const n = parseFloat(limpio)
-  return Number.isFinite(n) ? n : 0
+  const partes = String(texto ?? '').split('+')
+  const uno = parte => {
+    const limpio = String(parte).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')
+    const n = parseFloat(limpio)
+    return Number.isFinite(n) ? n : 0
+  }
+  // Una suma solo cuenta como suma si hay algo a los dos lados: "180.000+"
+  // a medio escribir sigue valiendo 180.000 hasta que se teclee el otro.
+  return partes.reduce((t, p) => t + uno(p), 0)
 }
 
 // Los puntos de miles puestos mientras se escribe.
@@ -60,11 +73,18 @@ function aNumero(texto) {
 // decimal a medio escribir —"20.000," no puede convertirse en "20.000"— o no
 // habría forma de teclear los centavos.
 function conPuntos(texto) {
-  const crudo = String(texto ?? '').replace(/[^\d,]/g, '')
-  if (!crudo) return ''
-  const [entera, ...resto] = crudo.split(',')
-  const agrupada = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  return resto.length ? `${agrupada},${resto.join('').slice(0, 2)}` : agrupada
+  // Cada sumando lleva sus propios puntos de miles, y el "+" se queda tal
+  // cual: "180.000+20.000" se lee de un golpe, "180000+20000" no.
+  return String(texto ?? '')
+    .split('+')
+    .map(parte => {
+      const crudo = String(parte).replace(/[^\d,]/g, '')
+      if (!crudo) return ''
+      const [entera, ...resto] = crudo.split(',')
+      const agrupada = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+      return resto.length ? `${agrupada},${resto.join('').slice(0, 2)}` : agrupada
+    })
+    .join('+')
 }
 
 // El ancho del campo, en caracteres, creciendo con lo que se teclea.
@@ -136,7 +156,11 @@ export default function Finanzas() {
   // cambio para el dólar, y entonces no se enseña ninguna cifra en dólares.
   const usdClp = respuesta?.usd_clp || 0
   const porOrigen = respuesta?.por_origen || []
-  const prefs = respuesta?.preferencias || { ocultos: [], orden: [] }
+  const prefs = respuesta?.preferencias || { ocultos: [], orden: [], capital_usd: 0 }
+  // El arqueo: lo contado en los bancos y lo que salió en gastos, del mismo
+  // rango de fechas que el cuaderno.
+  const bancos = respuesta?.bancos || []
+  const gastos = respuesta?.gastos || []
 
   const origenes = useMemo(() => {
     const lista = paises.filter(p => p.can_send && p.active && !prefs.ocultos.includes(p.name))
@@ -302,8 +326,12 @@ export default function Finanzas() {
   // apuntes en cero.
   const [borrador, setBorrador] = useState({ col: null, destino: null, texto: '' })
 
-  // Qué se está mirando: lo que se anota, o lo que suma.
-  const [vista, setVista] = useState('diarios')   // 'diarios' | 'total'
+  // Qué se está mirando: lo que se anota, o el arqueo contra los bancos.
+  //
+  // Los totales ya no son una pestaña: viven debajo de la tabla del día, que
+  // es donde se miran —se anota una cifra y se quiere ver cómo quedó la suma—.
+  // Tenerlos detrás de una pestaña obligaba a cambiar de pantalla y volver.
+  const [vista, setVista] = useState('diarios')   // 'diarios' | 'bancos'
 
   // Lo último que no se pudo guardar, para poder decirlo y reintentarlo.
   const [fallo, setFallo] = useState(null)
@@ -381,6 +409,48 @@ export default function Finanzas() {
       () => api.put('/finanzas/porcentaje', { origen, destino, porcentaje }),
       `el ${miles(porcentaje)}% de ${destino}`,
     )
+    refrescar()
+  }
+
+  // --- El arqueo ---------------------------------------------------------
+  //
+  // Cada cifra se manda sola al salir del campo, con el mismo reintento que el
+  // cuaderno: la casilla de un banco se pierde igual de fácil que la de un
+  // movimiento si la API se está reiniciando.
+  const crearBanco = async (pais, orden, monto) => {
+    await conReintento(
+      () => api.post('/finanzas/bancos', { fecha: desde, pais, monto, orden }),
+      `${miles(monto)} en ${pais}`,
+    )
+    refrescar()
+  }
+  const editarBanco = async (id, cambios) => {
+    await conReintento(() => api.patch(`/finanzas/bancos/${id}`, cambios), 'ese saldo de banco')
+    refrescar()
+  }
+  const borrarBanco = async (id) => {
+    await conReintento(() => api.delete(`/finanzas/bancos/${id}`), 'borrar ese saldo')
+    refrescar()
+  }
+
+  const crearGasto = async (datos) => {
+    await conReintento(
+      () => api.post('/finanzas/gastos', { fecha: desde, ...datos }),
+      `el gasto de ${miles(datos.monto)}`,
+    )
+    refrescar()
+  }
+  const editarGasto = async (id, cambios) => {
+    await conReintento(() => api.patch(`/finanzas/gastos/${id}`, cambios), 'ese gasto')
+    refrescar()
+  }
+  const borrarGasto = async (id) => {
+    await conReintento(() => api.delete(`/finanzas/gastos/${id}`), 'borrar ese gasto')
+    refrescar()
+  }
+
+  const guardarCapital = async (capital_usd) => {
+    await conReintento(() => api.put('/finanzas/capital', { capital_usd }), 'el capital')
     refrescar()
   }
 
@@ -545,7 +615,7 @@ export default function Finanzas() {
           display: 'flex', gap: 4, padding: '0 22px',
           borderBottom: '1px solid rgba(255,255,255,.07)',
         }}>
-          {[['diarios', 'Montos diarios'], ['total', 'Total']].map(([id, txt]) => {
+          {[['diarios', 'Montos diarios'], ['bancos', 'Bancos']].map(([id, txt]) => {
             const activa = vista === id
             return (
               <button key={id} type="button" onClick={() => setVista(id)}
@@ -562,34 +632,24 @@ export default function Finanzas() {
         </div>
 
         <div style={{ flex: 1, padding: '18px 22px', overflow: 'auto' }}>
-          {vista === 'total' && (
-            <>
-              {/* El mismo filtro que arriba: la suma del día depende de qué
-                  día, y sin él aquí habría que volver a la otra pestaña para
-                  cambiarlo. El acumulado no lo mira: es todo. */}
-              <div style={{ marginBottom: 16 }}>
-                <DateRangePicker value={rango} onChange={setRango} />
-              </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 22, alignItems: 'flex-start' }}>
-              <Resumen titulo={variosDias ? 'Suma total del rango' : 'Suma total del día'}
-                nota={usdClp ? 'en dólares' : 'en pesos chilenos'}
-                paises={origenes} porOrigen={porOrigen} totales={totales}
-                usdClp={usdClp}
-                sinTasa={respuesta?.sin_tasa || 0} />
-              <Resumen titulo="Acumulable del mes"
-                nota={usdClp ? 'en dólares' : 'en pesos chilenos'}
-                encabezado={
-                  <SelectorDeMes
-                    mes={acumulado.desde?.slice(0, 7)}
-                    tope={acumulado.mes_actual}
-                    onCambiar={setMesAcum} />
-                }
-                paises={origenes} porOrigen={acumulado.por_origen} totales={acumulado.totales}
-                usdClp={usdClp}
-                sinTasa={acumulado.sin_tasa || 0} />
-            </div>
-            </>
+          {vista === 'bancos' && (
+            <PanelArqueo
+              paises={origenes}
+              monedaDe={nombre => paises.find(p => p.name === nombre)?.currency || ''}
+              bancos={bancos}
+              gastos={gastos}
+              capitalUsd={prefs.capital_usd || 0}
+              totalDiaClp={totales[0]?.movido || 0}
+              variosDias={variosDias}
+              usdClp={usdClp}
+              rango={<DateRangePicker value={rango} onChange={setRango} />}
+              onCrearBanco={crearBanco}
+              onEditarBanco={editarBanco}
+              onBorrarBanco={borrarBanco}
+              onCrearGasto={crearGasto}
+              onEditarGasto={editarGasto}
+              onBorrarGasto={borrarGasto}
+              onCapital={guardarCapital} />
           )}
 
           {/* Los países desde los que se envía. Salen solo en esta pestaña
@@ -794,6 +854,25 @@ export default function Finanzas() {
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* Lo que suma todo lo anotado, debajo de donde se anota. */}
+              <div style={{ marginTop: 26 }}>
+                <p style={{
+                  fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em',
+                  color: '#7dd3fc', marginBottom: 14,
+                }}>
+                  TOTAL
+                </p>
+                <Totales
+                  variosDias={variosDias}
+                  paises={origenes}
+                  porOrigen={porOrigen}
+                  totales={totales}
+                  acumulado={acumulado}
+                  usdClp={usdClp}
+                  sinTasa={respuesta?.sin_tasa || 0}
+                  onMes={setMesAcum} />
               </div>
             </>
           )}
@@ -1321,8 +1400,10 @@ function Resumen({ titulo, nota, encabezado, paises, porOrigen, totales, usdClp 
           no hay cambio guardado para su moneda.
         </p>
       )}
-    <div style={{ ...GLASS, width: 'max-content', maxWidth: '100%', overflow: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
+    {/* A todo el ancho: son dos filas y muchas columnas, y encogidas al
+        contenido dejaban media pantalla en blanco a la derecha. */}
+    <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 'max-content' }}>
         <thead>
           <tr>
             <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }} />
@@ -1742,5 +1823,452 @@ function BotonPais({ pais, activo, conMovimiento, ordenando, onElegir, onQuitar,
         ✕
       </button>
     </span>
+  )
+}
+
+
+/**
+ * Los dos cuadros que suman: lo del día (o del rango) y lo del mes.
+ *
+ * Están aparte porque se miran en dos sitios: debajo de la tabla donde se
+ * anota, y dentro del arqueo, donde hay que comparar lo que dicen con lo que
+ * de verdad hay en los bancos.
+ */
+function Totales({ variosDias, paises, porOrigen, totales, acumulado, usdClp, sinTasa, onMes }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <Resumen titulo={variosDias ? 'Suma total del rango' : 'Suma total del día'}
+        nota={usdClp ? 'en dólares' : 'en pesos chilenos'}
+        paises={paises} porOrigen={porOrigen} totales={totales}
+        usdClp={usdClp}
+        sinTasa={sinTasa} />
+      <Resumen titulo="Acumulable del mes"
+        nota={usdClp ? 'en dólares' : 'en pesos chilenos'}
+        encabezado={
+          <SelectorDeMes
+            mes={acumulado.desde?.slice(0, 7)}
+            tope={acumulado.mes_actual}
+            onCambiar={onMes} />
+        }
+        paises={paises} porOrigen={acumulado.por_origen} totales={acumulado.totales}
+        usdClp={usdClp}
+        sinTasa={acumulado.sin_tasa || 0} />
+    </div>
+  )
+}
+
+
+// Lo que se admite de diferencia para decir que cuadra: un dólar.
+//
+// Cero no sirve: los saldos se cuentan en varias monedas y pasarlos a dólares
+// deja céntimos de redondeo que no son un descuadre, son aritmética.
+const MARGEN_USD = 1
+
+/** Una casilla del arqueo: se teclea, Enter o salir del campo la guarda. */
+function CasillaArqueo({ valor, moneda, ancho, onGuardar, onBorrar, placeholder }) {
+  const [texto, setTexto] = useState(valor != null ? conPuntos(String(valor)) : '')
+
+  const soltar = () => {
+    const n = aNumero(texto)
+    if (n === (valor ?? 0)) return
+    if (!n && onBorrar) { onBorrar(); return }
+    if (n) onGuardar(n)
+  }
+
+  return (
+    <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+      <input className="fin-cel" inputMode="decimal"
+        value={texto}
+        size={ancho ?? anchoDe(texto)}
+        placeholder={placeholder}
+        onChange={e => setTexto(conPuntos(e.target.value))}
+        onBlur={soltar}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            e.currentTarget.blur()
+          }
+        }} />
+      {moneda && (
+        <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7, flexShrink: 0 }}>{moneda}</span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * El arqueo: lo que hay, lo que debería haber y lo que se gastó.
+ *
+ * Tres secciones en una, y en este orden a propósito: primero se cuenta lo que
+ * hay en los bancos, después se compara con lo que el cuaderno dice que
+ * debería haber, y al final se descuentan los gastos. Comparar antes de contar
+ * no se puede, y descontar los gastos antes de cuadrar esconde el descuadre.
+ */
+function PanelArqueo({
+  paises, monedaDe, bancos, gastos, capitalUsd, totalDiaClp, variosDias, usdClp, rango,
+  onCrearBanco, onEditarBanco, onBorrarBanco,
+  onCrearGasto, onEditarGasto, onBorrarGasto, onCapital,
+}) {
+  // Lo contado, por país y por columna: una columna es una cuenta.
+  const porPais = useMemo(() => {
+    const m = new Map()
+    bancos.forEach(b => {
+      if (!m.has(b.pais)) m.set(b.pais, new Map())
+      const col = m.get(b.pais)
+      if (!col.has(b.orden)) col.set(b.orden, b)
+    })
+    return m
+  }, [bancos])
+
+  // Tantas columnas como cuentas tenga el país que más tenga, y una libre al
+  // final para la siguiente.
+  const columnas = useMemo(() => {
+    const usadas = bancos.map(b => b.orden)
+    const tope = usadas.length ? Math.max(...usadas) + 1 : 0
+    return Array.from({ length: tope + 1 }, (_, i) => i)
+  }, [bancos])
+
+  const enUsd = clp => (usdClp ? (Number(clp) || 0) / usdClp : 0)
+  const usd = clp => enDolares(clp, usdClp)
+
+  const contadoClp = bancos.reduce((t, b) => t + (b.monto_clp || 0), 0)
+  const contadoUsd = enUsd(contadoClp)
+
+  // Lo que debería haber: el capital con el que se arranca más lo que se movió
+  // en el rango que se esté viendo.
+  const diaUsd = enUsd(totalDiaClp)
+  const supuestoUsd = capitalUsd + diaUsd
+
+  const diferencia = contadoUsd - supuestoUsd
+  const cuadra = Math.abs(diferencia) <= MARGEN_USD && (contadoClp > 0 || capitalUsd > 0)
+  const color = cuadra ? '#4ade80' : '#f87171'
+
+  const gastosClp = gastos.reduce((t, g) => t + (g.monto_clp || 0), 0)
+  const gastosUsd = enUsd(gastosClp)
+  const quedaUsd = contadoUsd - gastosUsd
+
+  const titulo = { fontSize: 13, fontWeight: 700, color: '#eaf2ff' }
+  const bajada = { fontSize: 12, color: '#64748b', marginTop: 3, marginBottom: 13, lineHeight: 1.5 }
+  const seccion = { width: '100%' }
+  const rotulo = {
+    fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#7dd3fc',
+    marginBottom: 7,
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
+      {/* El mismo filtro que el cuaderno: lo contado es de un día, y sin él
+          habría que volver a la otra pestaña para cambiarlo. */}
+      <div>{rango}</div>
+
+      {/* ---------------------------------------------------------------- 1 --
+          Lo que hay. Los países en vertical, una columna por cuenta: un país
+          puede tener varias y cada una se cuenta aparte. */}
+      <div style={seccion}>
+        <p style={rotulo}>1 · LO QUE HAY</p>
+        <p style={titulo}>Saldos de los bancos</p>
+        <p style={bajada}>
+          Se anota a mano lo que hay en cada cuenta, en la moneda de su país.
+          Cada columna es una cuenta: si un país tiene dos bancos, van en dos
+          columnas y suman.
+        </p>
+
+        <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 'max-content' }}>
+            <thead>
+              <tr>
+                <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>PAÍS</th>
+                {columnas.map(c => (
+                  <th key={c} style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2' }}>
+                    CUENTA {c + 1}
+                  </th>
+                ))}
+                <th style={{ ...cabecera, ...separa, color: '#7dd3fc', borderRight: 'none' }}>TOTAL USD</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paises.map(p => {
+                const suyas = porPais.get(p.name) || new Map()
+                const sumaClp = [...suyas.values()].reduce((t, b) => t + (b.monto_clp || 0), 0)
+                const suma = [...suyas.values()].reduce((t, b) => t + (b.monto || 0), 0)
+                const moneda = monedaDe(p.name)
+                return (
+                  <tr key={p.id}>
+                    <td style={{ ...celda, ...pegadaPais, padding: '6px 10px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
+                        <Bandera iso2={p.iso2} tam={16} />
+                        {p.name}
+                      </span>
+                    </td>
+
+                    {columnas.map(c => {
+                      const b = suyas.get(c)
+                      return (
+                        <td key={c} className="fin-casilla"
+                          style={{ ...celda, position: 'relative', background: b ? 'rgba(56,189,248,.04)' : undefined }}>
+                          <CasillaArqueo
+                            key={`${b?.id ?? 'libre'}:${b?.monto ?? ''}`}
+                            valor={b ? b.monto : null}
+                            moneda={b ? b.moneda : (suyas.size || c === 0 ? moneda : '')}
+                            onGuardar={n => (b ? onEditarBanco(b.id, { monto: n }) : onCrearBanco(p.name, c, n))}
+                            onBorrar={b ? () => onBorrarBanco(b.id) : null} />
+                          {b && (
+                            <button type="button" className="fin-x" onClick={() => onBorrarBanco(b.id)}
+                              title="Quitar este saldo">
+                              ✕
+                            </button>
+                          )}
+                        </td>
+                      )
+                    })}
+
+                    <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', fontSize: 13, color: '#eaf2ff', borderRight: 'none' }}>
+                      {sumaClp || suma ? (
+                        <>
+                          {usd(sumaClp) !== null && (
+                            <>{usd(sumaClp)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span></>
+                          )}
+                          <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
+                            {miles(suma)} {moneda}
+                          </span>
+                        </>
+                      ) : ''}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+
+            <tfoot>
+              <tr>
+                <td style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+                  TOTAL CONTADO
+                </td>
+                {columnas.map(c => <td key={c} style={pieCelda} />)}
+                <td style={{ ...pieCelda, ...separa, textAlign: 'right', padding: '9px 10px', fontSize: 14, fontWeight: 800, color: '#eaf2ff', borderRight: 'none' }}>
+                  {usd(contadoClp) ?? pesos(contadoClp)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
+                  <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
+                    {pesos(contadoClp)} CLP
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------------- 2 --
+          Lo que debería haber, y si cuadra con lo contado. */}
+      <div style={seccion}>
+        <p style={rotulo}>2 · LO QUE DEBERÍA HABER</p>
+        <p style={titulo}>El cuadre</p>
+        <p style={bajada}>
+          El capital con el que se arranca más lo que dice el cuaderno
+          {variosDias ? ' en el rango' : ' del día'}. Si no da lo mismo que lo
+          contado arriba, hay algo que falta explicar.
+        </p>
+
+        <div style={{
+          ...GLASS, width: '100%', padding: '16px 18px',
+          display: 'flex', flexWrap: 'wrap', gap: 26, alignItems: 'flex-start',
+        }}>
+          <div style={{ minWidth: 168 }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+              CAPITAL
+            </p>
+            {/* Editable: es un dato de la casa, no una constante del programa. */}
+            <p style={{ fontSize: 19, fontWeight: 800, color: '#eaf2ff', marginTop: 4 }}>
+              <CasillaArqueo
+                key={capitalUsd}
+                valor={capitalUsd}
+                moneda="USD"
+                onGuardar={n => onCapital(n)} />
+            </p>
+          </div>
+
+          <div style={{ minWidth: 168 }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+              {variosDias ? 'MOVIDO EN EL RANGO' : 'MOVIDO HOY'}
+            </p>
+            <p style={{ fontSize: 19, fontWeight: 800, color: '#eaf2ff', marginTop: 4 }}>
+              {usd(totalDiaClp) ?? '—'} <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b' }}>USD</span>
+            </p>
+            <p style={{ fontSize: 10.5, color: '#64748b' }}>{pesos(totalDiaClp)} CLP</p>
+          </div>
+
+          <div style={{ minWidth: 190, paddingLeft: 20, borderLeft: '1px solid rgba(255,255,255,.07)' }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+              DEBERÍA HABER
+            </p>
+            <p style={{ fontSize: 21, fontWeight: 800, color, marginTop: 4 }}>
+              {cuadra && '✓ '}{miles(Math.round(supuestoUsd))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
+            </p>
+          </div>
+
+          <div style={{ minWidth: 190 }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+              CONTADO EN BANCOS
+            </p>
+            <p style={{ fontSize: 21, fontWeight: 800, color, marginTop: 4 }}>
+              {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
+            </p>
+          </div>
+
+          <div style={{ flex: '1 1 220px', minWidth: 200 }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+              DIFERENCIA
+            </p>
+            {cuadra ? (
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#4ade80', marginTop: 5 }}>
+                ✓ Cuadra
+              </p>
+            ) : (
+              <>
+                <p style={{ fontSize: 19, fontWeight: 800, color: '#f87171', marginTop: 4 }}>
+                  {diferencia > 0 ? '+' : ''}{miles(Math.round(diferencia))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
+                </p>
+                <p style={{ fontSize: 11, color: '#f87171', marginTop: 2 }}>
+                  {diferencia > 0
+                    ? 'hay más en los bancos de lo que dice el cuaderno'
+                    : 'falta dinero respecto a lo que dice el cuaderno'}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------------- 3 --
+          Lo que salió. Se resta de lo contado, que es el dinero que de verdad
+          está: restarlo de lo que "debería haber" sería restar de una cifra
+          que todavía está en duda. */}
+      <div style={seccion}>
+        <p style={rotulo}>3 · LO QUE SALIÓ</p>
+        <p style={titulo}>Gastos</p>
+        <p style={bajada}>
+          Lo que sale de la caja y no es un envío. Se resta de lo contado en los
+          bancos para saber con cuánto se queda la casa.
+        </p>
+
+        <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 'max-content' }}>
+            <thead>
+              <tr>
+                <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>CONCEPTO</th>
+                <th style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2' }}>MONTO</th>
+                <th style={{ ...cabecera, ...separa, color: '#f87171', borderRight: 'none' }}>EN USD</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {gastos.map(g => (
+                <tr key={g.id} className="fin-casilla" style={{ position: 'relative' }}>
+                  <td style={{ ...celda, ...pegadaPais, padding: '4px 10px', position: 'relative' }}>
+                    <input className="fin-cel" style={{ textAlign: 'left', width: '100%' }}
+                      defaultValue={g.concepto || ''}
+                      placeholder="en qué se gastó"
+                      onBlur={e => {
+                        if (e.target.value !== (g.concepto || '')) onEditarGasto(g.id, { concepto: e.target.value })
+                      }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }} />
+                  </td>
+                  <td style={{ ...celda, position: 'relative' }}>
+                    <CasillaArqueo
+                      key={`${g.id}:${g.monto}`}
+                      valor={g.monto}
+                      moneda={g.moneda}
+                      onGuardar={n => onEditarGasto(g.id, { monto: n })}
+                      onBorrar={() => onBorrarGasto(g.id)} />
+                    <button type="button" className="fin-x" onClick={() => onBorrarGasto(g.id)}
+                      title="Quitar este gasto">
+                      ✕
+                    </button>
+                  </td>
+                  <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', fontSize: 13, color: '#f87171', borderRight: 'none' }}>
+                    {usd(g.monto_clp) ?? ''} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
+                  </td>
+                </tr>
+              ))}
+
+              {/* La fila en blanco del siguiente gasto. */}
+              <GastoNuevo onCrear={onCrearGasto} />
+            </tbody>
+
+            <tfoot>
+              <tr>
+                <td style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+                  TOTAL GASTOS
+                </td>
+                <td style={pieCelda} />
+                <td style={{ ...pieCelda, ...separa, textAlign: 'right', padding: '9px 10px', fontSize: 14, fontWeight: 800, color: '#f87171', borderRight: 'none' }}>
+                  {usd(gastosClp) ?? pesos(gastosClp)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* Lo que queda: lo contado menos los gastos. */}
+        <div style={{
+          ...GLASS, width: '100%', marginTop: 14, padding: '14px 18px',
+          display: 'flex', flexWrap: 'wrap', gap: 28, alignItems: 'baseline',
+          borderColor: cuadra ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.25)',
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
+            QUEDA EN CAJA
+          </span>
+          <span style={{ fontSize: 22, fontWeight: 800, color: cuadra ? '#4ade80' : '#eaf2ff' }}>
+            {cuadra && '✓ '}{miles(Math.round(quedaUsd))} <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>USD</span>
+          </span>
+          <span style={{ fontSize: 11.5, color: '#64748b' }}>
+            contado {miles(Math.round(contadoUsd))} − gastos {miles(Math.round(gastosUsd))}
+          </span>
+          {!cuadra && (
+            <span style={{ fontSize: 11.5, color: '#f87171' }}>
+              · el arqueo todavía no cuadra, así que esta cifra está en duda
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** La fila en blanco para el siguiente gasto. */
+function GastoNuevo({ onCrear }) {
+  const [concepto, setConcepto] = useState('')
+  const [texto, setTexto] = useState('')
+
+  const guardar = () => {
+    const monto = aNumero(texto)
+    if (!monto) return
+    onCrear({ concepto, monto })
+    setConcepto('')
+    setTexto('')
+  }
+
+  return (
+    <tr>
+      <td style={{ ...celda, ...pegadaPais, padding: '4px 10px' }}>
+        <input className="fin-cel" style={{ textAlign: 'left', width: '100%' }}
+          value={concepto}
+          placeholder="en qué se gastó"
+          onChange={e => setConcepto(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardar() } }} />
+      </td>
+      <td style={celda}>
+        <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
+          <input className="fin-cel" inputMode="decimal"
+            value={texto}
+            size={anchoDe(texto)}
+            onChange={e => setTexto(conPuntos(e.target.value))}
+            onBlur={guardar}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }} />
+          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7 }}>CLP</span>
+        </span>
+      </td>
+      <td style={{ ...celda, ...separa, borderRight: 'none' }} />
+    </tr>
   )
 }

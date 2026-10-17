@@ -104,4 +104,75 @@ class FinancePref(Base):
     ocultos = Column(Text, nullable=False, default="[]")   # países que no quiere ver
     orden = Column(Text, nullable=False, default="[]")     # los destinos, en su orden
 
+    # El capital con el que se arranca el arqueo, en dólares.
+    #
+    # Va en dólares y no en pesos porque es como se cuenta el capital de la
+    # casa, y porque en pesos tendría que reconvertirse cada día: el capital no
+    # cambia de tamaño porque el dólar suba.
+    capital_usd = Column(Float, nullable=False, default=0.0)
+
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class FinanceBank(Base):
+    """Lo que de verdad hay en los bancos, contado a mano.
+
+    Es la otra mitad del arqueo: el cuaderno dice lo que debería haber, esto
+    dice lo que hay. Cuadran o no cuadran, y eso es justo lo que se quiere ver.
+
+    Un país puede tener varias cuentas, así que una fila es una cuenta de un
+    país en un día: `orden` es la columna en la pantalla y `nombre` el banco,
+    si se quiere apuntar cuál.
+
+    El monto va en la moneda del país y se congela igual que en los apuntes:
+    lo contado el lunes tiene que seguir significando lo mismo el viernes.
+    """
+    __tablename__ = "finance_banks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    super_admin_id = Column(Integer, nullable=False, index=True)
+
+    fecha = Column(Date, nullable=False, index=True)
+    pais = Column(String, nullable=False)
+    nombre = Column(String, nullable=True)      # el banco, si se quiere apuntar
+    moneda = Column(String, nullable=False)     # la del país, congelada
+
+    monto = Column(Float, nullable=False, default=0.0)
+    monto_clp = Column(Float, nullable=False, default=0.0)
+    tasa_clp = Column(Float, nullable=False, default=0.0)
+
+    orden = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+Index("ix_finance_banks_dueno_fecha", FinanceBank.super_admin_id, FinanceBank.fecha)
+
+
+class FinanceExpense(Base):
+    """Un gasto: lo que sale de la caja y no es un envío.
+
+    Se resta de lo que el arqueo dice que hay. Lleva concepto porque un gasto
+    sin concepto, a la semana, no se sabe qué fue.
+    """
+    __tablename__ = "finance_expenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    super_admin_id = Column(Integer, nullable=False, index=True)
+
+    fecha = Column(Date, nullable=False, index=True)
+    concepto = Column(String, nullable=True)
+    moneda = Column(String, nullable=False, default="CLP")
+
+    monto = Column(Float, nullable=False, default=0.0)
+    monto_clp = Column(Float, nullable=False, default=0.0)
+    tasa_clp = Column(Float, nullable=False, default=0.0)
+
+    orden = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+Index("ix_finance_expenses_dueno_fecha", FinanceExpense.super_admin_id, FinanceExpense.fecha)
