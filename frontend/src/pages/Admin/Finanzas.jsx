@@ -1981,6 +1981,12 @@ function PanelArqueo({
 
   const quedaUsd = contadoUsd
 
+  // Mirando un día anterior al que se fijó el capital no hay nada que
+  // arrastrar: el capital de hoy no era el de entonces. La comisión de ese día
+  // se ve país por país, pero no se suma al total, y eso hay que decirlo o
+  // parece que la pantalla se ha comido una cifra que está ahí mismo.
+  const antesDelCapital = Boolean(capitalDesde && dia && dia < capitalDesde)
+
   const ganadoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
   const titulo = { fontSize: 13, fontWeight: 700, color: '#eaf2ff' }
@@ -2186,8 +2192,15 @@ function PanelArqueo({
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
                       {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(comisionUsd))} comisionados
                       {gastosUsd > 0 && ` − ${miles(Math.round(gastosUsd))} de gastos`}
-                      {!variosDias && totalDiaClp > 0 && ` (${miles(Math.round(enUsd(totalDiaClp)))} hoy)`}
+                      {!antesDelCapital && !variosDias && totalDiaClp > 0
+                        && ` (${miles(Math.round(enUsd(totalDiaClp)))} de este día)`}
                     </span>
+                    {antesDelCapital && (
+                      <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#fcd34d' }}>
+                        este día es anterior al capital ({diaCorto(capitalDesde)}): su comisión
+                        no se suma aquí
+                      </span>
+                    )}
                   </td>
                 </tr>
               </tfoot>

@@ -317,18 +317,21 @@ def _bancos_vigentes(db: Session, dueno_id: int, hasta: date):
 
 
 def _gastos_del_mes(db: Session, dueno_id: int, hasta: date):
-    """Los gastos del mes entero, no los del día.
+    """Los gastos del mes, hasta el día que se está mirando.
 
-    Un gasto no es cosa de una jornada: el arriendo o una comisión bancaria
-    pesan todo el mes. Verlos solo el día que se anotaron los dejaba escritos
-    pero invisibles al día siguiente.
+    Del mes y no del día porque un gasto no es cosa de una jornada: el
+    arriendo o una comisión bancaria pesan todo el mes, y verlos solo el día
+    que se anotaron los dejaba escritos pero invisibles al día siguiente.
+
+    Y sin pasar del día que se mira, porque entonces un arqueo de ayer
+    cargaría gastos de mañana: ayer quedó como quedó, y así se puede volver a
+    mirar tal cual fue.
     """
     primero = hasta.replace(day=1)
-    ultimo = date(primero.year + (primero.month == 12), primero.month % 12 + 1, 1) - timedelta(days=1)
     return db.query(FinanceExpense).filter(
         FinanceExpense.super_admin_id == dueno_id,
         FinanceExpense.fecha >= primero,
-        FinanceExpense.fecha <= ultimo,
+        FinanceExpense.fecha <= hasta,
     ).order_by(FinanceExpense.fecha, FinanceExpense.orden, FinanceExpense.id).all()
 
 
