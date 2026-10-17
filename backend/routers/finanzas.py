@@ -90,6 +90,9 @@ class GastoPatch(BaseModel):
 
 class CapitalIn(BaseModel):
     capital_usd: float = Field(ge=0)
+    # Desde qué día vale. Si no viene, desde hoy: cuando alguien corrige el
+    # capital está diciendo lo que hay AHORA, no lo que había en enero.
+    desde: Optional[date] = None
 
 
 def _prefs(db: Session, dueno_id: int) -> FinancePref:
@@ -247,6 +250,23 @@ def _mio(db: Session, apunte_id: int, dueno: User) -> FinanceEntry:
     return a
 
 
+def _comision_desde(filas, base: Optional[date], desde: date, hasta: date) -> float:
+    """Lo comisionado entre el día del capital y el que se está mirando.
+
+    Sin día de capital se cuenta solo el rango que se ve: es lo único que se
+    puede afirmar sin saber desde cuándo vale esa cifra.
+
+    Mirando un día ANTERIOR al del capital no se cuenta nada: aquel día el
+    capital todavía no era ese, y arrastrar comisiones hacia atrás daría un
+    "debería haber" que nunca fue cierto.
+    """
+    if not base:
+        return sum((a.monto_clp or 0) * a.porcentaje / 100 for a in filas if desde <= a.fecha <= hasta)
+    if hasta < base:
+        return 0.0
+    return sum((a.monto_clp or 0) * a.porcentaje / 100 for a in filas if base <= a.fecha <= hasta)
+
+
 def _sale_banco(b: FinanceBank) -> dict:
     return {
         "id": b.id,
@@ -400,7 +420,15 @@ def listar(
             # Con lo que arranca el arqueo. Lo que el cuaderno dice que debería
             # haber es esto más lo movido; los bancos dicen lo que hay.
             "capital_usd": prefs.capital_usd or 0,
+            "capital_desde": prefs.capital_desde.isoformat() if prefs.capital_desde else None,
         },
+        # Lo comisionado desde el día del capital hasta el que se está mirando.
+        #
+        # Es lo que hace que el capital crezca solo: hoy es el capital más la
+        # comisión de hoy, mañana eso más la de mañana. La cuenta se hace aquí
+        # y no en la pantalla porque necesita TODOS los apuntes, no solo los
+        # del rango que se esté viendo.
+        "comision_desde_capital": round(_comision_desde(todo, prefs.capital_desde, desde, hasta), 2),
         # El arqueo del rango que se está viendo: lo contado en los bancos y lo
         # que salió en gastos. Va aquí y no en otra llamada porque es la misma
         # pantalla y el mismo rango de fechas: dos peticiones podrían contestar
@@ -744,6 +772,12 @@ def guardar_capital(
     """El capital con el que arranca el arqueo, en dólares."""
     fila = _prefs(db, admin.id)
     fila.capital_usd = datos.capital_usd
+    # El calendario chileno, no el reloj del servidor, que va en UTC y a las
+    # nueve de la noche ya estaría poniendo la fecha de mañana.
+    fila.capital_desde = datos.desde or datetime.now(ZoneInfo("America/Santiago")).date()
     db.commit()
     db.refresh(fila)
-    return {"data": {"capital_usd": fila.capital_usd}}
+    return {"data": {
+        "capital_usd": fila.capital_usd,
+        "capital_desde": fila.capital_desde.isoformat() if fila.capital_desde else None,
+    }}

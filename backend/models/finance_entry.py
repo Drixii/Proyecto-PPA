@@ -111,6 +111,14 @@ class FinancePref(Base):
     # cambia de tamaño porque el dólar suba.
     capital_usd = Column(Float, nullable=False, default=0.0)
 
+    # Desde qué día vale ese capital.
+    #
+    # Hace falta para que el capital se sume solo: lo que debería haber hoy es
+    # el capital más las comisiones ganadas desde este día. Sin la fecha habría
+    # que reescribir el capital cada mañana, y el día que se olvide la cifra
+    # queda mal sin que nada lo avise.
+    capital_desde = Column(Date, nullable=True)
+
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 

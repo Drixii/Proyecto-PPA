@@ -639,8 +639,10 @@ export default function Finanzas() {
               bancos={bancos}
               gastos={gastos}
               capitalUsd={prefs.capital_usd || 0}
+              capitalDesde={prefs.capital_desde}
+              comisionDesdeCapitalClp={respuesta?.comision_desde_capital || 0}
               porOrigen={porOrigen}
-              totalDiaClp={totales[0]?.movido || 0}
+              totalDiaClp={totales[0]?.ganado || 0}
               variosDias={variosDias}
               usdClp={usdClp}
               rango={<DateRangePicker value={rango} onChange={setRango} />}
@@ -1915,8 +1917,8 @@ function CasillaArqueo({ valor, moneda, onGuardar, onBorrar, placeholder }) {
  * descuadre.
  */
 function PanelArqueo({
-  paises, monedaDe, bancos, gastos, capitalUsd, porOrigen, totalDiaClp,
-  variosDias, usdClp, rango,
+  paises, monedaDe, bancos, gastos, capitalUsd, capitalDesde, comisionDesdeCapitalClp,
+  porOrigen, totalDiaClp, variosDias, usdClp, rango,
   onCrearBanco, onEditarBanco, onBorrarBanco,
   onCrearGasto, onEditarGasto, onBorrarGasto, onCapital,
 }) {
@@ -1930,23 +1932,26 @@ function PanelArqueo({
   const enUsd = clp => (usdClp ? (Number(clp) || 0) / usdClp : 0)
   const usd = clp => enDolares(clp, usdClp)
 
-  const contadoClp = bancos.reduce((t, b) => t + (b.monto_clp || 0), 0)
-  const contadoUsd = enUsd(contadoClp)
+  // Lo contado a mano en los bancos, y el total con el capital dentro: los dos
+  // cuadros arrancan de la misma base, así se comparan de frente.
+  const anotadoClp = bancos.reduce((t, b) => t + (b.monto_clp || 0), 0)
+  const anotadoUsd = enUsd(anotadoClp)
+  const contadoUsd = capitalUsd + anotadoUsd
 
-  // Lo que debería haber: el capital con el que se arranca más lo que se movió
-  // en el rango que se esté viendo.
-  const diaUsd = enUsd(totalDiaClp)
-  const supuestoUsd = capitalUsd + diaUsd
+  // Lo que debería haber: el capital más lo comisionado desde el día en que se
+  // fijó. Cada día que pasa se suma solo, sin tocar el capital a mano.
+  const comisionUsd = enUsd(comisionDesdeCapitalClp)
+  const supuestoUsd = capitalUsd + comisionUsd
 
   const diferencia = contadoUsd - supuestoUsd
-  const cuadra = Math.abs(diferencia) <= MARGEN_USD && (contadoClp > 0 || capitalUsd > 0)
+  const cuadra = Math.abs(diferencia) <= MARGEN_USD && (anotadoClp > 0 || capitalUsd > 0)
   const color = cuadra ? '#4ade80' : '#f87171'
 
   const gastosClp = gastos.reduce((t, g) => t + (g.monto_clp || 0), 0)
   const gastosUsd = enUsd(gastosClp)
   const quedaUsd = contadoUsd - gastosUsd
 
-  const movidoDe = nombre => porOrigen.find(o => o.origen === nombre)
+  const ganadoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
   const titulo = { fontSize: 13, fontWeight: 700, color: '#eaf2ff' }
   const bajada = { fontSize: 12, color: '#64748b', marginTop: 3, marginBottom: 13, lineHeight: 1.5, minHeight: 36 }
@@ -1955,6 +1960,7 @@ function PanelArqueo({
   // pantalla no da para los dos.
   const mitad = { flex: '1 1 380px', minWidth: 320 }
   const pais = { ...celda, ...pegadaPais, padding: '6px 10px' }
+  const nombreDePais = { display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
@@ -1964,12 +1970,13 @@ function PanelArqueo({
 
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {/* -------------------------------------------------------------- 1 --
-            Lo que hay: una cifra por país, escrita a mano. */}
+            Lo que hay: una cifra por país, escrita a mano, sobre el capital. */}
         <div style={mitad}>
           <p style={rotulo}>1 · LO QUE HAY</p>
           <p style={titulo}>Saldos de los bancos</p>
           <p style={bajada}>
-            Lo que hay en el banco de cada país, en la moneda de ese país.
+            Lo que hay en el banco de cada país, en la moneda de ese país. El
+            total arranca del capital y le suma lo que se vaya anotando.
           </p>
 
           <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
@@ -1987,7 +1994,7 @@ function PanelArqueo({
                   return (
                     <tr key={p.id}>
                       <td style={pais}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
+                        <span style={nombreDePais}>
                           <Bandera iso2={p.iso2} tam={16} />
                           {p.name}
                         </span>
@@ -2021,7 +2028,7 @@ function PanelArqueo({
                   <td style={{ ...pieCelda, textAlign: 'right', padding: '9px 10px', fontSize: 15, fontWeight: 800, color, borderRight: 'none' }}>
                     {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
-                      {pesos(contadoClp)} CLP
+                      {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(anotadoUsd))} anotados
                     </span>
                   </td>
                 </tr>
@@ -2031,14 +2038,26 @@ function PanelArqueo({
         </div>
 
         {/* -------------------------------------------------------------- 2 --
-            Lo que debería haber, con la misma forma para poder compararlo
-            fila por fila con el de al lado. */}
+            Lo que debería haber: la comisión de cada país sobre el capital. */}
         <div style={mitad}>
           <p style={rotulo}>2 · LO QUE DEBERÍA HABER</p>
-          <p style={titulo}>El cuadre</p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <p style={titulo}>El cuadre</p>
+            {/* El capital se edita aquí, en chico: se toca una vez y después
+                se suma solo. Un campo grande invitaría a reescribirlo cada
+                día, que es justo lo que ya no hace falta. */}
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 5, fontSize: 11, color: '#64748b' }}>
+              capital:
+              <span style={{ width: 86 }}>
+                <CasillaArqueo key={capitalUsd} valor={capitalUsd} moneda="USD" onGuardar={n => onCapital(n)} />
+              </span>
+              {capitalDesde && <span>desde el {capitalDesde.split('-').reverse().slice(0, 2).join('/')}</span>}
+            </span>
+          </div>
           <p style={bajada}>
-            Lo que dice el cuaderno {variosDias ? 'del rango' : 'del día'} por
-            país, más el capital. Tiene que dar lo mismo que lo contado.
+            La comisión de cada país {variosDias ? 'en el rango' : 'del día'}.
+            El total es el capital más todo lo comisionado desde que se fijó:
+            cada día se suma solo.
           </p>
 
           <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
@@ -2046,27 +2065,27 @@ function PanelArqueo({
               <thead>
                 <tr>
                   <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>PAÍS</th>
-                  <th style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2', borderRight: 'none' }}>MOVIDO</th>
+                  <th style={{ ...cabecera, padding: '8px 10px', color: '#4ade80', borderRight: 'none' }}>COMISIÓN</th>
                 </tr>
               </thead>
 
               <tbody>
                 {paises.map(p => {
-                  const d = movidoDe(p.name)
+                  const d = ganadoDe(p.name)
                   return (
                     <tr key={p.id}>
                       <td style={pais}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#eaf2ff' }}>
+                        <span style={nombreDePais}>
                           <Bandera iso2={p.iso2} tam={16} />
                           {p.name}
                         </span>
                       </td>
-                      <td style={{ ...celda, textAlign: 'right', padding: '6px 17px 6px 10px', fontSize: 13, color: '#eaf2ff', borderRight: 'none' }}>
-                        {d ? (
+                      <td style={{ ...celda, textAlign: 'right', padding: '6px 17px 6px 10px', fontSize: 13, fontWeight: 700, color: '#4ade80', borderRight: 'none' }}>
+                        {d && d.ganado ? (
                           <>
-                            {usd(d.movido)} <span style={{ fontSize: 10.5, color: '#64748b' }}>USD</span>
-                            <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
-                              {pesos(d.movido)} CLP
+                            {usd(d.ganado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>USD</span>
+                            <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
+                              {pesos(d.ganado)} CLP
                             </span>
                           </>
                         ) : ''}
@@ -2074,21 +2093,6 @@ function PanelArqueo({
                     </tr>
                   )
                 })}
-
-                {/* El capital no es de ningún país: va en su propia fila, y se
-                    edita aquí porque es donde se usa. */}
-                <tr>
-                  <td style={{ ...pais, fontSize: 12.5, fontWeight: 700, color: '#7dd3fc' }}>
-                    CAPITAL
-                  </td>
-                  <td className="fin-casilla" style={{ ...celda, borderRight: 'none', background: 'rgba(56,189,248,.04)' }}>
-                    <CasillaArqueo
-                      key={capitalUsd}
-                      valor={capitalUsd}
-                      moneda="USD"
-                      onGuardar={n => onCapital(n)} />
-                  </td>
-                </tr>
               </tbody>
 
               <tfoot>
@@ -2099,7 +2103,8 @@ function PanelArqueo({
                   <td style={{ ...pieCelda, textAlign: 'right', padding: '9px 10px', fontSize: 15, fontWeight: 800, color, borderRight: 'none' }}>
                     {cuadra && '✓ '}{miles(Math.round(supuestoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
-                      {pesos(totalDiaClp)} CLP movidos + {miles(capitalUsd)} USD de capital
+                      {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(comisionUsd))} comisionados
+                      {!variosDias && totalDiaClp > 0 && ` (${miles(Math.round(enUsd(totalDiaClp)))} hoy)`}
                     </span>
                   </td>
                 </tr>

@@ -30,6 +30,7 @@ def _run_migrations():
         # El capital con el que arranca el arqueo. create_all crea las tablas
         # nuevas pero no añade columnas a una que ya está.
         "ALTER TABLE finance_prefs ADD COLUMN capital_usd DOUBLE PRECISION DEFAULT 0",
+        "ALTER TABLE finance_prefs ADD COLUMN capital_desde DATE",
         "ALTER TABLE orders ADD COLUMN sub_admin_id INTEGER REFERENCES users(id)",
         "ALTER TABLE orders ADD COLUMN completion_proof VARCHAR",
         "ALTER TABLE users ADD COLUMN avatar VARCHAR",
