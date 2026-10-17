@@ -294,19 +294,41 @@ def _sale_gasto(g: FinanceExpense) -> dict:
     }
 
 
-def _bancos_del_rango(db: Session, dueno_id: int, desde: date, hasta: date):
-    return db.query(FinanceBank).filter(
+def _bancos_vigentes(db: Session, dueno_id: int, hasta: date):
+    """Lo último contado en cada país, sin pasar del día que se mira.
+
+    Un saldo no se acaba al cambiar de día: lo que había ayer en el banco sigue
+    ahí esta mañana. Por eso se arrastra el último conteo en vez de empezar la
+    pantalla en blanco cada día, que obligaría a reescribir diez cifras que no
+    han cambiado —y el día que se olvidara una, el arqueo diría que falta
+    dinero que está donde siempre.
+
+    Mirando un día pasado se ve lo que estaba contado ENTONCES: no se cuelan
+    conteos posteriores, o el arqueo de aquel día no sería el que fue.
+    """
+    filas = db.query(FinanceBank).filter(
         FinanceBank.super_admin_id == dueno_id,
-        FinanceBank.fecha >= desde,
         FinanceBank.fecha <= hasta,
-    ).order_by(FinanceBank.fecha, FinanceBank.orden, FinanceBank.id).all()
+    ).order_by(FinanceBank.fecha, FinanceBank.id).all()
+    ultimo: dict[str, FinanceBank] = {}
+    for b in filas:
+        ultimo[b.pais] = b
+    return list(ultimo.values())
 
 
-def _gastos_del_rango(db: Session, dueno_id: int, desde: date, hasta: date):
+def _gastos_del_mes(db: Session, dueno_id: int, hasta: date):
+    """Los gastos del mes entero, no los del día.
+
+    Un gasto no es cosa de una jornada: el arriendo o una comisión bancaria
+    pesan todo el mes. Verlos solo el día que se anotaron los dejaba escritos
+    pero invisibles al día siguiente.
+    """
+    primero = hasta.replace(day=1)
+    ultimo = date(primero.year + (primero.month == 12), primero.month % 12 + 1, 1) - timedelta(days=1)
     return db.query(FinanceExpense).filter(
         FinanceExpense.super_admin_id == dueno_id,
-        FinanceExpense.fecha >= desde,
-        FinanceExpense.fecha <= hasta,
+        FinanceExpense.fecha >= primero,
+        FinanceExpense.fecha <= ultimo,
     ).order_by(FinanceExpense.fecha, FinanceExpense.orden, FinanceExpense.id).all()
 
 
@@ -433,8 +455,8 @@ def listar(
         # que salió en gastos. Va aquí y no en otra llamada porque es la misma
         # pantalla y el mismo rango de fechas: dos peticiones podrían contestar
         # de días distintos.
-        "bancos": [_sale_banco(b) for b in _bancos_del_rango(db, admin.id, desde, hasta)],
-        "gastos": [_sale_gasto(g) for g in _gastos_del_rango(db, admin.id, desde, hasta)],
+        "bancos": [_sale_banco(b) for b in _bancos_vigentes(db, admin.id, hasta)],
+        "gastos": [_sale_gasto(g) for g in _gastos_del_mes(db, admin.id, hasta)],
         "porcentajes": [
             {"origen": o, "destino": d, "porcentaje": p}
             for (o, d), p in _porcentajes(db, admin.id).items()

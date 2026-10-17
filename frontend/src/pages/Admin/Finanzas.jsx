@@ -642,6 +642,7 @@ export default function Finanzas() {
               capitalDesde={prefs.capital_desde}
               comisionDesdeCapitalClp={respuesta?.comision_desde_capital || 0}
               porOrigen={porOrigen}
+              dia={desde}
               totalDiaClp={totales[0]?.ganado || 0}
               variosDias={variosDias}
               usdClp={usdClp}
@@ -1861,6 +1862,10 @@ function Totales({ variosDias, paises, porOrigen, totales, acumulado, usdClp, si
 }
 
 
+// "16/10", a partir de la fecha que manda el servidor. Sin año: dentro del
+// arqueo todo es del mismo mes y el año solo ocupa sitio.
+const diaCorto = f => String(f || '').split('-').reverse().slice(0, 2).join('/')
+
 // Lo que se admite de diferencia para decir que cuadra: un dólar.
 //
 // Cero no sirve: los saldos se cuentan en varias monedas y pasarlos a dólares
@@ -1918,7 +1923,7 @@ function CasillaArqueo({ valor, moneda, onGuardar, onBorrar, placeholder }) {
  */
 function PanelArqueo({
   paises, monedaDe, bancos, gastos, capitalUsd, capitalDesde, comisionDesdeCapitalClp,
-  porOrigen, totalDiaClp, variosDias, usdClp, rango,
+  porOrigen, dia, totalDiaClp, variosDias, usdClp, rango,
   onCrearBanco, onEditarBanco, onBorrarBanco,
   onCrearGasto, onEditarGasto, onBorrarGasto, onCapital,
 }) {
@@ -1929,6 +1934,14 @@ function PanelArqueo({
     return m
   }, [bancos])
 
+  // Lo anotado con nombre propio: un pago suelto, una caja chica, lo que haga
+  // falta. Se guarda igual que un país —el cuaderno guarda el nombre como
+  // texto— y se reconoce por no estar en la lista de países.
+  const sueltas = useMemo(() => {
+    const deLosPaises = new Set(paises.map(p => p.name))
+    return bancos.filter(b => !deLosPaises.has(b.pais))
+  }, [bancos, paises])
+
   const enUsd = clp => (usdClp ? (Number(clp) || 0) / usdClp : 0)
   const usd = clp => enDolares(clp, usdClp)
 
@@ -1936,20 +1949,26 @@ function PanelArqueo({
   // cuadros arrancan de la misma base, así se comparan de frente.
   const anotadoClp = bancos.reduce((t, b) => t + (b.monto_clp || 0), 0)
   const anotadoUsd = enUsd(anotadoClp)
-  const contadoUsd = capitalUsd + anotadoUsd
+
+  // Lo gastado en el mes. Sale de los DOS totales: el dinero gastado ya no
+  // está en el banco, y tampoco tendría que estar en lo que debería haber. Si
+  // se descontara de un lado solo, cada gasto abriría un descuadre que no es
+  // tal y el arqueo dejaría de servir para lo que sirve.
+  const gastosClp = gastos.reduce((t, g) => t + (g.monto_clp || 0), 0)
+  const gastosUsd = enUsd(gastosClp)
+
+  const contadoUsd = capitalUsd + anotadoUsd - gastosUsd
 
   // Lo que debería haber: el capital más lo comisionado desde el día en que se
-  // fijó. Cada día que pasa se suma solo, sin tocar el capital a mano.
+  // fijó, menos lo gastado. Cada día que pasa se suma solo, sin tocar nada.
   const comisionUsd = enUsd(comisionDesdeCapitalClp)
-  const supuestoUsd = capitalUsd + comisionUsd
+  const supuestoUsd = capitalUsd + comisionUsd - gastosUsd
 
   const diferencia = contadoUsd - supuestoUsd
   const cuadra = Math.abs(diferencia) <= MARGEN_USD && (anotadoClp > 0 || capitalUsd > 0)
   const color = cuadra ? '#4ade80' : '#f87171'
 
-  const gastosClp = gastos.reduce((t, g) => t + (g.monto_clp || 0), 0)
-  const gastosUsd = enUsd(gastosClp)
-  const quedaUsd = contadoUsd - gastosUsd
+  const quedaUsd = contadoUsd
 
   const ganadoDe = nombre => porOrigen.find(o => o.origen === nombre)
 
@@ -1975,8 +1994,9 @@ function PanelArqueo({
           <p style={rotulo}>1 · LO QUE HAY</p>
           <p style={titulo}>Saldos de los bancos</p>
           <p style={bajada}>
-            Lo que hay en el banco de cada país, en la moneda de ese país. El
-            total arranca del capital y le suma lo que se vaya anotando.
+            Lo que hay en el banco de cada país, en la moneda de ese país. Lo
+            contado un día sigue valiendo los siguientes hasta que se vuelva a
+            contar. El total arranca del capital y le suma lo anotado.
           </p>
 
           <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
@@ -2005,19 +2025,68 @@ function PanelArqueo({
                           key={`${b?.id ?? 'libre'}:${b?.monto ?? ''}`}
                           valor={b ? b.monto : null}
                           moneda={b ? b.moneda : monedaDe(p.name)}
-                          onGuardar={n => (b ? onEditarBanco(b.id, { monto: n }) : onCrearBanco(p.name, 0, n))}
-                          onBorrar={b ? () => onBorrarBanco(b.id) : null} />
+                          onGuardar={n => (b && b.fecha === dia
+                            ? onEditarBanco(b.id, { monto: n })
+                            : onCrearBanco(p.name, 0, n))}
+                          onBorrar={b && b.fecha === dia ? () => onBorrarBanco(b.id) : null} />
                         {/* Lo mismo en dólares, debajo: es la moneda en la que
                             se compara con el cuadro de al lado. */}
                         {b && b.monto_clp > 0 && usd(b.monto_clp) !== null && (
                           <span style={{ display: 'block', textAlign: 'right', fontSize: 10.5, color: '#64748b', paddingRight: 7 }}>
                             {usd(b.monto_clp)} USD
+                            {/* De cuándo es el conteo, si no es del día que se
+                                mira: así se ve lo que lleva sin tocarse. */}
+                            {b.fecha !== dia && (
+                              <span style={{ color: '#a78b4a' }}> · del {diaCorto(b.fecha)}</span>
+                            )}
                           </span>
                         )}
                       </td>
                     </tr>
                   )
                 })}
+
+                {/* Lo que no es un país: filas con el nombre que se quiera. */}
+                {sueltas.map(b => (
+                  <tr key={b.id} className="fin-casilla">
+                    <td style={{ ...pais, position: 'relative' }}>
+                      <input className="fin-cel"
+                        style={{ textAlign: 'left', width: '100%', boxSizing: 'border-box', fontWeight: 600 }}
+                        defaultValue={b.pais}
+                        placeholder="a qué corresponde"
+                        onBlur={e => {
+                          const nuevo = e.target.value.trim()
+                          if (nuevo && nuevo !== b.pais) onEditarBanco(b.id, { pais: nuevo })
+                        }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }} />
+                    </td>
+                    <td style={{ ...celda, position: 'relative', borderRight: 'none', background: 'rgba(56,189,248,.04)' }}>
+                      <CasillaArqueo
+                        key={`${b.id}:${b.monto}`}
+                        valor={b.monto}
+                        moneda={b.moneda}
+                        onGuardar={n => onEditarBanco(b.id, { monto: n })}
+                        onBorrar={() => onBorrarBanco(b.id)} />
+                      {b.monto_clp > 0 && usd(b.monto_clp) !== null && (
+                        <span style={{ display: 'block', textAlign: 'right', fontSize: 10.5, color: '#64748b', paddingRight: 7 }}>
+                          {usd(b.monto_clp)} USD
+                          {b.fecha !== dia && (
+                            <span style={{ color: '#a78b4a' }}> · del {diaCorto(b.fecha)}</span>
+                          )}
+                        </span>
+                      )}
+                      <button type="button" className="fin-x" onClick={() => onBorrarBanco(b.id)}
+                        title="Quitar esta fila">
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {/* La siguiente fila en blanco: se escribe el nombre y el
+                    monto, y al guardarse aparece otra. Así no hay que pulsar
+                    un botón de "añadir" antes de poder escribir. */}
+                <FilaSuelta onCrear={(nombre, monto) => onCrearBanco(nombre, 0, monto)} />
               </tbody>
 
               <tfoot>
@@ -2029,6 +2098,7 @@ function PanelArqueo({
                     {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
                       {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(anotadoUsd))} anotados
+                      {gastosUsd > 0 && ` − ${miles(Math.round(gastosUsd))} de gastos`}
                     </span>
                   </td>
                 </tr>
@@ -2051,7 +2121,7 @@ function PanelArqueo({
               <span style={{ width: 86 }}>
                 <CasillaArqueo key={capitalUsd} valor={capitalUsd} moneda="USD" onGuardar={n => onCapital(n)} />
               </span>
-              {capitalDesde && <span>desde el {capitalDesde.split('-').reverse().slice(0, 2).join('/')}</span>}
+              {capitalDesde && <span>desde el {diaCorto(capitalDesde)}</span>}
             </span>
           </div>
           <p style={bajada}>
@@ -2104,6 +2174,7 @@ function PanelArqueo({
                     {cuadra && '✓ '}{miles(Math.round(supuestoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
                       {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(comisionUsd))} comisionados
+                      {gastosUsd > 0 && ` − ${miles(Math.round(gastosUsd))} de gastos`}
                       {!variosDias && totalDiaClp > 0 && ` (${miles(Math.round(enUsd(totalDiaClp)))} hoy)`}
                     </span>
                   </td>
@@ -2151,18 +2222,20 @@ function PanelArqueo({
           está: restarlo de lo que "debería haber" sería restar de una cifra
           que todavía está en duda. */}
       <div style={{ width: '100%' }}>
-        <p style={rotulo}>3 · LO QUE SALIÓ</p>
-        <p style={titulo}>Gastos</p>
+        <p style={rotulo}>3 · MIS GASTOS</p>
+        <p style={titulo}>Mis gastos</p>
         <p style={{ ...bajada, minHeight: 0 }}>
-          Lo que sale de la caja y no es un envío. Se resta de lo contado en los
-          bancos para saber con cuánto se queda la casa.
+          Lo que sale de la caja y no es un envío. Se ve el mes entero y no solo
+          el día: un gasto pesa hasta que acabe el mes, no la jornada en que se
+          anotó. Se descuenta de los dos totales de arriba.
         </p>
 
         <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>CONCEPTO</th>
+                <th style={{ ...cabecera, ...pegadaPais, textAlign: 'left', padding: '9px 10px' }}>DÍA</th>
+                <th style={{ ...cabecera, textAlign: 'left', padding: '9px 10px' }}>CONCEPTO</th>
                 <th style={{ ...cabecera, padding: '8px 10px', color: '#aebfe2' }}>MONTO</th>
                 <th style={{ ...cabecera, ...separa, color: '#f87171', borderRight: 'none' }}>EN USD</th>
               </tr>
@@ -2171,7 +2244,10 @@ function PanelArqueo({
             <tbody>
               {gastos.map(g => (
                 <tr key={g.id} className="fin-casilla" style={{ position: 'relative' }}>
-                  <td style={{ ...celda, ...pegadaPais, padding: '4px 10px' }}>
+                  <td style={{ ...celda, ...pegadaPais, padding: '6px 10px', fontSize: 11.5, color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {diaCorto(g.fecha)}
+                  </td>
+                  <td style={{ ...celda, padding: '4px 10px' }}>
                     <input className="fin-cel" style={{ textAlign: 'left', width: '100%', boxSizing: 'border-box' }}
                       defaultValue={g.concepto || ''}
                       placeholder="en qué se gastó"
@@ -2204,8 +2280,8 @@ function PanelArqueo({
 
             <tfoot>
               <tr>
-                <td style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-                  TOTAL GASTOS
+                <td colSpan={2} style={{ ...pieCelda, ...pegadaPais, padding: '9px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+                  TOTAL GASTOS DEL MES
                 </td>
                 <td style={pieCelda} />
                 <td style={{ ...pieCelda, ...separa, textAlign: 'right', padding: '9px 10px', fontSize: 14, fontWeight: 800, color: '#f87171', borderRight: 'none' }}>
@@ -2229,7 +2305,8 @@ function PanelArqueo({
             {cuadra && '✓ '}{miles(Math.round(quedaUsd))} <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>USD</span>
           </span>
           <span style={{ fontSize: 11.5, color: '#64748b' }}>
-            contado {miles(Math.round(contadoUsd))} − gastos {miles(Math.round(gastosUsd))}
+            {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(anotadoUsd))} anotados
+            {' − '}{miles(Math.round(gastosUsd))} de gastos
           </span>
           {!cuadra && (
             <span style={{ fontSize: 11.5, color: '#f87171' }}>
@@ -2239,6 +2316,49 @@ function PanelArqueo({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * La fila en blanco del final: lo que no es un país.
+ *
+ * Un pago suelto, una caja chica, un cobro aparte. Se guarda en pesos: no es
+ * de ningún país, así que no hay moneda que heredar.
+ */
+function FilaSuelta({ onCrear }) {
+  const [nombre, setNombre] = useState('')
+  const [texto, setTexto] = useState('')
+
+  const guardar = () => {
+    const monto = aNumero(texto)
+    if (!nombre.trim() || !monto) return
+    onCrear(nombre.trim(), monto)
+    setNombre('')
+    setTexto('')
+  }
+
+  return (
+    <tr>
+      <td style={{ ...celda, ...pegadaPais, padding: '4px 10px' }}>
+        <input className="fin-cel"
+          style={{ textAlign: 'left', width: '100%', boxSizing: 'border-box' }}
+          value={nombre}
+          placeholder="+ otra fila (ej: pago de Luis)"
+          onChange={e => setNombre(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardar() } }} />
+      </td>
+      <td style={{ ...celda, borderRight: 'none' }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 4, width: '100%' }}>
+          <input className="fin-cel" inputMode="decimal"
+            style={{ flex: 1, width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+            value={texto}
+            onChange={e => setTexto(conPuntos(e.target.value))}
+            onBlur={guardar}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }} />
+          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7 }}>CLP</span>
+        </span>
+      </td>
+    </tr>
   )
 }
 
@@ -2257,8 +2377,11 @@ function GastoNuevo({ onCrear }) {
 
   return (
     <tr>
-      <td style={{ ...celda, ...pegadaPais, padding: '4px 10px' }}>
-        <input className="fin-cel" style={{ textAlign: 'left', width: '100%' }}
+      <td style={{ ...celda, ...pegadaPais, padding: '6px 10px', fontSize: 11.5, color: '#475569' }}>
+        hoy
+      </td>
+      <td style={{ ...celda, padding: '4px 10px' }}>
+        <input className="fin-cel" style={{ textAlign: 'left', width: '100%', boxSizing: 'border-box' }}
           value={concepto}
           placeholder="en qué se gastó"
           onChange={e => setConcepto(e.target.value)}
