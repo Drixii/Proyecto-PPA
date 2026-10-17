@@ -2098,15 +2098,18 @@ def _tasa_de_ruta(db: Session, desde: Country, hacia: Country) -> Optional[float
 # Carteles donde el precio se publica al revés: lo que cuesta UNA unidad de la
 # moneda del destino, en vez de lo que vale una del origen.
 #
-# Chile hacia los países que trabajan en dólares. La tasa de esa ruta es
-# 0,00093 y no le dice nada a nadie; invertida son 1.075 pesos por dólar, y el
-# cliente multiplica: quiero recibir 100 en Ecuador, mando 107.500.
+# Chile hacia los países que trabajan en dólares o en euros. La tasa de esa
+# ruta es 0,00093 y no le dice nada a nadie; invertida son 1.075 pesos por
+# dólar, y el cliente multiplica: quiero recibir 100 en Ecuador, mando 107.500.
 #
 # Es la inversa de la tasa publicada, no el dólar del día más la comisión. La
 # comisión se descuenta de lo que llega, no se suma al precio: con 988 x 1,08
 # el cliente mandaría 106.800 y recibiría 99,4 dólares, y el cartel le habría
 # mentido por unos centavos.
-PRECIO_INVERTIDO = {("Chile", "USD")}
+#
+# El euro va igual. Ojo con no confundirlo con el cartel de lo que LLEGA, que
+# publica el euro a la par a propósito: son dos carteles distintos.
+PRECIO_INVERTIDO = {("Chile", "USD"), ("Chile", "EUR")}
 
 
 def _publica_invertido(origen: Country, destino: Country) -> bool:
