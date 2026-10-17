@@ -2095,6 +2095,24 @@ def _tasa_de_ruta(db: Session, desde: Country, hacia: Country) -> Optional[float
     return tasa * (1 - pct / 100)
 
 
+# Carteles donde el precio se publica al revés: lo que cuesta UNA unidad de la
+# moneda del destino, en vez de lo que vale una del origen.
+#
+# Chile hacia los países que trabajan en dólares. La tasa de esa ruta es
+# 0,00093 y no le dice nada a nadie; invertida son 1.075 pesos por dólar, y el
+# cliente multiplica: quiero recibir 100 en Ecuador, mando 107.500.
+#
+# Es la inversa de la tasa publicada, no el dólar del día más la comisión. La
+# comisión se descuenta de lo que llega, no se suma al precio: con 988 x 1,08
+# el cliente mandaría 106.800 y recibiría 99,4 dólares, y el cartel le habría
+# mentido por unos centavos.
+PRECIO_INVERTIDO = {("Chile", "USD")}
+
+
+def _publica_invertido(origen: Country, destino: Country) -> bool:
+    return (origen.name, (destino.currency or "").upper()) in PRECIO_INVERTIDO
+
+
 def _clave_recargo(iso2: str, sentido: str = "envia") -> str:
     from services.imagen_tasas import clave_imagen
 
@@ -2128,6 +2146,8 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
 
     Salen TODOS los países del listado. Al que le falte la tasa viene con None
     y en la imagen sale con una raya: si está dado de alta, tiene que verse.
+
+    Algunas rutas publican el precio invertido; ver PRECIO_INVERTIDO.
     """
     from services.exchange_service import get_rate
     from services.order_service import _get_commission
@@ -2182,6 +2202,9 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
                 valor = valor * (1 + extra / 100)
         else:
             valor = _tasa_de_ruta(db, pais, otro)
+            # Hay rutas que se publican al revés; ver PRECIO_INVERTIDO.
+            if valor and _publica_invertido(pais, otro):
+                valor = 1 / valor
 
         filas.append({
             "name": otro.name,
