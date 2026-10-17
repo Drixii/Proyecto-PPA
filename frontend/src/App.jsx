@@ -10,6 +10,7 @@ import Home from './pages/Home'
 // JavaScript antes de ver nada. El home va aparte y sin espera: es la
 // primera impresión y lo que miden los buscadores.
 const Login = lazy(() => import('./pages/Auth/Login'))
+const CalculadoraPublica = lazy(() => import('./pages/CalculadoraPublica'))
 const Dashboard = lazy(() => import('./pages/Client/Dashboard'))
 const NewTransfer = lazy(() => import('./pages/Client/NewTransfer'))
 const OrderDetail = lazy(() => import('./pages/Client/OrderDetail'))
@@ -154,6 +155,9 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Navigate to="/login" replace />} />
+        {/* El enlace que reparte cada super admin: la calculadora sola, sin
+            sesión, con su botón de WhatsApp. */}
+        <Route path="/calc/:codigo" element={<CalculadoraPublica />} />
 
         {/* Cliente */}
         <Route path="/dashboard" element={<RequireAuth role="client"><Dashboard /></RequireAuth>} />

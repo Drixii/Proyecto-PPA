@@ -2221,6 +2221,104 @@ def _filas_de_tasas(db: Session, pais: Country, sentido: str = "envia") -> list[
     return filas
 
 
+# ── La calculadora para compartir ───────────────────────────────────────────
+#
+# Un enlace público, sin sesión, con la calculadora grande y un botón que
+# escribe por WhatsApp al número de ESE super admin. Lo único que cambia de un
+# enlace a otro es el número: las comisiones son globales (ver rates.convert),
+# así que las cifras son las mismas en todos.
+#
+# El enlace lleva un código al azar y no el id del super admin. Con el id, que
+# va de uno en adelante, cualquiera recorre la lista entera y se lleva el
+# nombre y el teléfono de todos los que tengan uno puesto.
+ALFABETO_CODIGO = "abcdefghjkmnpqrstuvwxyz23456789"
+
+
+def _clave_wsap(dueno_id: int) -> str:
+    return f"calc_wsap_{dueno_id}"
+
+
+def _clave_codigo(dueno_id: int) -> str:
+    return f"calc_codigo_{dueno_id}"
+
+
+def clave_dueno_calc(codigo: str) -> str:
+    """De código a dueño. Lo lee también el enlace público, en rates.py."""
+    return f"calc_dueno_{codigo}"
+
+
+def solo_digitos(numero: str) -> str:
+    """El teléfono como lo quiere wa.me: dígitos, con el país delante.
+
+    Se escribe de muchas formas —+56 9 1234 5678, 912345678, (56) 9 1234 5678—
+    y todas tienen que acabar en el mismo sitio. Un móvil chileno son nueve
+    dígitos que empiezan por nueve; si llega así, se le pone el 56 delante,
+    que es lo que se olvida siempre.
+    """
+    limpio = "".join(c for c in str(numero or "") if c.isdigit())
+    if len(limpio) == 9 and limpio.startswith("9"):
+        limpio = "56" + limpio
+    return limpio
+
+
+def codigo_de_calculadora(db: Session, dueno_id: int) -> str:
+    """El código del enlace. Se crea la primera vez y ya no cambia."""
+    fila = db.query(Setting).filter(Setting.key == _clave_codigo(dueno_id)).first()
+    if fila and fila.value:
+        return fila.value
+    codigo = "".join(secrets.choice(ALFABETO_CODIGO) for _ in range(10))
+    db.add(Setting(key=_clave_codigo(dueno_id), value=codigo))
+    db.add(Setting(key=clave_dueno_calc(codigo), value=str(dueno_id)))
+    db.commit()
+    return codigo
+
+
+class WhatsappIn(BaseModel):
+    whatsapp: str = ""
+
+
+@router.get("/calculadora", response_model=dict)
+def ver_calculadora(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """El enlace para compartir y el número al que escribe su botón."""
+    fila = db.query(Setting).filter(Setting.key == _clave_wsap(_admin.id)).first()
+    return {
+        "success": True,
+        "data": {
+            "whatsapp": fila.value if fila else "",
+            "codigo": codigo_de_calculadora(db, _admin.id),
+        },
+        "message": "",
+    }
+
+
+@router.put("/calculadora", response_model=dict)
+def guardar_calculadora(
+    data: WhatsappIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+):
+    """Guarda el número. Vacío quita el botón del enlace, no lo deja roto."""
+    numero = solo_digitos(data.whatsapp)
+    if numero and not 8 <= len(numero) <= 15:
+        raise HTTPException(status_code=400, detail="Ese número no parece un teléfono")
+
+    clave = _clave_wsap(_admin.id)
+    fila = db.query(Setting).filter(Setting.key == clave).first()
+    if fila:
+        fila.value = numero
+    else:
+        db.add(Setting(key=clave, value=numero))
+    db.commit()
+    return {
+        "success": True,
+        "data": {"whatsapp": numero, "codigo": codigo_de_calculadora(db, _admin.id)},
+        "message": "Guardado",
+    }
+
+
 def _clave_posicion(iso2: str, sentido: str = "envia") -> str:
     from services.imagen_tasas import clave_imagen
 

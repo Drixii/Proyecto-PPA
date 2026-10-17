@@ -28,7 +28,14 @@ function parseRaw(str) {
   return Number.isFinite(numero) ? numero : 0
 }
 
-export default function CalculatorDark({ onSend }) {
+/**
+ * La calculadora de la portada.
+ *
+ * `cta` cambia el botón de abajo —texto, icono y color— y `grande` la estira
+ * para una pantalla donde la calculadora es lo único que hay. Las dos traen
+ * por defecto lo de la portada: añadirlas no cambió nada de lo que ya estaba.
+ */
+export default function CalculatorDark({ onSend, cta, grande = false }) {
   const [fromCurrency, setFromCurrency] = useState('CLP')
   // El país, no solo la moneda: Ecuador, Estados Unidos y Panamá comparten
   // el dólar y cada uno puede tener su comisión.
@@ -185,7 +192,7 @@ export default function CalculatorDark({ onSend }) {
   const flagAnim = { animation: 'flagWave 2.4s ease-in-out infinite', transformOrigin: 'left center' }
 
   return (
-    <div className="calc-dark-wrap" style={{ width: '100%', maxWidth: 420, fontFamily: "'Space Grotesk',system-ui,sans-serif" }}>
+    <div className="calc-dark-wrap" style={{ width: '100%', maxWidth: grande ? 520 : 420, fontFamily: "'Space Grotesk',system-ui,sans-serif" }}>
       <style>{`
         @keyframes flagWave{0%{transform:perspective(80px) rotateY(0deg) skewY(0deg) scaleX(1);}12%{transform:perspective(80px) rotateY(-14deg) skewY(-2.5deg) scaleX(.94);}46%{transform:perspective(80px) rotateY(2deg) scaleX(1);}62%{transform:perspective(80px) rotateY(10deg) skewY(-1.5deg) scaleX(.95);}100%{transform:perspective(80px) rotateY(0deg) scaleX(1);}}
         @keyframes glowPulse{0%,100%{opacity:.45}50%{opacity:1}}
@@ -305,12 +312,22 @@ export default function CalculatorDark({ onSend }) {
         )}
 
         {/* CTA */}
-        <button className="calc-cta" disabled={faltaMinimo}
-          onClick={() => onSend?.({ amount: rawAmount, fromCurrency, fromCountry, toCountry, toCurrency, result })}
-          style={{ marginTop: 16, width: '100%', padding: 15, fontSize: 16, fontWeight: 700, color: '#061027', background: 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)', border: 'none', borderRadius: 16, cursor: faltaMinimo ? 'not-allowed' : 'pointer', opacity: faltaMinimo ? .45 : 1, boxShadow: '0 14px 38px rgba(56,189,248,.4)' }}>
-          ¡Comienza tu envío ahora! →
+        <button className="calc-cta" disabled={faltaMinimo || cta?.desactivado}
+          onClick={() => onSend?.({ amount: rawAmount, recibe: rawRecibe, fromCurrency, fromCountry, toCountry, toCurrency, result })}
+          style={{ marginTop: 16, width: '100%', padding: 15, fontSize: 16, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+            color: cta?.color || '#061027',
+            background: cta?.fondo || 'linear-gradient(135deg,#7dd3fc,#38bdf8 55%,#818cf8)',
+            border: 'none', borderRadius: 16,
+            cursor: faltaMinimo || cta?.desactivado ? 'not-allowed' : 'pointer',
+            opacity: faltaMinimo || cta?.desactivado ? .45 : 1,
+            boxShadow: cta?.sombra || '0 14px 38px rgba(56,189,248,.4)' }}>
+          {cta?.icono}
+          {cta?.texto || '¡Comienza tu envío ahora! →'}
         </button>
-        <p className="calc-footer" style={{ margin: '11px 0 0', textAlign: 'center', fontSize: 11.5, color: '#8aa0cc' }}>🔒 Cifrado de extremo a extremo · Sin sorpresas</p>
+        <p className="calc-footer" style={{ margin: '11px 0 0', textAlign: 'center', fontSize: 11.5, color: '#8aa0cc' }}>
+          {cta?.pie || '🔒 Cifrado de extremo a extremo · Sin sorpresas'}
+        </p>
       </div>
     </div>
   )

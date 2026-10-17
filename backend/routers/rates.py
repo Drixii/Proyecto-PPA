@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.exchange_rate import ExchangeRate
 from models.country import Country
+from models.setting import Setting
+from models.user import User
 from schemas.rate import RateOut, ConvertResult, ManualRateUpdate, CountryInfo
 from services.exchange_service import (
     get_rate, set_manual_rate, fetch_and_store_rates,
@@ -137,6 +139,34 @@ def _redondea_monto(valor: float, moneda: str) -> float:
     if moneda in SIN_DECIMALES:
         return float(round(valor))
     return round(valor, 2)
+
+
+@router.get("/calculadora/{codigo}", response_model=dict)
+def calculadora_publica(codigo: str, db: Session = Depends(get_db)):
+    """De quién es este enlace y a qué WhatsApp escribe su botón.
+
+    Sin sesión: lo abre cualquiera a quien le pasen el enlace. Solo sale el
+    nombre y el número que el super admin puso a propósito para que le
+    escriban; el correo y lo demás no salen de aquí.
+    """
+    from routers.admin import clave_dueno_calc, _clave_wsap
+
+    fila = db.query(Setting).filter(Setting.key == clave_dueno_calc(codigo)).first()
+    if not fila or not fila.value.isdigit():
+        raise HTTPException(status_code=404, detail="Ese enlace no existe")
+
+    dueno = db.query(User).filter(
+        User.id == int(fila.value), User.role == "admin", User.deleted_at.is_(None),
+    ).first()
+    if not dueno:
+        raise HTTPException(status_code=404, detail="Ese enlace no existe")
+
+    wsap = db.query(Setting).filter(Setting.key == _clave_wsap(dueno.id)).first()
+    return {
+        "success": True,
+        "data": {"nombre": dueno.full_name or "", "whatsapp": wsap.value if wsap else ""},
+        "message": "",
+    }
 
 
 @router.get("/convert", response_model=dict)

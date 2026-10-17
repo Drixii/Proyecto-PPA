@@ -2368,30 +2368,36 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
 
           {/* Al final del todo: se genera cuando ya está puesto como se quiere,
               y antes había que subir a buscarlo entre los otros botones. */}
-          <button onClick={generar} disabled={cargando || !origen}
-            style={{
-              marginTop: 14, padding: '11px 22px', borderRadius: 11, border: 'none',
-              fontSize: 13, fontWeight: 700, color: '#fff',
-              cursor: cargando ? 'wait' : 'pointer',
-              background: 'linear-gradient(135deg,#22c55e,#15803d)',
-            }}>
-            {cargando ? 'Generando…' : 'Generar imagen'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 14 }}>
+            <button onClick={generar} disabled={cargando || !origen}
+              style={{
+                padding: '11px 22px', borderRadius: 11, border: 'none',
+                fontSize: 13, fontWeight: 700, color: '#fff',
+                cursor: cargando ? 'wait' : 'pointer',
+                background: 'linear-gradient(135deg,#22c55e,#15803d)',
+              }}>
+              {cargando ? 'Generando…' : 'Generar imagen'}
+            </button>
+            <EnlaceCalculadora />
+          </div>
         </>
       )}
 
       {/* Sin fondo subido no hay controles, pero se puede generar igual: sale
           la versión automática, con la foto del país. */}
       {!editor?.tiene_fondo && (
-        <button onClick={generar} disabled={cargando || !origen}
-          style={{
-            padding: '11px 22px', borderRadius: 11, border: 'none',
-            fontSize: 13, fontWeight: 700, color: '#fff',
-            cursor: cargando ? 'wait' : 'pointer',
-            background: 'linear-gradient(135deg,#22c55e,#15803d)',
-          }}>
-          {cargando ? 'Generando…' : 'Generar imagen'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <button onClick={generar} disabled={cargando || !origen}
+            style={{
+              padding: '11px 22px', borderRadius: 11, border: 'none',
+              fontSize: 13, fontWeight: 700, color: '#fff',
+              cursor: cargando ? 'wait' : 'pointer',
+              background: 'linear-gradient(135deg,#22c55e,#15803d)',
+            }}>
+            {cargando ? 'Generando…' : 'Generar imagen'}
+          </button>
+          <EnlaceCalculadora />
+        </div>
       )}
 
       {mensaje && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: '#4ade80' }}>{mensaje}</p>}
@@ -2406,6 +2412,112 @@ function ImagenDeTasas({ origen, sentido = 'envia' }) {
               Descargar imagen
             </a>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * El enlace público de la calculadora y el WhatsApp al que escribe.
+ *
+ * Va aquí, al lado de la imagen de tasas, porque es lo mismo: material para
+ * mandarle a un cliente. La imagen dice a cómo está el cambio y el enlace le
+ * deja calcular su propio envío y mandar la cuenta hecha por WhatsApp.
+ *
+ * El enlace es uno por super admin y no caduca. Lo que cambia de uno a otro
+ * es el número: las comisiones son globales, así que las cifras son las
+ * mismas en todos los enlaces.
+ */
+function EnlaceCalculadora() {
+  const qc = useQueryClient()
+  const [escrito, setEscrito] = useState(null)
+  const [copiado, setCopiado] = useState(false)
+
+  const { data } = useQuery({
+    queryKey: ['calculadora'],
+    queryFn: () => api.get('/admin/calculadora').then(r => r.data.data),
+  })
+
+  const guardar = useMutation({
+    mutationFn: numero => api.put('/admin/calculadora', { whatsapp: numero }),
+    onSuccess: () => { setEscrito(null); qc.invalidateQueries({ queryKey: ['calculadora'] }) },
+  })
+
+  // Mientras no se escriba nada manda lo guardado; en cuanto se escribe manda
+  // lo tecleado, hasta que se suelta el campo y se guarda.
+  const numero = escrito ?? (data?.whatsapp || '')
+  const enlace = data?.codigo ? `${window.location.origin}/calc/${data.codigo}` : ''
+
+  const copiar = async () => {
+    if (!enlace) return
+    try {
+      await navigator.clipboard.writeText(enlace)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      // Sin permiso de portapapeles queda el enlace a la vista para copiarlo
+      // a mano; no hay nada que avisar.
+    }
+  }
+
+  return (
+    <div style={{
+      flex: '1 1 320px', minWidth: 280, padding: '12px 14px', borderRadius: 13,
+      background: 'rgba(37,211,102,.06)', border: '1px solid rgba(37,211,102,.22)',
+    }}>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#86efac' }}>
+        Calculadora para compartir
+      </p>
+      <p style={{ margin: '4px 0 9px', fontSize: 11, lineHeight: 1.5, color: '#8aa0cc' }}>
+        Un enlace con la calculadora sola, para el móvil. Quien lo abra calcula
+        su envío y te manda la cuenta hecha por WhatsApp.
+      </p>
+
+      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#64748b', marginBottom: 4 }}>
+        TU WHATSAPP
+      </label>
+      <input
+        value={numero}
+        inputMode="tel"
+        placeholder="+56 9 1234 5678"
+        onChange={e => setEscrito(e.target.value)}
+        onBlur={() => { if (escrito !== null && escrito !== (data?.whatsapp || '')) guardar.mutate(escrito) }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }}
+        style={{
+          width: '100%', boxSizing: 'border-box', padding: '9px 11px', borderRadius: 9,
+          background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.14)',
+          color: '#eaf2ff', fontSize: 13, outline: 'none',
+        }} />
+      {guardar.isError && (
+        <p style={{ margin: '5px 0 0', fontSize: 11, color: '#f87171' }}>
+          {guardar.error?.response?.data?.detail || 'No se pudo guardar'}
+        </p>
+      )}
+      {!numero && !guardar.isError && (
+        <p style={{ margin: '5px 0 0', fontSize: 11, color: '#fcd34d' }}>
+          Sin número, el enlace funciona pero el botón de WhatsApp sale apagado.
+        </p>
+      )}
+
+      {enlace && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+          <a href={enlace} target="_blank" rel="noopener noreferrer"
+            style={{
+              flex: 1, minWidth: 0, fontSize: 11.5, color: '#38bdf8', textDecoration: 'none',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+            {enlace}
+          </a>
+          <button onClick={copiar}
+            style={{
+              padding: '7px 13px', borderRadius: 9, border: 'none', flexShrink: 0,
+              fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+              background: copiado ? 'rgba(74,222,128,.22)' : 'rgba(255,255,255,.08)',
+              color: copiado ? '#4ade80' : '#dbe6ff',
+            }}>
+            {copiado ? 'Copiado' : 'Copiar'}
+          </button>
         </div>
       )}
     </div>
