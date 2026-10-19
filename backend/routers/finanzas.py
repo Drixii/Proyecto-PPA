@@ -300,26 +300,21 @@ def _sale_gasto(g: FinanceExpense) -> dict:
     }
 
 
-def _bancos_vigentes(db: Session, dueno_id: int, hasta: date):
-    """Lo último contado en cada país, sin pasar del día que se mira.
+def _bancos_del_dia(db: Session, dueno_id: int, hasta: date):
+    """Lo contado ESE día, y nada más.
 
-    Un saldo no se acaba al cambiar de día: lo que había ayer en el banco sigue
-    ahí esta mañana. Por eso se arrastra el último conteo en vez de empezar la
-    pantalla en blanco cada día, que obligaría a reescribir diez cifras que no
-    han cambiado —y el día que se olvidara una, el arqueo diría que falta
-    dinero que está donde siempre.
+    El arqueo es un conteo, no un saldo que se hereda: cada día se abre en
+    blanco y se vuelve a contar. Hubo una versión que arrastraba el último
+    conteo de cada país para no reescribir cifras que no habían cambiado, y lo
+    que hacía era dar por contado lo que nadie había mirado hoy.
 
-    Mirando un día pasado se ve lo que estaba contado ENTONCES: no se cuelan
-    conteos posteriores, o el arqueo de aquel día no sería el que fue.
+    Cada día guarda el suyo, así que volver a una fecha pasada enseña lo que
+    se contó entonces, tal cual.
     """
-    filas = db.query(FinanceBank).filter(
+    return db.query(FinanceBank).filter(
         FinanceBank.super_admin_id == dueno_id,
-        FinanceBank.fecha <= hasta,
-    ).order_by(FinanceBank.fecha, FinanceBank.id).all()
-    ultimo: dict[str, FinanceBank] = {}
-    for b in filas:
-        ultimo[b.pais] = b
-    return list(ultimo.values())
+        FinanceBank.fecha == hasta,
+    ).order_by(FinanceBank.orden, FinanceBank.id).all()
 
 
 def _gastos_del_mes(db: Session, dueno_id: int, hasta: date):
@@ -469,7 +464,7 @@ def listar(
         # que salió en gastos. Va aquí y no en otra llamada porque es la misma
         # pantalla y el mismo rango de fechas: dos peticiones podrían contestar
         # de días distintos.
-        "bancos": [_sale_banco(b) for b in _bancos_vigentes(db, admin.id, hasta)],
+        "bancos": [_sale_banco(b) for b in _bancos_del_dia(db, admin.id, hasta)],
         "gastos": [_sale_gasto(g) for g in _gastos_del_mes(db, admin.id, hasta)],
         "porcentajes": [
             {"origen": o, "destino": d, "porcentaje": p}

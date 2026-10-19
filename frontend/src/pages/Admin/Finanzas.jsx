@@ -2132,10 +2132,11 @@ function PanelArqueo({
           <p style={rotulo}>1 · LO QUE HAY</p>
           <p style={titulo}>Saldos de los bancos</p>
           <p style={bajada}>
-            Lo que hay en el banco de cada país, en la moneda de ese país. Lo
-            contado un día sigue valiendo los siguientes hasta que se vuelva a
-            contar. El total es la suma de lo anotado, menos los gastos.
-            Arrastra ⠿ para cambiar el orden: vale para los dos cuadros.
+            Lo que hay en el banco de cada país, en la moneda de ese país. Cada
+            día empieza en blanco y se vuelve a contar; lo de ayer se queda en
+            ayer y se puede ir a ver cambiando la fecha. El total es la suma de
+            lo anotado, menos los gastos. Arrastra ⠿ para cambiar el orden:
+            vale para los dos cuadros.
           </p>
 
           <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
@@ -2165,20 +2166,15 @@ function PanelArqueo({
                           key={`${b?.id ?? 'libre'}:${b?.monto ?? ''}`}
                           valor={b ? b.monto : null}
                           moneda={b ? b.moneda : monedaDe(p.name)}
-                          onGuardar={n => (b && b.fecha === dia
+                          onGuardar={n => (b
                             ? onEditarBanco(b.id, { monto: n })
                             : onCrearBanco(p.name, 0, n))}
-                          onBorrar={b && b.fecha === dia ? () => onBorrarBanco(b.id) : null} />
+                          onBorrar={b ? () => onBorrarBanco(b.id) : null} />
                         {/* Lo mismo en dólares, debajo: es la moneda en la que
                             se compara con el cuadro de al lado. */}
                         {b && b.monto_clp > 0 && usd(b.monto_clp) !== null && (
                           <span style={{ display: 'block', textAlign: 'right', fontSize: 10.5, color: '#64748b', paddingRight: 7 }}>
                             {usd(b.monto_clp)} USD
-                            {/* De cuándo es el conteo, si no es del día que se
-                                mira: así se ve lo que lleva sin tocarse. */}
-                            {b.fecha !== dia && (
-                              <span style={{ color: '#a78b4a' }}> · del {diaCorto(b.fecha)}</span>
-                            )}
                           </span>
                         )}
                       </td>
@@ -2210,9 +2206,6 @@ function PanelArqueo({
                       {b.monto_clp > 0 && usd(b.monto_clp) !== null && (
                         <span style={{ display: 'block', textAlign: 'right', fontSize: 10.5, color: '#64748b', paddingRight: 7 }}>
                           {usd(b.monto_clp)} USD
-                          {b.fecha !== dia && (
-                            <span style={{ color: '#a78b4a' }}> · del {diaCorto(b.fecha)}</span>
-                          )}
                         </span>
                       )}
                       <button type="button" className="fin-x" onClick={() => onBorrarBanco(b.id)}
