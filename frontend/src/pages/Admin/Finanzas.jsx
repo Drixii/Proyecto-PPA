@@ -2224,23 +2224,23 @@ function PanelArqueo({
       }}>
         {cuadra ? (
           <>
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>✓ Cuadra</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>✓ Está bien</span>
             <span style={{ fontSize: 12.5, color: '#64748b' }}>
-              lo contado y lo que debería haber dan lo mismo: {miles(Math.round(contadoUsd))} USD
+              lo contado coincide con lo que debería haber: {miles(Math.round(supuestoUsd))} USD
             </span>
           </>
         ) : (
           <>
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#64748b' }}>
-              DIFERENCIA
+              {diferencia > 0 ? 'SOBRA' : 'FALTA'}
             </span>
             <span style={{ fontSize: 19, fontWeight: 800, color: '#f87171' }}>
-              {diferencia > 0 ? '+' : ''}{miles(Math.round(diferencia))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
+              {miles(Math.abs(Math.round(diferencia)))} <span style={{ fontSize: 11, fontWeight: 500 }}>USD</span>
             </span>
             <span style={{ fontSize: 12.5, color: '#f87171' }}>
               {diferencia > 0
-                ? 'hay más en los bancos de lo que dice el cuaderno'
-                : 'falta dinero respecto a lo que dice el cuaderno'}
+                ? `hay más en los bancos que lo que debería haber (${miles(Math.round(supuestoUsd))} USD)`
+                : `para llegar a lo que debería haber (${miles(Math.round(supuestoUsd))} USD)`}
             </span>
           </>
         )}
