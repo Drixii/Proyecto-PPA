@@ -2534,7 +2534,6 @@ function MercadoParalelo() {
   const [error, setError] = useState('')
   const [abierto, setAbierto] = useState(false)
   const [seleccion, setSeleccion] = useState(null)   // { country, currency, iso2 }
-  const menuRef = useRef(null)
 
   // Países del sistema. El dólar se deja fuera: es la base de todas las tasas,
   // así que "el paralelo del USD" es siempre 1 y no dice nada.
@@ -2557,14 +2556,10 @@ function MercadoParalelo() {
     setSeleccion(opciones.find(o => o.currency === 'VES') || opciones[0])
   }, [opciones.length])
 
-  // Cerrar al pulsar fuera, comprobando DÓNDE se pulsó: cerrar ante cualquier
-  // clic abre y cierra el desplegable en el mismo gesto.
-  useEffect(() => {
-    if (!abierto) return
-    const fuera = (e) => { if (!menuRef.current?.contains(e.target)) setAbierto(false) }
-    document.addEventListener('mousedown', fuera)
-    return () => document.removeEventListener('mousedown', fuera)
-  }, [abierto])
+  // De cerrar al pulsar fuera se encarga SelectorBusqueda, que sabe dónde
+  // está: en el móvil es una hoja pegada abajo, en un portal colgado del body
+  // y por tanto fuera de este bloque. Vigilarlo también desde aquí cerraba el
+  // desplegable al tocar su propio buscador o cualquiera de sus países.
 
   // Una moneda cada vez: cada consulta sale a fuentes externas, y pedirlas
   // todas de golpe tardaría decenas de segundos en abrir la pantalla.
@@ -2653,7 +2648,7 @@ function MercadoParalelo() {
         compras al oficial y prometes al paralelo, la diferencia la pagas tú en cada envío.
       </p>
 
-      <div ref={menuRef} style={{ position: 'relative', marginBottom: 14, maxWidth: 420 }}>
+      <div style={{ position: 'relative', marginBottom: 14, maxWidth: 420 }}>
         <button type="button" onClick={() => setAbierto(a => !a)}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',

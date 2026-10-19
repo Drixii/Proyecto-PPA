@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import SelectorBusqueda from '../../components/SelectorBusqueda'
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -426,13 +426,13 @@ export default function Dashboard() {
 function TasaYAcciones({ countries, rateCountry, rateCurrency, rateData, actualizado, onChange, onTransferir, onHistorial }) {
   const [dropOpen, setDropOpen] = useState(false)
   const [hace, setHace] = useState(0)
-  const cardRef = useRef()
 
-  useEffect(() => {
-    const h = (e) => { if (cardRef.current && !cardRef.current.contains(e.target)) setDropOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+  // Cerrar al pulsar fuera lo hace SelectorBusqueda, que sabe donde esta: en
+  // el movil se abre como hoja pegada abajo, en un portal colgado del body y
+  // por tanto FUERA de esta tarjeta. Habia aqui un vigilante propio que cerraba
+  // ante cualquier pulsacion ajena a la tarjeta, asi que el buscador y los
+  // paises de la hoja cerraban el desplegable en el mismo dedazo con que se
+  // iban a usar: en el telefono no se podia ni escribir ni elegir pais.
 
   // Segundos desde la última consulta. Decir "se actualiza sola" y no moverse
   // nunca no convence a nadie; el contador demuestra que está viva.
@@ -449,7 +449,7 @@ function TasaYAcciones({ countries, rateCountry, rateCurrency, rateData, actuali
   const segundos = Math.round(TASA_REFRESCO_MS / 1000)
 
   return (
-    <div ref={cardRef} className="rounded-2xl p-5 relative" style={{ ...GLASS, overflow: 'visible', border: '1px solid rgba(56,189,248,.18)' }}>
+    <div className="rounded-2xl p-5 relative" style={{ ...GLASS, overflow: 'visible', border: '1px solid rgba(56,189,248,.18)' }}>
       <div className="flex flex-col lg:flex-row lg:items-stretch gap-5">
 
         {/* Tasa */}
