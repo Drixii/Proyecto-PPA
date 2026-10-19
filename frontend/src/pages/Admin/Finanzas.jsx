@@ -2254,9 +2254,10 @@ function PanelArqueo({
         <p style={rotulo}>3 · MIS GASTOS</p>
         <p style={titulo}>Mis gastos</p>
         <p style={{ ...bajada, minHeight: 0 }}>
-          Lo que sale de la caja y no es un envío. Se ve el mes entero y no solo
-          el día: un gasto pesa hasta que acabe el mes, no la jornada en que se
-          anotó. Se descuenta de los dos totales de arriba.
+          Lo que sale de la caja y no es un envío. Lo anotado se queda aquí el
+          mes entero y se ve igual cualquier día que se mire: un gasto pesa
+          hasta que acabe el mes, no la jornada en que se anotó. Se descuenta
+          de los dos totales de arriba.
         </p>
 
         <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
