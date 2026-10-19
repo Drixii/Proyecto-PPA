@@ -30,6 +30,12 @@ from services.exchange_service import get_rate
 # moneda: con un total por cada una no hay forma de responder "cuánto llevamos".
 MONEDA_CAJA = "CLP"
 
+# Las filas del arqueo que no son un pais —un pago suelto, una caja chica, un
+# saldo en USDT— no tienen moneda que heredar. Van en dolares, que es la
+# moneda en la que se lee el arqueo entero; en pesos salian cifras de menos de
+# un dolar donde se habian escrito miles.
+MONEDA_FILA_SUELTA = "USD"
+
 router = APIRouter(prefix="/api/finanzas", tags=["finanzas"])
 log = logging.getLogger("ppa")
 
@@ -670,7 +676,7 @@ def crear_banco(
     contado el lunes tiene que seguir valiendo lo mismo cuando se lea el
     viernes.
     """
-    moneda = _moneda_de(db, datos.pais) or MONEDA_CAJA
+    moneda = _moneda_de(db, datos.pais) or MONEDA_FILA_SUELTA
     tasa = _tasa_a_caja(db, moneda)
     b = FinanceBank(
         super_admin_id=admin.id,
@@ -703,7 +709,7 @@ def editar_banco(
         # Cambiar de país cambia la moneda, así que el valor en pesos se rehace
         # con el cambio de la moneda nueva.
         b.pais = datos.pais
-        b.moneda = _moneda_de(db, datos.pais) or MONEDA_CAJA
+        b.moneda = _moneda_de(db, datos.pais) or MONEDA_FILA_SUELTA
         b.tasa_clp = _tasa_a_caja(db, b.moneda)
         b.monto_clp = b.monto * b.tasa_clp
     if datos.monto is not None:

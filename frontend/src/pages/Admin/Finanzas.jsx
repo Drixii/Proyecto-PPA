@@ -1962,7 +1962,12 @@ function PanelArqueo({
   const gastosClp = gastos.reduce((t, g) => t + (g.monto_clp || 0), 0)
   const gastosUsd = enUsd(gastosClp)
 
-  const contadoUsd = capitalUsd + anotadoUsd - gastosUsd
+  // Lo contado es lo que hay en los bancos y nada mas. El capital NO se suma
+  // aqui: ese dinero ya esta dentro de los saldos que se anotan, y sumarlo
+  // encima contaba la misma plata dos veces -27.000 de capital mas 22.811 en
+  // los bancos daban 49.704 donde habia 22.704-. El capital es la referencia
+  // del otro cuadro, el de lo que deberia haber.
+  const contadoUsd = anotadoUsd - gastosUsd
 
   // Lo que debería haber: el capital más lo comisionado desde el día en que se
   // fijó, menos lo gastado. Cada día que pasa se suma solo, sin tocar nada.
@@ -1970,7 +1975,7 @@ function PanelArqueo({
   const supuestoUsd = capitalUsd + comisionUsd - gastosUsd
 
   const diferencia = contadoUsd - supuestoUsd
-  const cuadra = Math.abs(diferencia) <= MARGEN_USD && (anotadoClp > 0 || capitalUsd > 0)
+  const cuadra = Math.abs(diferencia) <= MARGEN_USD && anotadoClp > 0
 
   // El rojo es solo del total de los bancos: es la cifra contada a mano y la
   // única que puede estar mal. Lo que debería haber sale de lo anotado en el
@@ -2013,7 +2018,7 @@ function PanelArqueo({
           <p style={bajada}>
             Lo que hay en el banco de cada país, en la moneda de ese país. Lo
             contado un día sigue valiendo los siguientes hasta que se vuelva a
-            contar. El total arranca del capital y le suma lo anotado.
+            contar. El total es la suma de lo anotado, menos los gastos.
           </p>
 
           <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
@@ -2114,7 +2119,7 @@ function PanelArqueo({
                   <td style={{ ...pieCelda, textAlign: 'right', padding: '9px 10px', fontSize: 15, fontWeight: 800, color: colorContado, borderRight: 'none' }}>
                     {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
-                      {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(anotadoUsd))} anotados
+                      {miles(Math.round(anotadoUsd))} anotados en los bancos
                       {gastosUsd > 0 && ` − ${miles(Math.round(gastosUsd))} de gastos`}
                     </span>
                   </td>
@@ -2329,7 +2334,7 @@ function PanelArqueo({
             {cuadra && '✓ '}{miles(Math.round(quedaUsd))} <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>USD</span>
           </span>
           <span style={{ fontSize: 11.5, color: '#64748b' }}>
-            {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(anotadoUsd))} anotados
+            {miles(Math.round(anotadoUsd))} anotados en los bancos
             {' − '}{miles(Math.round(gastosUsd))} de gastos
           </span>
           {!cuadra && (
@@ -2346,8 +2351,9 @@ function PanelArqueo({
 /**
  * La fila en blanco del final: lo que no es un país.
  *
- * Un pago suelto, una caja chica, un cobro aparte. Se guarda en pesos: no es
- * de ningún país, así que no hay moneda que heredar.
+ * Un pago suelto, una caja chica, un cobro aparte. Se guarda en dólares: no
+ * es de ningún país, así que no hay moneda que heredar, y en dólares es como
+ * se lee el arqueo entero.
  */
 function FilaSuelta({ onCrear }) {
   const [nombre, setNombre] = useState('')
@@ -2379,7 +2385,7 @@ function FilaSuelta({ onCrear }) {
             onChange={e => setTexto(conPuntos(e.target.value))}
             onBlur={guardar}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }} />
-          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7 }}>CLP</span>
+          <span style={{ fontSize: 10, color: '#64748b', paddingRight: 7 }}>USD</span>
         </span>
       </td>
     </tr>
