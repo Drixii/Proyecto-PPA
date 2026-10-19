@@ -130,6 +130,10 @@ export default function Finanzas() {
   // Modo de reordenar las filas, y el país que se está preguntando si quitar.
   const [ordenando, setOrdenando] = useState(false)
   const [porQuitar, setPorQuitar] = useState(null)
+  // Lo que se va a borrar, mientras se pregunta: { titulo, detalle, hacer }.
+  // Las X de esta pantalla borran una cifra que se anotó a mano y no hay
+  // papelera donde ir a buscarla, así que ninguna actúa sin preguntar.
+  const [porBorrar, setPorBorrar] = useState(null)
 
   const { data: paises = [] } = useQuery({
     queryKey: ['finanzas-paises'],
@@ -400,10 +404,15 @@ export default function Finanzas() {
     await conReintento(() => api.patch(`/finanzas/${id}`, cambios), 'el cambio en esa casilla')
     refrescar()
   }
-  const borrar = async (id) => {
+  const borrarYa = async (id) => {
     await conReintento(() => api.delete(`/finanzas/${id}`), 'borrar ese movimiento')
     refrescar()
   }
+  const borrar = (id) => setPorBorrar({
+    titulo: '¿Borrar este movimiento?',
+    detalle: 'Desaparece del día y deja de contar en los totales.',
+    hacer: () => borrarYa(id),
+  })
   const ponerPorcentaje = async (destino, porcentaje) => {
     await conReintento(
       () => api.put('/finanzas/porcentaje', { origen, destino, porcentaje }),
@@ -428,9 +437,19 @@ export default function Finanzas() {
     await conReintento(() => api.patch(`/finanzas/bancos/${id}`, cambios), 'ese saldo de banco')
     refrescar()
   }
-  const borrarBanco = async (id) => {
+  const borrarBancoYa = async (id) => {
     await conReintento(() => api.delete(`/finanzas/bancos/${id}`), 'borrar ese saldo')
     refrescar()
+  }
+  const borrarBanco = (id) => {
+    const b = bancos.find(x => x.id === id)
+    setPorBorrar({
+      titulo: '¿Borrar este saldo?',
+      detalle: b
+        ? `${b.pais}: ${miles(b.monto)} ${b.moneda}. Deja de contar en el total contado.`
+        : 'Deja de contar en el total contado.',
+      hacer: () => borrarBancoYa(id),
+    })
   }
 
   const crearGasto = async (datos) => {
@@ -444,9 +463,19 @@ export default function Finanzas() {
     await conReintento(() => api.patch(`/finanzas/gastos/${id}`, cambios), 'ese gasto')
     refrescar()
   }
-  const borrarGasto = async (id) => {
+  const borrarGastoYa = async (id) => {
     await conReintento(() => api.delete(`/finanzas/gastos/${id}`), 'borrar ese gasto')
     refrescar()
+  }
+  const borrarGasto = (id) => {
+    const g = gastos.find(x => x.id === id)
+    setPorBorrar({
+      titulo: '¿Borrar este gasto?',
+      detalle: g
+        ? `${g.concepto || 'Sin concepto'}: ${miles(g.monto)} ${g.moneda}. Vuelve a sumar en los dos totales.`
+        : 'Vuelve a sumar en los dos totales.',
+      hacer: () => borrarGastoYa(id),
+    })
   }
 
   const guardarCapital = async (capital_usd) => {
@@ -900,6 +929,14 @@ export default function Finanzas() {
           onSi={() => quitarPais(porQuitar)}
           onNo={() => setPorQuitar(null)} />
       )}
+
+      {porBorrar && (
+        <ConfirmarBorrado
+          titulo={porBorrar.titulo}
+          detalle={porBorrar.detalle}
+          onSi={() => { porBorrar.hacer(); setPorBorrar(null) }}
+          onNo={() => setPorBorrar(null)} />
+      )}
     </div>
   )
 }
@@ -945,6 +982,50 @@ function ConfirmarQuitar({ pais, onSi, onNo }) {
               background: 'rgba(248,113,113,.15)', border: '1px solid rgba(248,113,113,.45)', color: '#f87171',
             }}>
             Sí, quitarlo
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Preguntar antes de borrar una cifra anotada a mano.
+ *
+ * Mismo aspecto que el de quitar un país, pero con el texto que le toque: lo
+ * que se borra aquí no está en ningún otro sitio, y las X viven pegadas a las
+ * casillas donde se escribe.
+ */
+function ConfirmarBorrado({ titulo, detalle, onSi, onNo }) {
+  return (
+    <div
+      onClick={onNo}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(3,8,22,.72)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        backdropFilter: 'blur(3px)',
+      }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ ...GLASS, width: 'min(420px, 100%)', padding: '20px 22px' }}>
+        <p style={{ fontSize: 15, fontWeight: 700, color: '#eaf2ff' }}>{titulo}</p>
+        <p style={{ fontSize: 12.5, color: '#8aa0cc', marginTop: 9, lineHeight: 1.5 }}>
+          {detalle} No se puede deshacer.
+        </p>
+
+        <div style={{ display: 'flex', gap: 9, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onNo}
+            style={{
+              padding: '8px 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 600,
+              background: 'transparent', border: '1px solid rgba(255,255,255,.12)', color: '#aebfe2',
+            }}>
+            No, dejarlo
+          </button>
+          <button type="button" onClick={onSi}
+            style={{
+              padding: '8px 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
+              background: 'rgba(248,113,113,.15)', border: '1px solid rgba(248,113,113,.45)', color: '#f87171',
+            }}>
+            Sí, borrarlo
           </button>
         </div>
       </div>
