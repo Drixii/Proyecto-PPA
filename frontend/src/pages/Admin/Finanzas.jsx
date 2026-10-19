@@ -653,7 +653,8 @@ export default function Finanzas() {
               onCrearGasto={crearGasto}
               onEditarGasto={editarGasto}
               onBorrarGasto={borrarGasto}
-              onCapital={guardarCapital} />
+              onCapital={guardarCapital}
+              onMover={reordenar} />
           )}
 
           {/* Los países desde los que se envía. Salen solo en esta pestaña
@@ -1931,7 +1932,41 @@ function PanelArqueo({
   porOrigen, dia, totalDiaClp, variosDias, usdClp, rango,
   onCrearBanco, onEditarBanco, onBorrarBanco,
   onCrearGasto, onEditarGasto, onBorrarGasto, onCapital,
+  onMover,
 }) {
+  // El pais sobre el que se esta soltando, para enseñar donde va a caer.
+  const [encima, setEncima] = useState(null)
+
+  // Arrastrar una fila entera estorbaria a las casillas donde se escribe, asi
+  // que el que se arrastra es el tirador y la fila solo recibe. El orden es
+  // el mismo que el de la barra de arriba y el de los montos diarios: se
+  // guarda una vez y vale para los dos cuadros de aqui.
+  const tirador = nombre => (
+    <span draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('text/plain', nombre)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      title="Arrastra para cambiar el orden"
+      style={{ cursor: 'grab', color: '#475569', fontSize: 12, lineHeight: 1, userSelect: 'none', flexShrink: 0 }}>
+      ⠿
+    </span>
+  )
+
+  const zonaDeSoltar = nombre => ({
+    onDragOver: e => { e.preventDefault(); setEncima(nombre) },
+    onDragLeave: () => setEncima(a => (a === nombre ? null : a)),
+    onDrop: e => {
+      e.preventDefault()
+      setEncima(null)
+      const quien = e.dataTransfer.getData('text/plain')
+      if (quien && quien !== nombre) onMover?.(quien, nombre)
+    },
+  })
+
+  const marcaDeSoltar = nombre => (encima === nombre
+    ? { boxShadow: 'inset 0 2px 0 #38bdf8' }
+    : null)
   // Una cuenta por país: la primera que haya anotada.
   const porPais = useMemo(() => {
     const m = new Map()
@@ -2019,6 +2054,7 @@ function PanelArqueo({
             Lo que hay en el banco de cada país, en la moneda de ese país. Lo
             contado un día sigue valiendo los siguientes hasta que se vuelva a
             contar. El total es la suma de lo anotado, menos los gastos.
+            Arrastra ⠿ para cambiar el orden: vale para los dos cuadros.
           </p>
 
           <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
@@ -2034,9 +2070,10 @@ function PanelArqueo({
                 {paises.map(p => {
                   const b = porPais.get(p.name)
                   return (
-                    <tr key={p.id}>
+                    <tr key={p.id} {...zonaDeSoltar(p.name)} style={marcaDeSoltar(p.name)}>
                       <td style={pais}>
                         <span style={nombreDePais}>
+                          {tirador(p.name)}
                           <Bandera iso2={p.iso2} tam={16} />
                           {p.name}
                         </span>
@@ -2165,9 +2202,10 @@ function PanelArqueo({
                 {paises.map(p => {
                   const d = ganadoDe(p.name)
                   return (
-                    <tr key={p.id}>
+                    <tr key={p.id} {...zonaDeSoltar(p.name)} style={marcaDeSoltar(p.name)}>
                       <td style={pais}>
                         <span style={nombreDePais}>
+                          {tirador(p.name)}
                           <Bandera iso2={p.iso2} tam={16} />
                           {p.name}
                         </span>
