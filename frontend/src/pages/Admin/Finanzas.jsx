@@ -2071,19 +2071,20 @@ function PanelArqueo({
   const anotadoClp = bancos.reduce((t, b) => t + (b.monto_clp || 0), 0)
   const anotadoUsd = enUsd(anotadoClp)
 
-  // Lo gastado en el mes. Sale de los DOS totales: el dinero gastado ya no
-  // está en el banco, y tampoco tendría que estar en lo que debería haber. Si
-  // se descontara de un lado solo, cada gasto abriría un descuadre que no es
-  // tal y el arqueo dejaría de servir para lo que sirve.
+  // Lo gastado en el mes. Baja SOLO lo que debería haber. Lo contado en los
+  // bancos es un conteo: el dinero del gasto ya salió de ahí, y volver a
+  // restarlo descontaba el mismo gasto dos veces. Restando en un lado solo, un
+  // gasto sí mueve la diferencia, que es de lo que se trata: cada peso que sale
+  // de la caja tiene que aparecer anotado abajo o el cuadre lo canta.
   const gastosClp = gastos.reduce((t, g) => t + (g.monto_clp || 0), 0)
   const gastosUsd = enUsd(gastosClp)
 
-  // Lo contado es lo que hay en los bancos y nada mas. El capital NO se suma
-  // aqui: ese dinero ya esta dentro de los saldos que se anotan, y sumarlo
-  // encima contaba la misma plata dos veces -27.000 de capital mas 22.811 en
-  // los bancos daban 49.704 donde habia 22.704-. El capital es la referencia
-  // del otro cuadro, el de lo que deberia haber.
-  const contadoUsd = anotadoUsd - gastosUsd
+  // Lo contado es lo que hay en los bancos y nada mas: ni se le suma el capital
+  // -ese dinero ya esta dentro de los saldos que se anotan, y sumarlo encima
+  // contaba la misma plata dos veces- ni se le restan los gastos, que ya
+  // salieron de esos mismos saldos. Es la cifra de la realidad, tal como se
+  // cuenta; lo demas es el otro cuadro, el de lo que deberia haber.
+  const contadoUsd = anotadoUsd
 
   // Lo que debería haber: el capital más lo comisionado desde el día en que se
   // fijó, menos lo gastado. Cada día que pasa se suma solo, sin tocar nada.
@@ -2100,7 +2101,10 @@ function PanelArqueo({
   const colorContado = cuadra ? '#4ade80' : '#f87171'
   const color = cuadra ? '#4ade80' : '#eaf2ff'
 
-  const quedaUsd = contadoUsd
+  // Lo que queda de verdad despues de los gastos del mes. Aqui si se restan:
+  // este renglon no compara nada, responde a "cuanto me queda", y la resta se
+  // ve escrita debajo de la cifra.
+  const quedaUsd = anotadoUsd - gastosUsd
 
   // Mirando un día anterior al que se fijó el capital no hay nada que
   // arrastrar: el capital de hoy no era el de entonces. La comisión de ese día
@@ -2231,7 +2235,6 @@ function PanelArqueo({
                     {cuadra && '✓ '}{miles(Math.round(contadoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
                       {miles(Math.round(anotadoUsd))} anotados en los bancos
-                      {gastosUsd > 0 && ` − ${miles(Math.round(gastosUsd))} de gastos`}
                     </span>
                   </td>
                 </tr>
