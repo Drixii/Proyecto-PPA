@@ -2139,8 +2139,9 @@ function PanelArqueo({
             Lo que hay en el banco de cada país, en la moneda de ese país. Cada
             día empieza en blanco y se vuelve a contar; lo de ayer se queda en
             ayer y se puede ir a ver cambiando la fecha. El total es la suma de
-            lo anotado, menos los gastos. Arrastra ⠿ para cambiar el orden:
-            vale para los dos cuadros.
+            lo anotado, sin quitarle nada: los gastos ya salieron de estos
+            saldos y se descuentan en el cuadro de al lado. Arrastra ⠿ para
+            cambiar el orden: vale para los dos cuadros.
           </p>
 
           <div style={{ ...GLASS, width: '100%', overflow: 'auto' }}>
