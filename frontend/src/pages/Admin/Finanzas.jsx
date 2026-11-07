@@ -670,6 +670,7 @@ export default function Finanzas() {
               capitalUsd={prefs.capital_usd || 0}
               capitalDesde={prefs.capital_desde}
               comisionDesdeCapitalClp={respuesta?.comision_desde_capital || 0}
+              gastosDesdeCapitalClp={respuesta?.gastos_desde_capital || 0}
               porOrigen={porOrigen}
               dia={desde}
               totalDiaClp={totales[0]?.ganado || 0}
@@ -2010,6 +2011,7 @@ function CasillaArqueo({ valor, moneda, onGuardar, onBorrar, placeholder }) {
  */
 function PanelArqueo({
   paises, monedaDe, bancos, gastos, capitalUsd, capitalDesde, comisionDesdeCapitalClp,
+  gastosDesdeCapitalClp,
   porOrigen, dia, totalDiaClp, variosDias, usdClp, rango,
   onCrearBanco, onEditarBanco, onBorrarBanco,
   onCrearGasto, onEditarGasto, onBorrarGasto, onCapital,
@@ -2089,7 +2091,11 @@ function PanelArqueo({
   // Lo que debería haber: el capital más lo comisionado desde el día en que se
   // fijó, menos lo gastado. Cada día que pasa se suma solo, sin tocar nada.
   const comisionUsd = enUsd(comisionDesdeCapitalClp)
-  const supuestoUsd = capitalUsd + comisionUsd - gastosUsd
+  // Los gastos que descuenta el cuadre son TODOS los de desde el capital, no
+  // los del mes que se mira. Si no, cada 1 de mes los del mes anterior dejaban
+  // de restar y la cifra saltaba hacia arriba pidiendo dinero ya gastado.
+  const gastosAcumUsd = enUsd(gastosDesdeCapitalClp)
+  const supuestoUsd = capitalUsd + comisionUsd - gastosAcumUsd
 
   const diferencia = contadoUsd - supuestoUsd
   const cuadra = Math.abs(diferencia) <= MARGEN_USD && anotadoClp > 0
@@ -2312,7 +2318,10 @@ function PanelArqueo({
                     {cuadra && '✓ '}{miles(Math.round(supuestoUsd))} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>USD</span>
                     <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#64748b' }}>
                       {miles(Math.round(capitalUsd))} de capital + {miles(Math.round(comisionUsd))} comisionados
-                      {gastosUsd > 0 && ` − ${miles(Math.round(gastosUsd))} de gastos`}
+                      {/* "desde el ..." y no a secas: lo que resta aquí no es
+                          el total de la lista de abajo, que es del mes. */}
+                      {gastosAcumUsd > 0 && ` − ${miles(Math.round(gastosAcumUsd))} de gastos${
+                        capitalDesde ? ` desde el ${diaCorto(capitalDesde)}` : ''}`}
                       {!antesDelCapital && !variosDias && totalDiaClp > 0
                         && ` (${miles(Math.round(enUsd(totalDiaClp)))} de este día)`}
                     </span>

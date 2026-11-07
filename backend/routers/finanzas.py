@@ -341,6 +341,35 @@ def _gastos_del_mes(db: Session, dueno_id: int, hasta: date):
     ).order_by(FinanceExpense.fecha, FinanceExpense.orden, FinanceExpense.id).all()
 
 
+def _gastos_desde_capital(db: Session, dueno_id: int, base: Optional[date], hasta: date) -> float:
+    """Lo gastado entre el día del capital y el que se está mirando, en CLP.
+
+    Misma ventana que `_comision_desde`, y por el mismo motivo: el cuadro de lo
+    que debería haber suma las comisiones desde el día del capital, así que
+    tiene que restar los gastos desde ese mismo día. Cuando restaba solo los
+    del mes en curso, cada 1 de mes los del mes anterior dejaban de contar y la
+    cifra subía de golpe: el 1 de noviembre pidió 4.413 USD que se habían
+    gastado en octubre y no habían vuelto al banco, y hubo que tapar el hueco
+    anotando a mano un gasto que no existía.
+
+    El dinero gastado no vuelve al cambiar de mes. La lista de abajo sí es
+    mensual —es la libreta de gastos del mes— pero el cuadre no.
+
+    Sin día de capital se cuenta el mes del día que se mira, que es lo único
+    que se puede afirmar sin saber desde cuándo vale la cifra.
+    """
+    if not base:
+        return sum(g.monto_clp or 0 for g in _gastos_del_mes(db, dueno_id, hasta))
+    if hasta < base:
+        return 0.0
+    filas = db.query(FinanceExpense).filter(
+        FinanceExpense.super_admin_id == dueno_id,
+        FinanceExpense.fecha >= base,
+        FinanceExpense.fecha <= hasta,
+    ).all()
+    return sum(g.monto_clp or 0 for g in filas)
+
+
 def _mi_banco(db: Session, fila_id: int, dueno: User) -> FinanceBank:
     """La cuenta contada, si es de quien pregunta. Si no, no existe."""
     b = db.query(FinanceBank).filter(
@@ -460,6 +489,12 @@ def listar(
         # y no en la pantalla porque necesita TODOS los apuntes, no solo los
         # del rango que se esté viendo.
         "comision_desde_capital": round(_comision_desde(todo, prefs.capital_desde, desde, hasta), 2),
+        # Y lo gastado en esa misma ventana. La lista de `gastos` de más abajo
+        # sigue siendo la del mes —esa es la libreta que se mira y se edita—,
+        # pero el cuadre necesita todo lo que salió desde el capital o cada 1
+        # de mes se desarma.
+        "gastos_desde_capital": round(
+            _gastos_desde_capital(db, admin.id, prefs.capital_desde, hasta), 2),
         # El arqueo del rango que se está viendo: lo contado en los bancos y lo
         # que salió en gastos. Va aquí y no en otra llamada porque es la misma
         # pantalla y el mismo rango de fechas: dos peticiones podrían contestar
