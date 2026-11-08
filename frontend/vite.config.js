@@ -100,7 +100,31 @@ export default defineConfig({
         // El service worker lo genera workbox en cada build, así que el
         // manejador de notificaciones no puede vivir dentro: se importa.
         importScripts: ['/push-sw.js'],
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        // Solo el esqueleto de la app. Antes entraban TODAS las imagenes:
+        // 192 archivos y 3,9 MB, con el banner de vuelos de 1,5 MB y el
+        // centenar de logos de bancos dentro. El service worker no queda
+        // activo hasta terminar de bajar eso —27 s con buena conexion, mucho
+        // mas con datos moviles— y Chrome no ofrece instalar la app mientras
+        // el worker no este activo: quien tocaba el boton antes de tiempo no
+        // conseguia instalar nada.
+        globPatterns: ['**/*.{js,css,html,ico,webmanifest}', 'icons/app3-*.png', 'favicon.png', 'apple-touch-icon.png'],
+        // Las imagenes se guardan la primera vez que se ven, no al instalar.
+        // Los logos de los bancos siguen quedando sin conexion —que era el
+        // motivo de servirlos nosotros— en cuanto se abre la lista una vez.
+        // Fuera /uploads: ahi viven los comprobantes de cada cliente y no
+        // tienen por que quedarse en el telefono mas de la cuenta.
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) => request.destination === 'image'
+              && !url.pathname.startsWith('/uploads') && !url.pathname.startsWith('/api'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'imagenes',
+              expiration: { maxEntries: 250, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/uploads/, /^\/ws/],
         // El worker nuevo toma el control sin esperar a que se cierren las
