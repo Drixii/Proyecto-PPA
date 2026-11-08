@@ -9,8 +9,10 @@ self.addEventListener('push', function (evento) {
   var titulo = datos.title || 'KSA Global Evolution';
   var opciones = {
     body: datos.body || '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    // El «maskable»: Android recorta en círculo también el icono del aviso,
+    // y el logo suelto de antes se veía cortado por los bordes.
+    icon: '/icons/app3-maskable-192.png',
+    badge: '/icons/app3-maskable-192.png',
     // Con la misma etiqueta, el aviso nuevo de una orden reemplaza al anterior
     // en vez de apilarse: cinco cambios de estado no dejan cinco avisos.
     tag: datos.tag || undefined,

@@ -95,7 +95,7 @@ export default defineConfig({
       // El susto de la recarga a destiempo lo cubre AvisoActualizacion, que
       // espera a que no haya una ventana abierta ni un campo en uso.
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'icons/app2-192.png', 'icons/app2-512.png', 'icons/app2-maskable-192.png', 'icons/app2-maskable-512.png'],
+      includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'icons/app3-192.png', 'icons/app3-512.png', 'icons/app3-maskable-192.png', 'icons/app3-maskable-512.png'],
       workbox: {
         // El service worker lo genera workbox en cada build, así que el
         // manejador de notificaciones no puede vivir dentro: se importa.
@@ -128,16 +128,28 @@ export default defineConfig({
         related_applications: [
           { platform: 'webapp', url: 'https://ksaglobal-evolution.com/manifest.webmanifest' },
         ],
-        // Iconos con fondo de la marca y el logo con aire alrededor. Los de
-        // antes eran el logo transparente llenando todo el cuadro, y el mismo
-        // archivo servía de «maskable»: Android lo recortaba al círculo y el
-        // globo quedaba cortado y pegado a los bordes. Nombres nuevos a
-        // propósito, para que los teléfonos no sigan con los viejos en caché.
+        // Iconos con fondo de la marca. Los primeros eran el logo transparente
+        // llenando todo el cuadro, y el mismo archivo servía de «maskable»:
+        // Android lo recortaba al círculo y el globo quedaba cortado.
+        //
+        // Los segundos (app2) arreglaron el recorte pasandose de prudentes: el
+        // dibujo ocupaba el 44% del cuadro en el «maskable», así que en la
+        // pantalla de inicio se veía un globo chico perdido en un cuadro
+        // oscuro. Y los dos se encuadraban contando la sombra del logo, que es
+        // una elipse gris suelta debajo del dibujo: eso empujaba el globo hacia
+        // arriba y lo dejaba descentrado.
+        //
+        // Estos (app3) salen del logo sin la sombra, centrados a ojo —el
+        // dibujo es diagonal y la esfera pesa abajo a la izquierda— y ocupando
+        // el 76% del cuadro, o el 64% en el «maskable», que es todo lo que
+        // cabe dentro del círculo seguro del 80%. Se generan con
+        // scripts/hacer_iconos.py. Nombres nuevos a propósito, para que los
+        // teléfonos no sigan con los viejos en caché.
         icons: [
-          { src: '/icons/app2-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icons/app2-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icons/app2-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/icons/app2-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/app3-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/app3-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/app3-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/app3-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),
