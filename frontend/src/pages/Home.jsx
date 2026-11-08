@@ -35,16 +35,8 @@ const RD = (d) => ({ ...R0, transitionDelay: `${d}s,${d}s` })
 export default function Home() {
   const navigate = useNavigate()
   const { user } = useStore()
-  const deferredPrompt = useRef(null)
-  const [canInstall, setCanInstall] = useState(false)
-
-  useEffect(() => {
-    const handler = (e) => { e.preventDefault(); deferredPrompt.current = e; setCanInstall(true) }
-    window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
-  }, [])
-
-  const [showHint, setShowHint] = useState(false)
+  // El botón de instalar se fue a components/BotonInstalar.jsx y se monta
+  // en App: aquí solo lo veía quien pasaba por la portada.
 
   // La primera vez que se abre la web en esta pestaña hay una presentación:
   // primero se ve solo el globo, después baja el header y al final entra el
@@ -79,19 +71,6 @@ export default function Home() {
     ]
     return () => relojes.forEach(clearTimeout)
   }, [])
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
-
-  const handleInstall = async () => {
-    if (deferredPrompt.current) {
-      deferredPrompt.current.prompt()
-      await deferredPrompt.current.userChoice
-      deferredPrompt.current = null
-      setCanInstall(false)
-    } else {
-      setShowHint(h => !h)
-    }
-  }
-
   // Carga globe.js desde /public — IIFE que busca los IDs en el DOM
   useEffect(() => {
     const script = document.createElement('script')
@@ -304,7 +283,6 @@ export default function Home() {
           .feature-card h3{font-size:14px!important;}
           .feature-card p{font-size:13px!important;}
           .feature-icon{width:38px!important;height:38px!important;border-radius:11px!important;margin-bottom:10px!important;}
-          .mob-fab{display:flex!important;}
         }
         @media(max-width:480px){
           .section-pad{padding:44px 12px;}
@@ -322,9 +300,8 @@ export default function Home() {
           .nav-marca p:last-child{display:none!important;}
           .nav-auth .interruptor-tema{width:30px!important;height:30px!important;}
           .nav-auth .interruptor-tema svg{width:14px!important;height:14px!important;}
-          .mob-fab{display:flex!important;}
         }
-        @media(min-width:769px){ .mob-fab{display:none!important;}.mob-scroll-hint{display:none!important;} }
+        @media(min-width:769px){ .mob-scroll-hint{display:none!important;} }
         @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
       `}</style>
 
@@ -465,39 +442,6 @@ export default function Home() {
 
       {/* ── FOOTER ── */}
       <Suspense fallback={null}><PiePagina /></Suspense>
-
-      {/* Mobile floating PWA install button.
-          Redondo y sin texto: con «Instalar app» escrito ocupaba la mitad del
-          ancho justo a la altura de «Toca aquí para más información», y tapaba
-          el final de la frase. El texto de cómo instalar sigue saliendo al
-          tocarlo. */}
-      <div className="mob-fab" style={{ position:'fixed', bottom:'calc(8px + env(safe-area-inset-bottom, 0px))', right:14, zIndex:200, flexDirection:'column', alignItems:'flex-end', gap:8 }}>
-        {showHint && (
-          <div style={{ background:'rgba(8,16,44,.97)', border:'1px solid rgba(56,189,248,.3)', borderRadius:14, padding:'12px 14px', maxWidth:220, fontSize:13, color:'#aebfe2', lineHeight:1.5, boxShadow:'0 8px 24px rgba(0,0,0,.5)' }}>
-            {isIOS
-              ? <>En Safari: toca <strong style={{color:'#38bdf8'}}>Compartir</strong> → <strong style={{color:'#38bdf8'}}>Añadir a pantalla de inicio</ strong></>
-              : <>En Chrome: toca los <strong style={{color:'#38bdf8'}}>3 puntos</strong> (⋮) → <strong style={{color:'#38bdf8'}}>Instalar aplicación</strong></>
-            }
-          </div>
-        )}
-        <button
-          onClick={handleInstall}
-          aria-label="Instalar app"
-          title="Instalar app"
-          style={{
-            display:'flex', alignItems:'center', justifyContent:'center',
-            width:42, height:42, padding:0,
-            background:'linear-gradient(135deg,#1d4ed8,#38bdf8)',
-            color:'#fff', border:'none', borderRadius:'50%',
-            boxShadow:'0 6px 18px rgba(56,189,248,.45)',
-            cursor:'pointer',
-          }}
-        >
-          <svg width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-        </button>
-      </div>
 
     </div>
   )

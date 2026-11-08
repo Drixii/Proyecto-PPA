@@ -222,6 +222,11 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
     return {
         "success": True,
         "data": _user_out(current_user, db),
+        # Token nuevo cada vez que la app arranca, que es cuando la web
+        # llama aquí. Lo que echa a alguien pasa a ser dejar de abrirla
+        # durante todo el plazo, no que el plazo haya corrido desde el día
+        # que inició sesión. Para el admin eso significa no salir nunca.
+        "token": create_access_token({"sub": str(current_user.id), "role": current_user.role}),
         "message": ""
     }
 

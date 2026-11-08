@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str = _DEV_SECRET
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_DAYS: int = 7
+    # El panel se abre todos los días y desde el teléfono. Con la sesión
+    # caducando cada semana, el admin tenía que escribir la contraseña
+    # delante de quien estuviera al lado para mirar una cifra. `/auth/me`
+    # renueva el token en cada apertura, así que esto es el tope de tiempo
+    # que puede pasar SIN abrir la app antes de tener que entrar de nuevo.
+    ACCESS_TOKEN_EXPIRE_DAYS_ADMIN: int = 365
     FEE_PERCENTAGE: float = 1.5  # 1.5% comisión por defecto
 
     # extra="ignore" es obligatorio: pydantic-settings carga TODAS las claves

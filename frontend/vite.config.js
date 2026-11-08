@@ -120,6 +120,14 @@ export default defineConfig({
         background_color: '#060d22',
         theme_color: '#38bdf8',
         orientation: 'portrait',
+        // El manifiesto se declara a sí mismo para que
+        // `navigator.getInstalledRelatedApps()` pueda responder si la app ya
+        // está instalada cuando la web se abre en una pestaña normal, y deje
+        // de responderlo en cuanto se borra: así el botón de instalar
+        // desaparece al instalarla y vuelve a salir si la desinstalan.
+        related_applications: [
+          { platform: 'webapp', url: 'https://ksaglobal-evolution.com/manifest.webmanifest' },
+        ],
         // Iconos con fondo de la marca y el logo con aire alrededor. Los de
         // antes eran el logo transparente llenando todo el cuadro, y el mismo
         // archivo servía de «maskable»: Android lo recortaba al círculo y el

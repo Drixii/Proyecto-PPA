@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AvisoActualizacion from './components/AvisoActualizacion'
+import BotonInstalar from './components/BotonInstalar'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useStore } from './store/useStore'
 import api from './services/api'
@@ -50,10 +51,15 @@ function RequireAuth({ children, role }) {
 }
 
 function UserRefresh() {
-  const { token, setUser } = useStore()
+  const { token, setUser, setToken } = useStore()
   useEffect(() => {
     if (!token) return
-    api.get('/auth/me').then(r => setUser(r.data.data)).catch(() => {})
+    api.get('/auth/me').then(r => {
+      setUser(r.data.data)
+      // El servidor manda un token recién firmado en cada arranque. Mientras
+      // la app se abra, la sesión no caduca; el admin ya no la pierde.
+      if (r.data.token) setToken(r.data.token)
+    }).catch(() => {})
   }, [])
   return null
 }
@@ -150,6 +156,9 @@ export default function App() {
       <AvisoActualizacion />
       <UserRefresh />
       <ForceChangePassword />
+      {/* Fuera de las rutas: el botón de instalar acompaña a todas las
+          pantallas, no solo al inicio. */}
+      <BotonInstalar />
       <Suspense fallback={<div style={{ minHeight: '100vh', background: '#060d22' }} />}>
       <Routes>
         <Route path="/" element={<Home />} />

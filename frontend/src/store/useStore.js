@@ -28,6 +28,13 @@ export const useStore = create((set) => ({
 
   setRates: (rates) => set({ rates }),
 
+  // Cambia el token sin tocar al usuario: lo usa la renovación de la
+  // sesión al arrancar la app.
+  setToken: (token) => {
+    localStorage.setItem('token', token)
+    set({ token })
+  },
+
   setUser: (user) => {
     localStorage.setItem('user', JSON.stringify(user))
     set({ user })
