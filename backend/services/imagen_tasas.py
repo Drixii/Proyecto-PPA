@@ -290,16 +290,24 @@ def formatea_tasa(valor: float) -> str:
     0,00123 / 0,000123— y se usa coma decimal, que es como se lee en la region.
     Con cuatro, los numeros largos empujaban al nombre del pais y lo encogian.
 
+    De 1 a 99,99 van siempre DOS decimales, aunque sean ceros: 1,00 y 5,50, no
+    1 y 5,5. Un numero pelado en un cartel de tasas se lee como si faltara
+    algo, y la columna queda despareja cuando unos traen coma y otros no.
+
     De 100 para arriba se redondea a entero: 872,98 se lee 873. Los decimales
     ahi no dicen nada —nadie decide un envio por 98 centesimos de bolivar— y
     solo alargan el numero en un cartel que se mira de lejos.
     """
     if valor is None:
         return "—"
-    if valor >= 100:
+    # Se mira el valor YA redondeado a dos decimales: 99,999 con el crudo
+    # caia en la rama de los decimales y salia "100,00", un numero de tres
+    # cifras con coma en una columna donde el resto va entero.
+    if round(valor, 2) >= 100:
         texto = f"{valor:,.0f}".replace(",", ".")
     elif valor >= 1:
-        texto = f"{valor:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        # Sin quitar los ceros de la derecha: eso es lo que dejaba 1 y 5,5.
+        texto = f"{valor:.2f}".replace(".", ",")
     else:
         # Tres cifras significativas: 0,00483 en vez de 0,00.
         #
