@@ -52,19 +52,17 @@ export default function BotonInstalar() {
     mqApp?.addEventListener?.('change', verApp)
     mqMovil?.addEventListener?.('change', verMovil)
 
-    // Instalada, pero abierta en una pestaña normal del navegador: ahí no
-    // valen ni display-mode ni beforeinstallprompt. Chrome lo responde si el
-    // manifiesto se declara a sí mismo en `related_applications`, y deja de
-    // responderlo en cuanto la app se borra, que es justo lo que se busca.
-    // Si el navegador no trae esta función el botón se queda, y lo peor que
-    // pasa es ofrecer instalar algo que ya está instalado.
-    let vivo = true
-    navigator.getInstalledRelatedApps?.()
-      .then((apps) => { if (vivo && apps?.length) setInstalada(true) })
-      .catch(() => {})
+    // Aquí se consultaba `getInstalledRelatedApps()` para esconder el botón
+    // cuando la app ya estaba instalada aunque se abriera en una pestaña
+    // normal. Se quitó: esa respuesta tarda en ponerse al día cuando la app
+    // se desinstala, y el resultado era el peor de los dos: quien la borraba
+    // del teléfono no encontraba cómo volver a instalarla.
+    //
+    // Ahora solo se esconde cuando de verdad se está DENTRO de la app. Que
+    // sobre un botón a quien ya la tiene es molestia menor; que falte a quien
+    // no la tiene es no poder instalarla.
 
     return () => {
-      vivo = false
       window.removeEventListener('beforeinstallprompt', alOfrecer)
       window.removeEventListener('appinstalled', alInstalar)
       mqApp?.removeEventListener?.('change', verApp)
