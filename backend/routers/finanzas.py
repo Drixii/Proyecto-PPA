@@ -1,14 +1,21 @@
 """El cuaderno de finanzas del super-admin.
 
-Capital, lo generado cada día y el acumulado. Lo escribe él: no se alimenta de
-los envíos de la web a propósito, porque también entra por aquí lo que se movió
-fuera de la plataforma.
+Capital, lo generado cada día y el acumulado. Lo escribe él a mano, porque por
+aquí entra también lo que se movió fuera de la plataforma, que ningún listado
+de envíos sabe.
+
+A lo escrito a mano se le suman los envíos que SÍ pasaron por la web, marcados
+como "Sistema". Son de lectura: se calculan al leer desde la tabla de órdenes y
+no se guardan como apuntes, así que no se pueden editar ni borrar desde aquí y
+corregir una orden se refleja solo. Lo que no hay que hacer es volver a
+escribirlos a mano: se contarían dos veces.
 
 Cada super-admin ve solo lo suyo, y eso se comprueba en cada operación contra
 el dueño guardado en la fila, nunca contra lo que venga en la petición.
 """
 import json
 import logging
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Optional
@@ -23,8 +30,22 @@ from models.country import Country
 from models.finance_entry import (
     FinanceEntry, FinanceRate, FinancePref, FinanceBank, FinanceExpense,
 )
+from models.order import Order
 from models.user import User
 from services.exchange_service import get_rate
+
+# La zona en la que se lleva el cuaderno. El servidor va en UTC: sin esto, un
+# envío de las nueve de la noche del día 30 caería en el día 1.
+ZONA = ZoneInfo("America/Santiago")
+
+# Los estados en los que un envío de la web ya es una venta hecha: el dinero
+# del cliente entró y la comisión está cobrada.
+#
+# `pendiente_pago` no entra porque es una orden sin pagar, `en_aprobacion`
+# tampoco porque nadie ha comprobado todavía el comprobante, y `rechazado`
+# menos. `en_proceso` sí: el pago ya está aprobado y lo único que falta es
+# entregar al receptor.
+VENTAS_ESTADOS = ("completado", "en_proceso")
 
 # Todo lo que se suma se suma en pesos chilenos. La casa lleva la caja en una
 # moneda: con un total por cada una no hay forma de responder "cuánto llevamos".
@@ -149,6 +170,115 @@ def _pct_de_ruta(db: Session, dueno_id: int, origen: str, destino: str) -> float
         FinanceRate.destino == destino,
     ).first()
     return f.porcentaje if f else 0.0
+
+
+@dataclass
+class VentaSistema:
+    """Un envío hecho por la web, vestido de apunte del cuaderno.
+
+    Trae los mismos campos que `FinanceEntry` para poder pasar por las mismas
+    sumas —`_suma_en_caja`, `_comision_desde`— sin escribirlas dos veces.
+
+    No se guarda en ninguna tabla: se calcula cada vez que se lee la pantalla.
+    Así no hay dos verdades que puedan separarse, y si una orden se corrige, se
+    rechaza o se borra, el cuaderno se entera solo.
+    """
+    id: str
+    fecha: date
+    origen: str
+    destino: str
+    moneda: str
+    monto: float
+    porcentaje: float
+    tasa_clp: float
+    monto_clp: float
+    orden: int
+    nota: Optional[str]
+    numero: str
+    estado: str
+
+
+def _dia_chileno(cuando: datetime) -> date:
+    """El día al que pertenece ese instante en Chile."""
+    if cuando.tzinfo is None:
+        return cuando.date()
+    return cuando.astimezone(ZONA).date()
+
+
+def _ventas_sistema(db: Session, dueno_id: int) -> list[VentaSistema]:
+    """Los envíos de la web que ya son venta, listos para sumar.
+
+    El porcentaje sale de la comisión que cobró la propia orden —`fee` sobre lo
+    enviado— y no del porcentaje que tenga puesta la ruta en esta pantalla: lo
+    que se cobró ese día es un hecho, y el porcentaje de la ruta es lo que se
+    cobra hoy. Si mañana cambia, las ventas de ayer no cambian con él.
+
+    La fecha es la de completado, o la de creación si todavía no se completó:
+    la venta cuenta el día en que se hizo.
+    """
+    filas = db.query(Order).filter(
+        Order.super_admin_id == dueno_id,
+        Order.deleted_at.is_(None),
+        Order.status.in_(VENTAS_ESTADOS),
+    ).order_by(Order.id).all()
+
+    # Una sola consulta de tasa por moneda: el bucle puede traer decenas de
+    # órdenes de la misma.
+    tasas: dict[str, float] = {}
+    salida: list[VentaSistema] = []
+
+    for o in filas:
+        cuando = o.completed_at or o.created_at
+        if not cuando:
+            continue
+        moneda = o.currency_from or ""
+        if moneda not in tasas:
+            tasas[moneda] = _tasa_a_caja(db, moneda)
+        tasa = tasas[moneda]
+        monto = o.amount_sent or 0.0
+        salida.append(VentaSistema(
+            id=f"sys-{o.id}",
+            fecha=_dia_chileno(cuando),
+            origen=o.sender_country or "",
+            destino=o.receiver_country or "",
+            moneda=moneda,
+            monto=monto,
+            porcentaje=round((o.fee or 0.0) / monto * 100, 4) if monto else 0.0,
+            tasa_clp=tasa,
+            monto_clp=monto * tasa,
+            orden=0,
+            nota=o.receiver_name,
+            numero=o.order_number,
+            estado=o.status,
+        ))
+
+    return salida
+
+
+def _sale_venta(v: VentaSistema) -> dict:
+    """Una venta del sistema con la misma forma que un apunte, y marcada.
+
+    `sistema: True` es lo que hace que la pantalla le ponga la etiqueta y no
+    ofrezca editarla ni borrarla.
+    """
+    return {
+        "id": v.id,
+        "fecha": v.fecha.isoformat(),
+        "origen": v.origen,
+        "destino": v.destino,
+        "moneda": v.moneda,
+        "monto": round(v.monto, 2),
+        "porcentaje": v.porcentaje,
+        "ganancia": round(v.monto * v.porcentaje / 100, 2),
+        "monto_clp": round(v.monto_clp, 2),
+        "ganancia_clp": round(v.monto_clp * v.porcentaje / 100, 2),
+        "tasa_clp": v.tasa_clp,
+        "orden": v.orden,
+        "nota": v.nota,
+        "sistema": True,
+        "numero": v.numero,
+        "estado": v.estado,
+    }
 
 
 def _sale(a: FinanceEntry) -> dict:
@@ -421,7 +551,15 @@ def listar(
 
     apuntes = [_sale(a) for a in filas]
 
-    por_origen, total_dia, sin_tasa_dia = _suma_en_caja(filas)
+    # Los envíos de la web. Se calculan todos y se recortan después, porque los
+    # totales de abajo necesitan unos del rango y otros del mes entero.
+    ventas = _ventas_sistema(db, admin.id)
+    ventas_rango = [v for v in ventas if desde <= v.fecha <= hasta]
+
+    # Lo anotado a mano y lo vendido por la web se suman juntos: es el mismo
+    # dinero y la misma caja. La pantalla los distingue fila por fila con la
+    # etiqueta "Sistema", pero en los totales no hay dos cajas.
+    por_origen, total_dia, sin_tasa_dia = _suma_en_caja([*filas, *ventas_rango])
 
     # Y el acumulado del mes en curso, que es lo que va sumando día tras día.
     #
@@ -430,7 +568,7 @@ def listar(
     # dos veces. El mes se toma del calendario chileno, no del reloj del
     # servidor, que va en UTC y el primer día del mes cambiaría de mes a las
     # nueve de la noche.
-    hoy_chile = datetime.now(ZoneInfo("America/Santiago")).date()
+    hoy_chile = datetime.now(ZONA).date()
     if mes:
         anio, num = (int(x) for x in mes.split("-"))
         primero = date(anio, num, 1)
@@ -443,11 +581,21 @@ def listar(
     if primero <= hoy_chile <= ultimo:
         ultimo = hoy_chile
 
-    del_mes = [a for a in todo if primero <= a.fecha <= ultimo]
+    del_mes = [
+        *(a for a in todo if primero <= a.fecha <= ultimo),
+        *(v for v in ventas if primero <= v.fecha <= ultimo),
+    ]
     acum_origen, total_acum, sin_tasa_acum = _suma_en_caja(del_mes)
 
     return {
         "data": apuntes,
+        # Las ventas de la web del mismo rango, aparte de lo escrito a mano.
+        #
+        # Van en su propia lista y no mezcladas en `data`: la pantalla pinta lo
+        # anotado en casillas que se editan y esto en filas de solo lectura, y
+        # confundirlos haría que un envío de la web pareciera una cifra que se
+        # puede corregir o borrar desde aquí. En los totales sí van juntos.
+        "ventas": [_sale_venta(v) for v in ventas_rango],
         "moneda": MONEDA_CAJA,
         # Cuántos pesos vale un dólar HOY, para poder enseñar los totales
         # también en dólares.
@@ -488,7 +636,12 @@ def listar(
         # comisión de hoy, mañana eso más la de mañana. La cuenta se hace aquí
         # y no en la pantalla porque necesita TODOS los apuntes, no solo los
         # del rango que se esté viendo.
-        "comision_desde_capital": round(_comision_desde(todo, prefs.capital_desde, desde, hasta), 2),
+        #
+        # Con las ventas de la web dentro: su comisión es dinero que entró
+        # igual que el de un apunte escrito a mano, y si contara en la suma del
+        # día pero no aquí, el cuadre pediría de menos.
+        "comision_desde_capital": round(
+            _comision_desde([*todo, *ventas], prefs.capital_desde, desde, hasta), 2),
         # Y lo gastado en esa misma ventana. La lista de `gastos` de más abajo
         # sigue siendo la del mes —esa es la libreta que se mira y se edita—,
         # pero el cuadre necesita todo lo que salió desde el capital o cada 1
@@ -840,7 +993,7 @@ def guardar_capital(
     fila.capital_usd = datos.capital_usd
     # El calendario chileno, no el reloj del servidor, que va en UTC y a las
     # nueve de la noche ya estaría poniendo la fecha de mañana.
-    fila.capital_desde = datos.desde or datetime.now(ZoneInfo("America/Santiago")).date()
+    fila.capital_desde = datos.desde or datetime.now(ZONA).date()
     db.commit()
     db.refresh(fila)
     return {"data": {

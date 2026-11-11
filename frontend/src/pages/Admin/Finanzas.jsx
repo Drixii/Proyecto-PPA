@@ -108,9 +108,14 @@ function Bandera({ iso2, tam = 18 }) {
 // Pantalla aparte del panel, con su propio menú: lo que se ve aquí no es la
 // operación del día a día, es el dinero de la casa.
 //
-// Es un cuaderno, no un informe. Nada se rellena con los envíos de la web a
-// propósito: por aquí entra también lo que se movió fuera de la plataforma, y
-// eso ningún listado de envíos lo sabe.
+// Es un cuaderno: se escribe a mano, porque por aquí entra también lo que se
+// movió fuera de la plataforma y eso ningún listado de envíos lo sabe.
+//
+// Debajo de lo escrito salen además los envíos que SÍ pasaron por la web, en
+// filas marcadas "Sistema". No se editan ni se borran desde aquí —se calculan
+// de las órdenes cada vez que se abre la pantalla— y suman en los mismos
+// totales. Lo que no hay que hacer es volver a escribirlos a mano: contarían
+// dos veces.
 //
 // Los países van en vertical y cada movimiento ocupa su columna. Una columna
 // es un movimiento: escribir en ella la reserva para ese país y tranca las
@@ -155,6 +160,10 @@ export default function Finanzas() {
   })
 
   const apuntes = respuesta?.data || []
+  // Los envíos hechos por la web del mismo rango. Llegan aparte de lo anotado
+  // a mano porque se pintan distinto y no se tocan, pero los totales que manda
+  // el servidor ya vienen con ellos dentro.
+  const ventas = respuesta?.ventas || []
   const totales = respuesta?.totales || []
   // Cuántos pesos vale un dólar hoy. En cero cuando el servidor no tiene
   // cambio para el dólar, y entonces no se enseña ninguna cifra en dólares.
@@ -221,9 +230,11 @@ export default function Finanzas() {
   //
   // Va detrás de `origenes` a la fuerza: leerlo antes de declararlo deja la
   // pantalla en blanco entera, y el compilador no avisa.
+  // Cuenta también lo vendido por la web: si ese día solo hubo envíos del
+  // sistema, la pantalla tiene que abrirse donde están.
   const conMovimiento = useMemo(
-    () => new Set(apuntes.map(a => a.origen)),
-    [apuntes],
+    () => new Set([...apuntes, ...ventas].map(a => a.origen)),
+    [apuntes, ventas],
   )
   const origen = elegido
     ?? origenes.find(p => conMovimiento.has(p.name))?.name
@@ -529,23 +540,49 @@ export default function Finanzas() {
     refrescar()
   }
 
-  const movidoDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + a.monto, 0)
-  const ganadoDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + a.ganancia, 0)
-  // Lo mismo en pesos chilenos, que es la moneda de la caja.
-  const movidoClpDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + (a.monto_clp || 0), 0)
-  const ganadoClpDe = destino => delOrigen.filter(a => a.destino === destino).reduce((s, a) => s + (a.ganancia_clp || 0), 0)
+  // Si el país ya cobra en pesos, el equivalente es la misma cifra repetida.
+  const enCaja = paisOrigen?.currency === 'CLP'
 
-  const totalMovido = delOrigen.reduce((s, a) => s + a.monto, 0)
-  const totalGanado = delOrigen.reduce((s, a) => s + a.ganancia, 0)
+  // Las ventas de la web de este país, que van debajo de lo anotado a mano.
+  const ventasDelOrigen = useMemo(
+    () => ventas.filter(v => v.origen === origen),
+    [ventas, origen],
+  )
+
+  /**
+   * Lo anotado a mano y lo vendido por la web, junto, para sumarlo.
+   *
+   * Dos listas y no una: las columnas en pesos admiten cualquier venta —la
+   * caja es una—, pero la columna en la moneda del país solo puede sumar lo
+   * que esté EN esa moneda. Un envío de 175 USD desde Chile no son 175 pesos,
+   * y sumarlo a un total en pesos daría una cifra falsa. Esas ventas cuentan
+   * en los pesos, que es donde se lleva la caja, y la fila avisa de su moneda.
+   */
+  const ventasEnMoneda = useMemo(
+    () => ventasDelOrigen.filter(v => !paisOrigen?.currency || v.moneda === paisOrigen.currency),
+    [ventasDelOrigen, paisOrigen],
+  )
+  const conVentas = [...delOrigen, ...ventasEnMoneda]
+  const conVentasClp = [...delOrigen, ...ventasDelOrigen]
+  // Hay alguna venta en otra moneda, así que el total en pesos no es el mismo
+  // número que el de arriba y tiene que salir aunque el país cobre en pesos.
+  const otraMoneda = ventasDelOrigen.length !== ventasEnMoneda.length
+
+  const movidoDe = destino => conVentas.filter(a => a.destino === destino).reduce((s, a) => s + a.monto, 0)
+  const ganadoDe = destino => conVentas.filter(a => a.destino === destino).reduce((s, a) => s + a.ganancia, 0)
+  // Lo mismo en pesos chilenos, que es la moneda de la caja.
+  const movidoClpDe = destino => conVentasClp.filter(a => a.destino === destino).reduce((s, a) => s + (a.monto_clp || 0), 0)
+  const ganadoClpDe = destino => conVentasClp.filter(a => a.destino === destino).reduce((s, a) => s + (a.ganancia_clp || 0), 0)
+
+  const totalMovido = conVentas.reduce((s, a) => s + a.monto, 0)
+  const totalGanado = conVentas.reduce((s, a) => s + a.ganancia, 0)
   // Lo mismo pasado a pesos chilenos, que es como se lleva la caja. Se suma
   // de los apuntes y no del total que manda el servidor, que no sabe lo que
   // se está tecleando ahora mismo.
   const enPesos = {
-    movido: delOrigen.reduce((s, a) => s + (a.monto_clp || 0), 0),
-    ganado: delOrigen.reduce((s, a) => s + (a.ganancia_clp || 0), 0),
+    movido: conVentasClp.reduce((s, a) => s + (a.monto_clp || 0), 0),
+    ganado: conVentasClp.reduce((s, a) => s + (a.ganancia_clp || 0), 0),
   }
-  // Si el país ya cobra en pesos, el equivalente es la misma cifra repetida.
-  const enCaja = paisOrigen?.currency === 'CLP'
   const variosDias = desde !== hasta
 
   return (
@@ -838,6 +875,18 @@ export default function Finanzas() {
                         onTecleando={setTecleando}
                       />
                     ))}
+
+                    {/* Los envíos que hizo la web, debajo de lo escrito a mano
+                        y ya sumando en el pie. No se editan: la cifra buena
+                        está en la orden, y poder corregirla aquí crearía dos
+                        versiones de lo mismo. */}
+                    {ventasDelOrigen.map(v => (
+                      <FilaSistema
+                        key={v.id}
+                        venta={v}
+                        destinos={destinosDelOrigen}
+                        moneda={paisOrigen?.currency} />
+                    ))}
                   </tbody>
 
                   <tfoot>
@@ -853,14 +902,14 @@ export default function Finanzas() {
                               <>
                                 <span style={{ color: '#eaf2ff', fontWeight: 700 }}>{miles(movido)}</span>
                                 <span style={{ fontSize: 10, color: '#64748b' }}> {paisOrigen?.currency}</span>
-                                {enCaja || (
+                                {(enCaja && !otraMoneda) || (
                                   <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>
                                     {pesos(movidoClpDe(d.name))} CLP
                                   </span>
                                 )}
                                 <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
                                   {miles(ganadoDe(d.name))} de comisión
-                                  {!enCaja && ganadoClpDe(d.name) > 0 && ` · ${pesos(ganadoClpDe(d.name))} CLP`}
+                                  {(!enCaja || otraMoneda) && ganadoClpDe(d.name) > 0 && ` · ${pesos(ganadoClpDe(d.name))} CLP`}
                                 </span>
                               </>
                             ) : ''}
@@ -872,7 +921,7 @@ export default function Finanzas() {
                         {/* Y lo mismo en pesos chilenos, que es la moneda en la
                             que se lleva la caja: arriba lo que se movió allá,
                             aquí lo que vale aquí. */}
-                        {enPesos && !enCaja && (
+                        {enPesos && (!enCaja || otraMoneda) && (
                           <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
                             {pesos(enPesos.movido)} CLP
                           </span>
@@ -880,7 +929,7 @@ export default function Finanzas() {
                       </td>
                       <td style={{ ...pieCelda, textAlign: 'right', color: '#4ade80', fontWeight: 800, fontSize: 14, borderRight: 'none' }}>
                         {miles(totalGanado)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{paisOrigen?.currency}</span>
-                        {enPesos && !enCaja && (
+                        {enPesos && (!enCaja || otraMoneda) && (
                           <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#4ade80', marginTop: 2 }}>
                             {pesos(enPesos.ganado)} CLP
                           </span>
@@ -1431,6 +1480,79 @@ function FilaCliente({
             )}
           </>
         ) : ''}
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * Un envío hecho por la web: una fila que no se escribe, solo se lee.
+ *
+ * Lleva la etiqueta "Sistema" para que no se confunda con lo anotado a mano, y
+ * no trae casillas editables ni aspa de borrar: el dato vive en la orden, y
+ * poder corregirlo aquí dejaría dos versiones de lo mismo sin forma de saber
+ * cuál vale.
+ *
+ * El porcentaje es el que cobró esa orden —su comisión sobre lo enviado—, no el
+ * de la ruta: lo que se cobró ese día ya pasó, y el de la ruta es lo de hoy.
+ */
+function FilaSistema({ venta, destinos, moneda }) {
+  // La venta puede venir en otra moneda que la del país: un envío desde Chile
+  // cobrado en dólares. Entonces se avisa en ámbar, en vez de dejar una cifra
+  // que se leería como pesos. Esas no suman en la columna de la moneda del
+  // país —no se puede— pero sí en los pesos de la caja.
+  const suMoneda = venta.moneda || moneda
+  const ajena = !!moneda && !!venta.moneda && venta.moneda !== moneda
+  // A qué país fue, cuando no tiene columna en esta tabla. Cuenta en el total
+  // igual, y sin decirlo la fila parecería vacía.
+  const sinColumna = !destinos.some(d => d.name === venta.destino)
+
+  return (
+    <tr style={{ background: 'rgba(74,222,128,.04)' }}>
+      <td style={{ ...celda, ...pegadaPais, padding: '6px 10px', fontSize: 12.5 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{
+            padding: '1px 7px', borderRadius: 999, fontSize: 9.5, fontWeight: 800,
+            letterSpacing: '.07em', background: 'rgba(74,222,128,.15)',
+            border: '1px solid rgba(74,222,128,.35)', color: '#4ade80', flexShrink: 0,
+          }}>
+            SISTEMA
+          </span>
+          <span style={{ color: '#8aa0cc', fontWeight: 600 }}>{venta.nota || venta.numero}</span>
+        </span>
+        <span style={{ display: 'block', fontSize: 10, color: '#475569', marginTop: 2 }}>
+          {venta.numero} · {venta.fecha}
+          {venta.estado === 'en_proceso' && ' · en proceso'}
+          {sinColumna && ` · a ${venta.destino}`}
+        </span>
+      </td>
+
+      {destinos.map(d => (
+        <td key={d.id} style={{ ...celda, textAlign: 'right', padding: '6px 10px', fontSize: 13 }}>
+          {d.name === venta.destino ? (
+            <>
+              <span style={{ color: '#eaf2ff' }}>{miles(venta.monto)}</span>
+              <span style={{ fontSize: 10, color: ajena ? '#fcd34d' : '#64748b' }}> {suMoneda}</span>
+            </>
+          ) : ''}
+        </td>
+      ))}
+
+      <td style={{ ...celda, ...separa, textAlign: 'right', padding: '6px 10px', color: '#aebfe2', fontSize: 13 }}>
+        {miles(venta.monto)} <span style={{ fontSize: 10.5, color: ajena ? '#fcd34d' : '#64748b' }}>{suMoneda}</span>
+        {venta.monto_clp > 0 && suMoneda !== 'CLP' && (
+          <span style={{ display: 'block', fontSize: 10.5, color: '#4ade80' }}>
+            {pesos(venta.monto_clp)} CLP
+          </span>
+        )}
+      </td>
+      <td style={{ ...celda, textAlign: 'right', padding: '6px 12px', color: '#4ade80', fontWeight: 700, fontSize: 13 }}>
+        {miles(venta.ganancia)} <span style={{ fontSize: 10.5, fontWeight: 500, color: '#3f8f5c' }}>{suMoneda}</span>
+        {venta.ganancia_clp > 0 && suMoneda !== 'CLP' && (
+          <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: '#4ade80' }}>
+            {pesos(venta.ganancia_clp)} CLP
+          </span>
+        )}
       </td>
     </tr>
   )
